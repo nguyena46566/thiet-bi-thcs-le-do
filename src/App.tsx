@@ -252,7 +252,7 @@ function HomePage({ setPage }: { setPage: (p: Page) => void }) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
-                    {["Giáo viên", "Lớp", "Môn học", "Thiết bị", "SL", "Ngày mượn", "Ngày trả", "Trạng thái"].map((h) => (
+                    {["Giáo viên", "Lớp", "Môn học", "Tiết", "Đồ dùng mượn", "Ngày mượn", "Ngày trả", "Trạng thái"].map((h) => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -265,8 +265,8 @@ function HomePage({ setPage }: { setPage: (p: Page) => void }) {
                         <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">{r.teacherName}</td>
                         <td className="px-4 py-3 text-gray-600">{r.className}</td>
                         <td className="px-4 py-3"><span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold text-white" style={{ backgroundColor: sub?.color || "#888" }}>{r.subjectName}</span></td>
+                        <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{r.period || "-"}</td>
                         <td className="px-4 py-3 text-gray-700 max-w-[160px] truncate" title={r.equipment}>{r.equipment}</td>
-                        <td className="px-4 py-3 text-gray-600 text-center">{r.quantity}</td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{r.borrowDate}</td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{r.returnDate}</td>
                         <td className="px-4 py-3">
@@ -308,20 +308,21 @@ function HomePage({ setPage }: { setPage: (p: Page) => void }) {
   )
 }
 
-// ============ BORROW FORM (CHỈ ADMIN mới được đăng ký) ============
+// ============ BORROW FORM ============
 interface FormState {
   teacherName: string
   className: string
-  equipment: string
-  quantity: number
   borrowDate: string
+  period: string
+  periodPPCT: string
+  equipment: string
   returnDate: string
   notes: string
 }
 
 function BorrowForm({ subjectId, subjectName, onCreated }: { subjectId: string; subjectName: string; onCreated?: () => void }) {
   const { user, login } = useAuth()
-  const [form, setForm] = useState<FormState>({ teacherName: "", className: "", equipment: "", quantity: 1, borrowDate: "", returnDate: "", notes: "" })
+  const [form, setForm] = useState<FormState>({ teacherName: "", className: "", borrowDate: "", period: "", periodPPCT: "", equipment: "", returnDate: "", notes: "" })
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -351,7 +352,7 @@ function BorrowForm({ subjectId, subjectName, onCreated }: { subjectId: string; 
       await createRecord({ subjectId, subjectName, ...form })
       setSubmitted(true)
       onCreated?.()
-      setTimeout(() => { setSubmitted(false); setForm({ teacherName: "", className: "", equipment: "", quantity: 1, borrowDate: "", returnDate: "", notes: "" }) }, 3500)
+      setTimeout(() => { setSubmitted(false); setForm({ teacherName: "", className: "", borrowDate: "", period: "", periodPPCT: "", equipment: "", returnDate: "", notes: "" }) }, 3500)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Có lỗi xảy ra")
     } finally {
@@ -384,18 +385,25 @@ function BorrowForm({ subjectId, subjectName, onCreated }: { subjectId: string; 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm font-medium">{error}</div>}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div><label className={labelCls}>Họ tên giáo viên <span className="text-red-500">*</span></label><input required className={fieldCls} placeholder="Nguyễn Văn A" value={form.teacherName} onChange={(e) => setForm({ ...form, teacherName: e.target.value })} /></div>
-        <div><label className={labelCls}>Lớp dạy <span className="text-red-500">*</span></label><input required className={fieldCls} placeholder="8A1" value={form.className} onChange={(e) => setForm({ ...form, className: e.target.value })} /></div>
+        <div><label className={labelCls}>Họ và tên giáo viên <span className="text-red-500">*</span></label><input required className={fieldCls} placeholder="Nguyễn Văn A" value={form.teacherName} onChange={(e) => setForm({ ...form, teacherName: e.target.value })} /></div>
+        <div><label className={labelCls}>Lớp dạy học <span className="text-red-500">*</span></label><input required className={fieldCls} placeholder="8A1" value={form.className} onChange={(e) => setForm({ ...form, className: e.target.value })} /></div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="sm:col-span-2"><label className={labelCls}>Tên thiết bị mượn <span className="text-red-500">*</span></label><input required className={fieldCls} placeholder="Ống nghiệm, kính hiển vi..." value={form.equipment} onChange={(e) => setForm({ ...form, equipment: e.target.value })} /></div>
-        <div><label className={labelCls}>Số lượng <span className="text-red-500">*</span></label><input required type="number" min={1} className={fieldCls} value={form.quantity} onChange={(e) => setForm({ ...form, quantity: parseInt(e.target.value) || 1 })} /></div>
+      <div><label className={labelCls}>Ngày mượn đồ dùng <span className="text-red-500">*</span></label><input required type="date" className={fieldCls} value={form.borrowDate} onChange={(e) => setForm({ ...form, borrowDate: e.target.value })} /></div>
+      <div>
+        <label className={labelCls}>Tiết dạy trong ngày <span className="text-red-500">*</span></label>
+        <div className="grid grid-cols-5 gap-2 mt-1">
+          {["Tiết 1", "Tiết 2", "Tiết 3", "Tiết 4", "Tiết 5"].map((t) => (
+            <label key={t} className={`flex items-center gap-2 cursor-pointer px-3 py-2.5 rounded-xl border-2 text-sm font-medium transition-all select-none ${form.period === t ? "bg-[#1a3670] border-[#1a3670] text-white" : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"}`}>
+              <input type="radio" name="period" value={t} checked={form.period === t} onChange={() => setForm({ ...form, period: t })} className="sr-only" required />
+              {t}
+            </label>
+          ))}
+        </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div><label className={labelCls}>Ngày mượn <span className="text-red-500">*</span></label><input required type="date" className={fieldCls} value={form.borrowDate} onChange={(e) => setForm({ ...form, borrowDate: e.target.value })} /></div>
-        <div><label className={labelCls}>Ngày trả dự kiến <span className="text-red-500">*</span></label><input required type="date" className={fieldCls} value={form.returnDate} onChange={(e) => setForm({ ...form, returnDate: e.target.value })} /></div>
-      </div>
-      <div><label className={labelCls}>Ghi chú</label><textarea rows={3} className={fieldCls} placeholder="Ghi chú thêm nếu có..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+      <div><label className={labelCls}>Tiết theo PPCT <span className="text-red-500">*</span></label><input required className={fieldCls} placeholder="VD: Tiết 25 - Bài 12" value={form.periodPPCT} onChange={(e) => setForm({ ...form, periodPPCT: e.target.value })} /></div>
+      <div><label className={labelCls}>Đồ dùng cần mượn <span className="text-red-500">*</span></label><textarea required rows={2} className={fieldCls} placeholder="Ống nghiệm, kính hiển vi, mô hình..." value={form.equipment} onChange={(e) => setForm({ ...form, equipment: e.target.value })} /></div>
+      <div><label className={labelCls}>Ngày trả đồ dùng <span className="text-red-500">*</span></label><input required type="date" className={fieldCls} value={form.returnDate} onChange={(e) => setForm({ ...form, returnDate: e.target.value })} /></div>
+      <div><label className={labelCls}>Ghi chú</label><textarea rows={2} className={fieldCls} placeholder="Ghi chú thêm nếu có..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
       <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-700">
         <strong>Lưu ý:</strong> Yêu cầu mượn sẽ được gửi đến admin để duyệt. Bạn sẽ nhận được thông báo khi yêu cầu được xử lý.
       </div>
@@ -461,7 +469,7 @@ function SubjectPage({ subjectId, setPage }: { subjectId: string; setPage: (p: P
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-100">
-                        {["Giáo viên", "Lớp", "Thiết bị", "SL", "Ngày mượn", "Ngày trả", "Trạng thái"].map((h) => (
+                        {["Giáo viên", "Lớp", "Tiết", "Đồ dùng", "Ngày mượn", "Ngày trả", "Trạng thái"].map((h) => (
                           <th key={h} className="px-4 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -471,8 +479,8 @@ function SubjectPage({ subjectId, setPage }: { subjectId: string; setPage: (p: P
                         <tr key={r.id} className="hover:bg-gray-50/60">
                           <td className="px-4 py-2.5 font-medium text-gray-900">{r.teacherName}</td>
                           <td className="px-4 py-2.5 text-gray-600">{r.className}</td>
+                          <td className="px-4 py-2.5 text-gray-600">{r.period || "-"}</td>
                           <td className="px-4 py-2.5 text-gray-700">{r.equipment}</td>
-                          <td className="px-4 py-2.5 text-gray-600 text-center">{r.quantity}</td>
                           <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{r.borrowDate}</td>
                           <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{r.returnDate}</td>
                           <td className="px-4 py-2.5">
@@ -606,7 +614,7 @@ function AdminPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead><tr className="bg-gray-50 border-b border-gray-100">
-                    {["GV", "Lớp", "Môn", "Thiết bị", "SL", "Mượn", "Trả", "TT", ""].map((h) => <th key={h} className="px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap">{h}</th>)}
+                    {["GV", "Lớp", "Môn", "Tiết", "Đồ dùng", "Mượn", "Trả", "TT", ""].map((h) => <th key={h} className="px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap">{h}</th>)}
                   </tr></thead>
                   <tbody className="divide-y divide-gray-50">
                     {records.map((r) => {
@@ -616,8 +624,8 @@ function AdminPage() {
                           <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">{r.teacherName}</td>
                           <td className="px-3 py-3 text-gray-600">{r.className}</td>
                           <td className="px-3 py-3"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white" style={{ backgroundColor: sub?.color || "#888" }}>{r.subjectName}</span></td>
+                          <td className="px-3 py-3 text-gray-600 text-xs">{r.period || "-"}</td>
                           <td className="px-3 py-3 text-gray-700 max-w-[140px] truncate">{r.equipment}</td>
-                          <td className="px-3 py-3 text-center">{r.quantity}</td>
                           <td className="px-3 py-3 text-gray-600 whitespace-nowrap text-xs">{r.borrowDate}</td>
                           <td className="px-3 py-3 text-gray-600 whitespace-nowrap text-xs">{r.returnDate}</td>
                           <td className="px-3 py-3"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${r.status === "Chờ duyệt" ? "bg-amber-50 text-amber-700" : r.status === "Mượn" ? "bg-blue-50 text-blue-700" : r.status === "Từ chối" ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{r.status}</span></td>

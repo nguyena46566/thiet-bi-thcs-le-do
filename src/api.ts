@@ -21,6 +21,8 @@ export interface BorrowRecord {
   borrowDate: string;
   returnDate: string;
   notes: string;
+  period?: string;
+  periodPPCT?: string;
   status: "Mượn" | "Trả" | "Chờ duyệt" | "Từ chối";
   userId?: string;
   userName?: string;
