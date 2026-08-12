@@ -3,7 +3,14 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 
-import siteConfiguration from './.figma/make/site.json'
+import fs from 'node:fs'
+
+let siteConfiguration: any = {}
+try {
+  siteConfiguration = JSON.parse(fs.readFileSync('./.figma/make/site.json', 'utf-8'))
+} catch {
+  // File not available in production build
+}
 
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
