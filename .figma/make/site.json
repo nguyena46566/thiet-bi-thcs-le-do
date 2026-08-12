@@ -1,0 +1,10 @@
+{
+  "description": "Manage classroom equipment with an intuitive platform for teachers to request and return teaching tools by subject, streamlining resource allocation.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
