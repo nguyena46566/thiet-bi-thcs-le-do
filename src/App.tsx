@@ -388,7 +388,7 @@ function BorrowForm({ subjectId, subjectName, onCreated }: { subjectId: string; 
         <div><label className={labelCls}>Họ và tên giáo viên <span className="text-red-500">*</span></label><input required className={fieldCls} placeholder="Nguyễn Văn A" value={form.teacherName} onChange={(e) => setForm({ ...form, teacherName: e.target.value })} /></div>
         <div><label className={labelCls}>Lớp dạy học <span className="text-red-500">*</span></label><input required className={fieldCls} placeholder="8A1" value={form.className} onChange={(e) => setForm({ ...form, className: e.target.value })} /></div>
       </div>
-      <div><label className={labelCls}>Ngày mượn đồ dùng <span className="text-red-500">*</span></label><input required type="date" className={fieldCls} value={form.borrowDate} onChange={(e) => setForm({ ...form, borrowDate: e.target.value })} /></div>
+      <div><label className={labelCls}>Ngày mượn đồ dùng <span className="text-red-500">*</span></label><input required className={fieldCls} placeholder="DD/MM/YYYY" value={form.borrowDate} onChange={(e) => setForm({ ...form, borrowDate: e.target.value })} /></div>
       <div>
         <label className={labelCls}>Tiết dạy trong ngày <span className="text-red-500">*</span></label>
         <div className="grid grid-cols-5 gap-2 mt-1">
@@ -402,7 +402,7 @@ function BorrowForm({ subjectId, subjectName, onCreated }: { subjectId: string; 
       </div>
       <div><label className={labelCls}>Tiết theo PPCT <span className="text-red-500">*</span></label><input required className={fieldCls} placeholder="VD: Tiết 25 - Bài 12" value={form.periodPPCT} onChange={(e) => setForm({ ...form, periodPPCT: e.target.value })} /></div>
       <div><label className={labelCls}>Đồ dùng cần mượn <span className="text-red-500">*</span></label><textarea required rows={2} className={fieldCls} placeholder="Ống nghiệm, kính hiển vi, mô hình..." value={form.equipment} onChange={(e) => setForm({ ...form, equipment: e.target.value })} /></div>
-      <div><label className={labelCls}>Ngày trả đồ dùng <span className="text-red-500">*</span></label><input required type="date" className={fieldCls} value={form.returnDate} onChange={(e) => setForm({ ...form, returnDate: e.target.value })} /></div>
+      <div><label className={labelCls}>Ngày trả đồ dùng <span className="text-red-500">*</span></label><input required className={fieldCls} placeholder="DD/MM/YYYY" value={form.returnDate} onChange={(e) => setForm({ ...form, returnDate: e.target.value })} /></div>
       <div><label className={labelCls}>Ghi chú</label><textarea rows={2} className={fieldCls} placeholder="Ghi chú thêm nếu có..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
       <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-700">
         <strong>Lưu ý:</strong> Yêu cầu mượn sẽ được gửi đến admin để duyệt. Bạn sẽ nhận được thông báo khi yêu cầu được xử lý.
