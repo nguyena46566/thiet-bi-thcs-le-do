@@ -102,7 +102,7 @@ app.get("/api/records", (req, res) => {
 });
 
 app.post("/api/records", requireAuth, (req, res) => {
-  const { id, subjectId, subjectName, teacherName, className, equipment, quantity, borrowDate, returnDate, notes } = req.body;
+  const { id, subjectId, subjectName, teacherName, className, equipment, borrowDate, returnDate, notes, period, periodPPCT } = req.body;
 
   if (!subjectId || !subjectName || !teacherName || !className || !equipment || !borrowDate || !returnDate) {
     return res.status(400).json({ error: "Điền đầy đủ thông tin" });
@@ -111,7 +111,8 @@ app.post("/api/records", requireAuth, (req, res) => {
   // User gửi yêu cầu -> trạng thái "Chờ duyệt", admin duyệt sau
   const newRecord = {
     id: id || Date.now().toString(), subjectId, subjectName, teacherName, className,
-    equipment, quantity: quantity || 1, borrowDate, returnDate, notes: notes || "",
+    equipment, quantity: 1, borrowDate, returnDate, notes: notes || "",
+    period: period || "", periodPPCT: periodPPCT || "",
     status: "Chờ duyệt",
     userId: req.session.user.id, userName: req.session.user.name,
     createdAt: new Date().toISOString(),
