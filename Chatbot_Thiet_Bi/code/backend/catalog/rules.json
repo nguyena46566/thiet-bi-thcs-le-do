@@ -1,0 +1,29 @@
+[
+  { "id": "quy-dinh-chung", "title": "Quy định chung", "text": [
+    "Thiết bị dạy học là tài sản của nhà trường, phục vụ công tác giảng dạy và học tập.",
+    "Giáo viên có trách nhiệm bảo quản thiết bị trong suốt thời gian mượn.",
+    "Mọi hành vi làm hỏng, mất thiết bị phải báo cáo ngay và chịu trách nhiệm bồi thường.",
+    "Không được cho người khác mượn lại thiết bị đã đăng ký."
+  ] },
+  { "id": "quy-trinh-muon", "title": "Quy trình đăng ký mượn", "text": [
+    "Đăng ký mượn phải thực hiện trước ít nhất 24 giờ so với thời gian cần sử dụng.",
+    "Quản trị viên (nhân viên thiết bị) sẽ đăng ký trên hệ thống theo yêu cầu của giáo viên.",
+    "Giáo viên cung cấp đầy đủ thông tin: họ tên, lớp dạy, tên thiết bị, số lượng, ngày mượn, ngày trả.",
+    "Sau khi đăng ký thành công, hệ thống sẽ gửi thông báo xác nhận.",
+    "Giáo viên nhận thiết bị tại phòng thiết bị vào ngày đã đăng ký."
+  ] },
+  { "id": "quy-dinh-tra", "title": "Quy định trả thiết bị", "text": [
+    "Trả thiết bị đúng hạn đã đăng ký.",
+    "Kiểm tra tình trạng thiết bị trước khi trả, đảm bảo đầy đủ và nguyên vẹn.",
+    "Vệ sinh thiết bị sạch sẽ trước khi trả (đặc biệt thiết bị thí nghiệm).",
+    "Nếu cần gia hạn, phải thông báo trước khi hết hạn."
+  ] },
+  { "id": "xu-ly-vi-pham", "title": "Xử lý vi phạm", "text": [
+    "Trả trễ: nhắc nhở lần 1, lần 2 trở đi sẽ bị hạn chế quyền mượn.",
+    "Làm hỏng thiết bị: bồi thường theo giá trị hoặc mua mới thay thế.",
+    "Làm mất thiết bị: bồi thường 100% giá trị thiết bị."
+  ] },
+  { "id": "luu-y-quan-trong", "title": "Lưu ý quan trọng", "text": [
+    "Phải đăng ký mượn trước ít nhất 24 giờ. Hệ thống sẽ không chấp nhận đăng ký nếu ngày mượn cách thời điểm hiện tại chưa đủ 24 giờ."
+  ] }
+]

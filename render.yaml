@@ -27,3 +27,5 @@ services:
         sync: false
       - key: SESSION_SECRET
         generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false

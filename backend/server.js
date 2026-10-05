@@ -15,6 +15,7 @@ import {
 } from "./auth.js";
 import notifications from "./notifications.js";
 import { sendBorrowNotification } from "./mailer.js";
+import { createChatRouter } from "./chat.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -39,9 +40,11 @@ app.use(
   })
 );
 
-// ============ Serve frontend (production) ============
+// ============ Serve frontend (production only) ============
 const distPath = path.join(__dirname, "..", "dist");
-app.use(express.static(distPath));
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(distPath));
+}
 
 // ============ AUTH ROUTES (Google OAuth) ============
 
@@ -102,7 +105,7 @@ app.get("/api/records", (req, res) => {
 });
 
 app.post("/api/records", requireAuth, (req, res) => {
-  const { id, subjectId, subjectName, teacherName, className, equipment, quantity, borrowDate, returnDate, notes } = req.body;
+  const { id, subjectId, subjectName, teacherName, className, equipment, borrowDate, returnDate, notes, period, periodPPCT } = req.body;
 
   if (!subjectId || !subjectName || !teacherName || !className || !equipment || !borrowDate || !returnDate) {
     return res.status(400).json({ error: "Điền đầy đủ thông tin" });
@@ -111,7 +114,8 @@ app.post("/api/records", requireAuth, (req, res) => {
   // User gửi yêu cầu -> trạng thái "Chờ duyệt", admin duyệt sau
   const newRecord = {
     id: id || Date.now().toString(), subjectId, subjectName, teacherName, className,
-    equipment, quantity: quantity || 1, borrowDate, returnDate, notes: notes || "",
+    equipment, quantity: 1, borrowDate, returnDate, notes: notes || "",
+    period: period || "", periodPPCT: periodPPCT || "",
     status: "Chờ duyệt",
     userId: req.session.user.id, userName: req.session.user.name,
     createdAt: new Date().toISOString(),
@@ -169,10 +173,15 @@ app.patch("/api/notifications/:id/read", requireAdmin, (req, res) => {
 });
 app.post("/api/notifications/mark-all-read", requireAdmin, (req, res) => { res.json(notifications.markAllAsRead()); });
 
-// ============ SPA fallback (production) ============
-app.get("*", (req, res) => {
-  res.sendFile(path.join(distPath, "index.html"));
-});
+// ============ CHAT (AI chatbot) ============
+app.use("/api/chat", createChatRouter({ requireAuth }));
+
+// ============ SPA fallback (production only) ============
+if (process.env.NODE_ENV === "production") {
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
+  });
+}
 
 // ============ START ============
 app.listen(PORT, () => {

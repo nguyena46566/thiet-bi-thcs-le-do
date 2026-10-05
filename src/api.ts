@@ -21,6 +21,8 @@ export interface BorrowRecord {
   borrowDate: string;
   returnDate: string;
   notes: string;
+  period?: string;
+  periodPPCT?: string;
   status: "Mượn" | "Trả" | "Chờ duyệt" | "Từ chối";
   userId?: string;
   userName?: string;
@@ -170,4 +172,41 @@ export async function markAllNotificationsRead(): Promise<void> {
     method: "POST",
     credentials: "include",
   });
+}
+
+// ============ CHAT ============
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface BorrowDraft {
+  subjectId: string;
+  subjectName: string;
+  teacherName: string;
+  className: string;
+  equipment: string;
+  borrowDate: string;
+  returnDate: string;
+  period: string;
+  periodPPCT: string;
+  notes: string;
+}
+
+export async function sendChat(
+  messages: ChatMessage[],
+  context?: { subjectId?: string }
+): Promise<{ reply: string; draft: BorrowDraft | null }> {
+  const res = await fetch(`${API_BASE}/api/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ messages, context }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Không thể gửi tin nhắn");
+  }
+  return res.json();
 }
