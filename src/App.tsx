@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react"
 import logoImg from "@/imports/Logo.jpg"
 import { AuthProvider, useAuth } from "@/AuthContext"
+import ChatWidget from "@/ChatWidget"
 import {
   fetchRecords,
   createRecord,
@@ -696,6 +697,8 @@ function AppContent() {
     )
   }
 
+  const currentSubjectId = SUBJECTS.find((s) => s.id === page)?.id
+
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
       <Nav page={page} setPage={setPage} />
@@ -703,6 +706,7 @@ function AppContent() {
       {page === "noiquy" && <NoiQuyPage />}
       {page === "admin" && <AdminPage />}
       {SUBJECTS.some((s) => s.id === page) && <SubjectPage subjectId={page} setPage={setPage} />}
+      <ChatWidget subjectId={currentSubjectId} />
     </div>
   )
 }
