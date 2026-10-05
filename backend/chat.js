@@ -13,7 +13,7 @@ const MAX_CHARS = 2000;
 const MAX_STEPS = 6;
 const RATE_LIMIT = 10;
 
-const getModel = () => process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const getModel = () => process.env.GEMINI_MODEL || "gemini-3.8-flash";
 const getApiKey = () => process.env.GEMINI_API_KEY || "";
 
 // ---------- Rate limit ----------
@@ -191,8 +191,9 @@ export function createChatRouter({ requireAuth } = {}) {
     } catch (err) {
       console.error("Chat error:", err?.status, err?.message);
       if (err?.status === 429) return res.status(503).json({ error: "Trợ lý đang bận, vui lòng thử lại sau ít phút." });
-      if (err?.status === 400) return res.status(503).json({ error: "Chatbot gặp lỗi cấu hình. Vui lòng liên hệ quản trị viên." });
-      res.status(502).json({ error: "Trợ lý tạm thời không phản hồi, vui lòng thử lại." });
+      if (err?.status === 400) return res.status(503).json({ error: `Lỗi cấu hình: ${err.message}` });
+      if (err?.status === 401 || err?.status === 403) return res.status(503).json({ error: "GEMINI_API_KEY không hợp lệ hoặc chưa được cấp quyền." });
+      res.status(502).json({ error: `Lỗi: ${err?.message || "Không rõ"}` });
     }
   });
 

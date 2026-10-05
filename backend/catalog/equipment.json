@@ -1,4 +1,4 @@
-﻿[
+[
   { "id": "th-thuoc-thang-1m", "name": "ThÆ°á»›c tháº³ng 1 mÃ©t (dÃ¹ng trÃªn báº£ng lá»›p)", "subjectId": "toan-hoc", "grades": [6,7,8,9], "stock": 8, "condition": "Tá»‘t", "location": "PhÃ²ng thiáº¿t bá»‹ - Tá»§ ToÃ¡n 1", "keywords": ["thÆ°á»›c dÃ i", "váº½ báº£ng", "Ä‘Æ°á»ng tháº³ng", "Ä‘o Ä‘á»™ dÃ i"] },
   { "id": "th-compa-lon", "name": "Compa khá»•ng lá»“ (váº½ trÃªn báº£ng)", "subjectId": "toan-hoc", "grades": [6,7,8,9], "stock": 6, "condition": "Tá»‘t", "location": "PhÃ²ng thiáº¿t bá»‹ - Tá»§ ToÃ¡n 1", "keywords": ["compa báº£ng", "váº½ Ä‘Æ°á»ng trÃ²n", "hÃ¬nh trÃ²n"] },
   { "id": "th-eke-lon", "name": "ÃŠ-ke lá»›n (dÃ¹ng trÃªn báº£ng)", "subjectId": "toan-hoc", "grades": [6,7,8,9], "stock": 6, "condition": "Tá»‘t", "location": "PhÃ²ng thiáº¿t bá»‹ - Tá»§ ToÃ¡n 1", "keywords": ["Ãª ke", "gÃ³c vuÃ´ng", "váº½ hÃ¬nh", "tam giÃ¡c vuÃ´ng"] },
