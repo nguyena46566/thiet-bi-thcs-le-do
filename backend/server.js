@@ -15,6 +15,7 @@ import {
 } from "./auth.js";
 import notifications from "./notifications.js";
 import { sendBorrowNotification } from "./mailer.js";
+import { createChatRouter } from "./chat.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -39,9 +40,11 @@ app.use(
   })
 );
 
-// ============ Serve frontend (production) ============
+// ============ Serve frontend (production only) ============
 const distPath = path.join(__dirname, "..", "dist");
-app.use(express.static(distPath));
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(distPath));
+}
 
 // ============ AUTH ROUTES (Google OAuth) ============
 
@@ -170,10 +173,15 @@ app.patch("/api/notifications/:id/read", requireAdmin, (req, res) => {
 });
 app.post("/api/notifications/mark-all-read", requireAdmin, (req, res) => { res.json(notifications.markAllAsRead()); });
 
-// ============ SPA fallback (production) ============
-app.get("*", (req, res) => {
-  res.sendFile(path.join(distPath, "index.html"));
-});
+// ============ CHAT (AI chatbot) ============
+app.use("/api/chat", createChatRouter({ requireAuth }));
+
+// ============ SPA fallback (production only) ============
+if (process.env.NODE_ENV === "production") {
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
+  });
+}
 
 // ============ START ============
 app.listen(PORT, () => {
