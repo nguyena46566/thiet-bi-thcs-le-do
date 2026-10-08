@@ -28,7 +28,6 @@ export function getGoogleAuthURL(req) {
     redirect_uri: process.env.GOOGLE_REDIRECT_URI,
     response_type: "code",
     scope: "openid email profile",
-    access_type: "offline",
     state,
     prompt: "select_account",
   });
@@ -40,6 +39,7 @@ export function getGoogleAuthURL(req) {
  * Exchange authorization code for access token
  */
 export async function exchangeCodeForToken(code) {
+  if (typeof code !== "string" || code.length > 2048) throw new Error("Mã xác thực không hợp lệ");
   const response = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -52,8 +52,8 @@ export async function exchangeCodeForToken(code) {
     }).toString(),
   });
 
-  const data = await response.json();
-  if (data.error) {
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.error) {
     throw new Error(`Google token error: ${data.error} - ${data.error_description || ""}`);
   }
   return data;
@@ -67,17 +67,29 @@ export async function getGoogleProfile(accessToken) {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
-  const data = await response.json();
-  if (data.error) {
-    throw new Error(`Google profile error: ${data.error.message || ""}`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.error) {
+    throw new Error(`Google profile error: ${data.error?.message || response.status}`);
   }
   return data;
+}
+
+/**
+ * So sánh state trả về từ Google với state đã lưu trong session (chống CSRF đăng nhập).
+ * State chỉ dùng được một lần.
+ */
+export function verifyOAuthState(req, state) {
+  const expected = req.session?.oauthState;
+  delete req.session.oauthState;
+  if (!expected || typeof state !== "string" || state.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(state), Buffer.from(expected));
 }
 
 /**
  * Check if email is admin
  */
 export function isAdmin(email) {
+  if (!email) return false;
   const adminEmails = (process.env.ADMIN_EMAILS || "")
     .split(",")
     .map((e) => e.trim().toLowerCase())

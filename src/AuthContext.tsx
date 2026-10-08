@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { fetchCurrentUser, logout as apiLogout, type User } from "@/api";
+import { fetchCurrentUser, getGoogleLoginURL, logout as apiLogout, type User } from "@/api";
 
 interface AuthContextType {
   user: User | null;
@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = () => {
     // Redirect to backend Google OAuth
-    window.location.href = "/api/auth/google/login";
+    window.location.href = getGoogleLoginURL();
   };
 
   const logout = async () => {

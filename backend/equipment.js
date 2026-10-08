@@ -11,13 +11,18 @@ import db from "./database.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const catalogDir = path.join(__dirname, "catalog");
 
+// Danh mục chỉ đọc từ đĩa một lần rồi giữ trong bộ nhớ (sửa file catalog thì khởi động lại server).
+const catalogCache = new Map();
 function readCatalog(file) {
+  if (catalogCache.has(file)) return catalogCache.get(file);
+  let data = [];
   try {
-    return JSON.parse(fs.readFileSync(path.join(catalogDir, file), "utf-8"));
+    data = JSON.parse(fs.readFileSync(path.join(catalogDir, file), "utf-8"));
   } catch (err) {
     console.error(`Không đọc được catalog/${file}:`, err.message);
-    return [];
   }
+  catalogCache.set(file, data);
+  return data;
 }
 
 // ---------- Tiện ích văn bản / ngày ----------
@@ -108,17 +113,21 @@ export function todayVN() {
 // ---------- Thiết bị ----------
 
 export const listEquipment = () => readCatalog("equipment.json");
-export const getEquipment = (id) => listEquipment().find((e) => e.id === id) || null;
+let equipmentById = null;
+export const getEquipment = (id) => {
+  if (!equipmentById) equipmentById = new Map(listEquipment().map((e) => [e.id, e]));
+  return equipmentById.get(id) || null;
+};
 
 const ACTIVE_STATUS = new Set(["Chờ duyệt", "Mượn"]);
 
 /**
  * Số lượng đang bị giữ trong khoảng [from, to] (tính theo ngày).
- * Form hiện tại cho nhập "đồ dùng" dạng văn bản tự do, nên khớp theo:
- *   - record.equipmentIds (nếu sau này bạn lưu mã thiết bị), hoặc
- *   - tên thiết bị xuất hiện trong record.equipment.
+ *   - Phiếu có `items` ([{ equipmentId, quantity }], do chatbot soạn) -> đếm chính xác theo mã.
+ *   - Phiếu nhập tay (chỉ có chữ) -> khớp theo tên thiết bị, đọc số lượng dạng "(x2)" nếu có.
+ * `records` là danh sách phiếu đang hoạt động (db.records.findActive()).
  */
-export function bookedQuantity(eq, from, to, records = db.findAll()) {
+export function bookedQuantity(eq, from, to, records) {
   const nameNorm = normalize(eq.name);
   let booked = 0;
   for (const r of records) {
@@ -127,9 +136,15 @@ export function bookedQuantity(eq, from, to, records = db.findAll()) {
     const rd = parseDate(r.returnDate);
     if (!bd || !rd) continue;
     if (bd > to || rd < from) continue; // không giao nhau
-    const byId = Array.isArray(r.equipmentIds) && r.equipmentIds.includes(eq.id);
-    const byName = normalize(r.equipment).includes(nameNorm);
-    if (byId || byName) booked += Number(r.quantity) || 1;
+    if (Array.isArray(r.items) && r.items.length) {
+      for (const it of r.items) if (it.equipmentId === eq.id) booked += Number(it.quantity) || 1;
+      continue;
+    }
+    const text = ` ${normalize(r.equipment)} `;
+    const i = text.indexOf(` ${nameNorm} `);
+    if (i === -1) continue;
+    const qty = text.slice(i + nameNorm.length + 2).match(/^x(\d+)\b/);
+    booked += qty ? Number(qty[1]) : 1;
   }
   return booked;
 }
@@ -144,13 +159,13 @@ export function availabilityOf(eq, from, to, records) {
   return { stock, booked, available: Math.max(0, stock - booked) };
 }
 
-export function checkAvailability({ equipmentIds, borrowDate, returnDate }) {
+export async function checkAvailability({ equipmentIds = [], borrowDate, returnDate }) {
   const from = parseDate(borrowDate);
   const to = parseDate(returnDate || borrowDate);
   if (!from || !to) return { error: "Ngày không hợp lệ, cần định dạng DD/MM/YYYY." };
   if (to < from) return { error: "Ngày trả phải sau hoặc bằng ngày mượn." };
-  const records = db.findAll();
-  const items = equipmentIds.map((id) => {
+  const records = await db.records.findActive();
+  const items = equipmentIds.slice(0, 20).map((id) => {
     const eq = getEquipment(id);
     if (!eq) return { equipmentId: id, error: "Không có thiết bị với mã này trong danh mục." };
     return { equipmentId: id, name: eq.name, ...availabilityOf(eq, from, to, records) };
@@ -184,7 +199,7 @@ export function searchEquipment({ query = "", subjectId, grade, limit = 8 } = {}
  * Bước 2 (dự phòng): không khớp bài nào -> tìm thiết bị theo từ khóa (content-based).
  * Sau này có thể thay bước 2 bằng embedding + cosine similarity mà không đổi giao diện hàm.
  */
-export function suggestForLesson({ subjectId, grade, topic = "", borrowDate, returnDate }) {
+export async function suggestForLesson({ subjectId, grade, topic = "", borrowDate, returnDate }) {
   const qt = tokens(topic);
   let lessons = readCatalog("lessons.json");
   if (subjectId) lessons = lessons.filter((l) => l.subjectId === subjectId);
@@ -209,7 +224,7 @@ export function suggestForLesson({ subjectId, grade, topic = "", borrowDate, ret
 
   const from = parseDate(borrowDate);
   const to = parseDate(returnDate || borrowDate);
-  const records = from && to ? db.findAll() : null;
+  const records = from && to ? await db.records.findActive() : null;
   return {
     source, // "lesson_plan" = có trong PPCT; "keyword_fallback" = chỉ đoán theo từ khóa
     lesson,

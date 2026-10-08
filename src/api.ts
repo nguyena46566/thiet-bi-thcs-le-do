@@ -10,6 +10,13 @@ export interface User {
   isAdmin: boolean;
 }
 
+export type RecordStatus = "Mượn" | "Trả" | "Chờ duyệt" | "Từ chối";
+
+export interface BorrowItem {
+  equipmentId: string;
+  quantity: number;
+}
+
 export interface BorrowRecord {
   id: string;
   subjectId: string;
@@ -23,7 +30,8 @@ export interface BorrowRecord {
   notes: string;
   period?: string;
   periodPPCT?: string;
-  status: "Mượn" | "Trả" | "Chờ duyệt" | "Từ chối";
+  status: RecordStatus;
+  items?: BorrowItem[];
   userId?: string;
   userName?: string;
   createdAt: string;
@@ -54,8 +62,8 @@ export async function fetchCurrentUser(): Promise<User | null> {
   const data = await res.json();
   return data.user;
 }
-export function getZaloLoginURL(): string {
-  return `${API_BASE}/api/auth/zalo/login`;
+export function getGoogleLoginURL(): string {
+  return `${API_BASE}/api/auth/google/login`;
 }
 
 export async function logout(): Promise<void> {
@@ -71,38 +79,39 @@ export async function fetchRecords(params?: {
   subjectId?: string;
   status?: string;
   search?: string;
-}): Promise<BorrowRecord[]> {
+}, signal?: AbortSignal): Promise<BorrowRecord[]> {
   const url = new URL(`${API_BASE}/api/records`, window.location.origin);
   if (params?.subjectId) url.searchParams.set("subjectId", params.subjectId);
   if (params?.status) url.searchParams.set("status", params.status);
   if (params?.search) url.searchParams.set("search", params.search);
 
-  const res = await fetch(url.toString(), { credentials: "include" });
+  const res = await fetch(url.toString(), { credentials: "include", signal });
   if (!res.ok) throw new Error("Không thể tải dữ liệu");
   return res.json();
 }
 
-export async function createRecord(
-  data: Omit<BorrowRecord, "id" | "createdAt" | "userId" | "userName">
-): Promise<BorrowRecord> {
+/** Dữ liệu gửi lên khi tạo phiếu. id, trạng thái, số lượng... do server tự điền. */
+export type NewRecordInput = Pick<
+  BorrowRecord,
+  "subjectId" | "teacherName" | "className" | "equipment" | "borrowDate" | "returnDate" | "notes"
+> & { subjectName?: string; period?: string; periodPPCT?: string; items?: BorrowItem[] };
+
+export async function createRecord(data: NewRecordInput): Promise<BorrowRecord> {
   const res = await fetch(`${API_BASE}/api/records`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ ...data, id: Date.now().toString() }),
+    body: JSON.stringify(data),
   });
   if (!res.ok) {
-    const err = await res.json();
+    const err = await res.json().catch(() => ({}));
     throw new Error(err.error || "Không thể tạo bản ghi");
   }
   return res.json();
 }
 
-export async function updateRecordStatus(
-  id: string,
-  status: "Mượn" | "Trả" | "Chờ duyệt" | "Từ chối"
-): Promise<BorrowRecord> {
-  const res = await fetch(`${API_BASE}/api/records/${id}/status`, {
+export async function updateRecordStatus(id: string, status: RecordStatus): Promise<BorrowRecord> {
+  const res = await fetch(`${API_BASE}/api/records/${encodeURIComponent(id)}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -113,7 +122,7 @@ export async function updateRecordStatus(
 }
 
 export async function deleteRecord(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/records/${id}`, {
+  const res = await fetch(`${API_BASE}/api/records/${encodeURIComponent(id)}`, {
     method: "DELETE",
     credentials: "include",
   });
@@ -129,7 +138,7 @@ export async function fetchStats(): Promise<Stats> {
 }
 
 export async function fetchSubjectStats(subjectId: string): Promise<Stats> {
-  const res = await fetch(`${API_BASE}/api/stats/${subjectId}`, {
+  const res = await fetch(`${API_BASE}/api/stats/${encodeURIComponent(subjectId)}`, {
     credentials: "include",
   });
   if (!res.ok) throw new Error("Không thể tải thống kê môn học");
@@ -161,7 +170,7 @@ export async function fetchUnreadCount(): Promise<number> {
 }
 
 export async function markNotificationRead(id: string): Promise<void> {
-  await fetch(`${API_BASE}/api/notifications/${id}/read`, {
+  await fetch(`${API_BASE}/api/notifications/${encodeURIComponent(id)}/read`, {
     method: "PATCH",
     credentials: "include",
   });
@@ -187,6 +196,7 @@ export interface BorrowDraft {
   teacherName: string;
   className: string;
   equipment: string;
+  items?: BorrowItem[];
   borrowDate: string;
   returnDate: string;
   period: string;

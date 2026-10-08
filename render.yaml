@@ -2,11 +2,13 @@ services:
   - type: web
     name: thiet-bi-thcs-le-do
     runtime: node
-    buildCommand: npm install --include=dev && npm run build && cd backend && npm install
+    buildCommand: npm install --include=dev && npm run build && cd backend && npm install --omit=dev
     startCommand: cd backend && node server.js
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DATABASE_URL
+        sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
@@ -27,5 +29,5 @@ services:
         sync: false
       - key: SESSION_SECRET
         generateValue: true
-      - key: ANTHROPIC_API_KEY
+      - key: GEMINI_API_KEY
         sync: false

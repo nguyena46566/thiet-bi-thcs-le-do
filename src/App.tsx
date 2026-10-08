@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import logoImg from "@/imports/Logo.jpg"
 import { AuthProvider, useAuth } from "@/AuthContext"
 import ChatWidget from "@/ChatWidget"
@@ -14,6 +14,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   type BorrowRecord,
+  type RecordStatus,
   type Stats,
   type Notification,
 } from "@/api"
@@ -39,12 +40,16 @@ function Nav({ page, setPage }: { page: Page; setPage: (p: Page) => void }) {
   const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
-    if (user?.isAdmin) {
-      fetchUnreadCount().then(setUnreadCount).catch(() => {})
-      const interval = setInterval(() => fetchUnreadCount().then(setUnreadCount).catch(() => {}), 30000)
-      return () => clearInterval(interval)
+    if (!user?.isAdmin) return
+    const refresh = () => {
+      // Không gọi API khi tab đang ẩn
+      if (document.visibilityState === "visible") fetchUnreadCount().then(setUnreadCount).catch(() => {})
     }
-  }, [user])
+    refresh()
+    const interval = setInterval(refresh, 30000)
+    document.addEventListener("visibilitychange", refresh)
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", refresh) }
+  }, [user?.isAdmin])
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-[#1a3670] text-white shadow-xl">
@@ -533,23 +538,41 @@ function AdminPage() {
   const [filterSubject, setFilterSubject] = useState("")
   const [filterStatus, setFilterStatus] = useState("")
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [loading, setLoading] = useState(true)
   const [notifs, setNotifs] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
 
+  const isAdmin = !!user?.isAdmin
+  const latestRequest = useRef<AbortController | null>(null)
+
+  // Chờ người dùng ngừng gõ 300ms rồi mới tìm, tránh gọi API sau mỗi phím
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
   const loadData = useCallback(() => {
+    if (!isAdmin) return
+    latestRequest.current?.abort() // hủy request cũ để kết quả không bị ghi đè lộn xộn
+    const ctrl = new AbortController()
+    latestRequest.current = ctrl
     setLoading(true)
-    fetchRecords({ subjectId: filterSubject || undefined, status: filterStatus || undefined, search: search || undefined })
-      .then(setRecords).catch(console.error).finally(() => setLoading(false))
-  }, [filterSubject, filterStatus, search])
+    fetchRecords({ subjectId: filterSubject || undefined, status: filterStatus || undefined, search: debouncedSearch || undefined }, ctrl.signal)
+      .then(setRecords)
+      .catch((err) => { if (err?.name !== "AbortError") console.error(err) })
+      .finally(() => { if (latestRequest.current === ctrl) setLoading(false) })
+  }, [isAdmin, filterSubject, filterStatus, debouncedSearch])
 
   const loadNotifs = useCallback(() => {
+    if (!isAdmin) return
     fetchNotifications().then(setNotifs).catch(console.error)
     fetchUnreadCount().then(setUnreadCount).catch(() => {})
-  }, [])
+  }, [isAdmin])
 
   useEffect(() => { loadData() }, [loadData])
   useEffect(() => { loadNotifs() }, [loadNotifs])
+  useEffect(() => () => latestRequest.current?.abort(), [])
 
   if (!user?.isAdmin) {
     return (
@@ -565,7 +588,7 @@ function AdminPage() {
     )
   }
 
-  const handleStatusChange = async (id: string, newStatus: "Mượn" | "Trả") => {
+  const handleStatusChange = async (id: string, newStatus: RecordStatus) => {
     try { await updateRecordStatus(id, newStatus); loadData() } catch (err) { alert(err instanceof Error ? err.message : "Lỗi") }
   }
   const handleDelete = async (id: string) => {

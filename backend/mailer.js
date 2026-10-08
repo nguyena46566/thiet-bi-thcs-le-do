@@ -30,8 +30,18 @@ function getTransporter() {
   return transporter;
 }
 
+const esc = (v) =>
+  String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+const STATUS_STYLE = {
+  "Chờ duyệt": { label: "Chờ duyệt", bg: "#fef3c7", fg: "#b45309" },
+  "Mượn": { label: "Đang mượn", bg: "#dbeafe", fg: "#1d4ed8" },
+  "Trả": { label: "Đã trả", bg: "#dcfce7", fg: "#15803d" },
+  "Từ chối": { label: "Từ chối", bg: "#fee2e2", fg: "#b91c1c" },
+};
+
 /**
- * Gửi email thông báo khi có đăng ký mới
+ * Gửi email cho admin khi có yêu cầu mượn mới (trạng thái "Chờ duyệt").
  */
 export async function sendBorrowNotification(record) {
   const transport = getTransporter();
@@ -40,29 +50,35 @@ export async function sendBorrowNotification(record) {
   const notifyEmail = process.env.NOTIFY_EMAIL;
   if (!notifyEmail) return;
 
-  const statusText = record.status === "Mượn" ? "MƯỢN" : "TRẢ";
-  const subject = `[Thiết bị] ${record.teacherName} - ${statusText} ${record.equipment}`;
+  const st = STATUS_STYLE[record.status] || STATUS_STYLE["Chờ duyệt"];
+  // Tiêu đề email là văn bản thuần, chỉ cần bỏ xuống dòng
+  const plain = (v, n) => String(v ?? "").replace(/[\r\n]+/g, " ").slice(0, n);
+  const subject = `[Thiết bị] Yêu cầu mượn mới: ${plain(record.teacherName, 60)} - ${plain(record.equipment, 80)}`;
+
+  const row = (label, value, bold = false) =>
+    `<tr><td style="padding: 8px 0; color: #6b7280; width: 130px;">${label}:</td><td style="padding: 8px 0;${bold ? " font-weight: bold;" : ""}">${value}</td></tr>`;
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1a3670; color: white; padding: 20px; border-radius: 12px 12px 0 0;">
-        <h2 style="margin: 0; font-size: 18px;">Thông báo đăng ký ${record.status === "Mượn" ? "mượn" : "trả"} thiết bị</h2>
-        <p style="margin: 5px 0 0; opacity: 0.8; font-size: 13px;">Trường THCS Lê Độ</p>
+        <h2 style="margin: 0; font-size: 18px;">Yêu cầu mượn thiết bị mới</h2>
+        <p style="margin: 5px 0 0; opacity: 0.8; font-size: 13px;">Trường THCS Lê Độ - vào trang Quản trị để duyệt</p>
       </div>
       <div style="border: 1px solid #e5e7eb; border-top: none; padding: 24px; border-radius: 0 0 12px 12px;">
         <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-          <tr><td style="padding: 8px 0; color: #6b7280; width: 130px;">Giáo viên:</td><td style="padding: 8px 0; font-weight: bold;">${record.teacherName}</td></tr>
-          <tr><td style="padding: 8px 0; color: #6b7280;">Lớp:</td><td style="padding: 8px 0;">${record.className}</td></tr>
-          <tr><td style="padding: 8px 0; color: #6b7280;">Môn học:</td><td style="padding: 8px 0;">${record.subjectName}</td></tr>
-          <tr><td style="padding: 8px 0; color: #6b7280;">Thiết bị:</td><td style="padding: 8px 0; font-weight: bold;">${record.equipment}</td></tr>
-          <tr><td style="padding: 8px 0; color: #6b7280;">Số lượng:</td><td style="padding: 8px 0;">${record.quantity}</td></tr>
-          <tr><td style="padding: 8px 0; color: #6b7280;">Ngày mượn:</td><td style="padding: 8px 0;">${record.borrowDate}</td></tr>
-          <tr><td style="padding: 8px 0; color: #6b7280;">Ngày trả:</td><td style="padding: 8px 0;">${record.returnDate}</td></tr>
-          <tr><td style="padding: 8px 0; color: #6b7280;">Trạng thái:</td><td style="padding: 8px 0;"><span style="background: ${record.status === "Mượn" ? "#dbeafe" : "#dcfce7"}; color: ${record.status === "Mượn" ? "#1d4ed8" : "#15803d"}; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 12px;">${record.status === "Mượn" ? "Đang mượn" : "Đã trả"}</span></td></tr>
-          ${record.notes ? `<tr><td style="padding: 8px 0; color: #6b7280;">Ghi chú:</td><td style="padding: 8px 0;">${record.notes}</td></tr>` : ""}
+          ${row("Giáo viên", esc(record.teacherName), true)}
+          ${row("Lớp", esc(record.className))}
+          ${row("Môn học", esc(record.subjectName))}
+          ${row("Thiết bị", esc(record.equipment), true)}
+          ${row("Số lượng", esc(record.quantity))}
+          ${row("Ngày mượn", esc(record.borrowDate) + (record.period ? ` (${esc(record.period)})` : ""))}
+          ${row("Ngày trả", esc(record.returnDate))}
+          ${record.periodPPCT ? row("Tiết PPCT", esc(record.periodPPCT)) : ""}
+          ${row("Trạng thái", `<span style="background: ${st.bg}; color: ${st.fg}; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 12px;">${st.label}</span>`)}
+          ${record.notes ? row("Ghi chú", esc(record.notes)) : ""}
         </table>
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
-        <p style="font-size: 12px; color: #9ca3af; margin: 0;">Thời gian đăng ký: ${new Date(record.createdAt).toLocaleString("vi-VN")}</p>
+        <p style="font-size: 12px; color: #9ca3af; margin: 0;">Thời gian đăng ký: ${new Date(record.createdAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>
       </div>
     </div>
   `;

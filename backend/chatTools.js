@@ -111,7 +111,7 @@ export const TOOLS = [
   },
 ];
 
-function draftBorrowRequest(input, ctx) {
+async function draftBorrowRequest(input, ctx) {
   const subject = SUBJECTS.find((s) => s.id === input.subjectId);
   if (!subject) return { ok: false, error: "Môn học không hợp lệ." };
 
@@ -120,14 +120,18 @@ function draftBorrowRequest(input, ctx) {
   if (!from || !to) return { ok: false, error: "Ngày không hợp lệ, cần định dạng DD/MM/YYYY." };
   if (to < from) return { ok: false, error: "Ngày trả phải sau hoặc bằng ngày mượn." };
 
+  if (!PERIODS.includes(input.period)) return { ok: false, error: `Tiết trong ngày phải là một trong: ${PERIODS.join(", ")}.` };
+  if (!Array.isArray(input.items) || !input.items.length) return { ok: false, error: "Cần ít nhất một thiết bị." };
+
   // Quy định: đăng ký trước ít nhất 24 giờ (tính đến giờ bắt đầu của tiết dạy).
   const hours = hoursUntilBorrow(input.borrowDate, input.period);
-  if (hours < MIN_NOTICE_HOURS) {
+  if (hours === null || hours < MIN_NOTICE_HOURS) {
     return { ok: false, error: `Phải đăng ký trước ít nhất ${MIN_NOTICE_HOURS} giờ, nhưng ${input.period} ngày ${formatDate(from)} chỉ còn khoảng ${Math.max(0, Math.floor(hours))} giờ. Hãy chọn ngày hoặc tiết muộn hơn.` };
   }
 
-  const records = db.findAll();
+  const records = await db.records.findActive();
   const lines = [];
+  const items = [];
   const conflicts = [];
   for (const it of input.items || []) {
     const eq = getEquipment(it.equipmentId);
@@ -137,6 +141,7 @@ function draftBorrowRequest(input, ctx) {
     const av = availabilityOf(eq, from, to, records);
     if (av.available < qty) conflicts.push({ name: eq.name, requested: qty, available: av.available });
     lines.push(`${eq.name} (x${qty})`);
+    items.push({ equipmentId: eq.id, quantity: qty });
   }
   if (conflicts.length) {
     return { ok: false, error: "Không đủ thiết bị trong khoảng ngày này.", conflicts };
@@ -148,6 +153,7 @@ function draftBorrowRequest(input, ctx) {
     teacherName: String(input.teacherName || "").trim().slice(0, 80),
     className: String(input.className || "").trim().slice(0, 20),
     equipment: lines.join(", "),
+    items,
     borrowDate: formatDate(from),
     returnDate: formatDate(to),
     period: input.period,
@@ -161,7 +167,7 @@ function draftBorrowRequest(input, ctx) {
   };
 }
 
-export function runTool(name, input = {}, ctx = {}) {
+export async function runTool(name, input = {}, ctx = {}) {
   switch (name) {
     case "search_equipment":
       return { results: searchEquipment(input) };

@@ -4,11 +4,12 @@ import cors from "cors";
 import session from "express-session";
 import path from "path";
 import { fileURLToPath } from "url";
-import db from "./database.js";
+import db, { newId } from "./database.js";
 import {
   getGoogleAuthURL,
   exchangeCodeForToken,
   getGoogleProfile,
+  verifyOAuthState,
   isAdmin,
   requireAuth,
   requireAdmin,
@@ -16,47 +17,78 @@ import {
 import notifications from "./notifications.js";
 import { sendBorrowNotification } from "./mailer.js";
 import { createChatRouter } from "./chat.js";
+import { SUBJECTS } from "./chatTools.js";
+import {
+  parseDate, formatDate, hoursUntilBorrow, MIN_NOTICE_HOURS, PERIOD_START,
+  getEquipment, availabilityOf,
+} from "./equipment.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || process.env.BACKEND_PORT || 3001;
 const FRONTEND_URL = process.env.FRONTEND_URL || "";
+const isProd = process.env.NODE_ENV === "production";
 
-// Middleware
+// ============ Kiểm tra cấu hình ============
+if (isProd && !process.env.SESSION_SECRET) {
+  console.error("Thiếu SESSION_SECRET. Không chạy production với secret mặc định.");
+  process.exit(1);
+}
+if (isProd && db.kind === "file") {
+  console.warn("⚠️  Chưa có DATABASE_URL: dữ liệu đang lưu vào file và SẼ MẤT khi Render deploy lại / khởi động lại.");
+}
+await db.init();
+
+// ============ Session store ============
+let sessionStore; // undefined = MemoryStore (chỉ dùng khi chạy thử trên máy)
+if (db.kind === "postgres") {
+  const { default: connectPgSimple } = await import("connect-pg-simple");
+  const PgSession = connectPgSimple(session);
+  sessionStore = new PgSession({ pool: db.pool, tableName: "user_sessions", createTableIfMissing: true });
+}
+
+// ============ Middleware ============
+if (isProd) app.set("trust proxy", 1); // Render đứng sau proxy HTTPS
+app.disable("x-powered-by");
 app.use(cors({ origin: FRONTEND_URL || true, credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: "100kb" }));
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "default-secret",
+    store: sessionStore,
+    secret: process.env.SESSION_SECRET || "dev-only-secret",
     resave: false,
     saveUninitialized: false,
+    proxy: isProd,
     cookie: {
-      secure: process.env.NODE_ENV === "production",
+      secure: isProd,
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60 * 1000,
       sameSite: "lax",
     },
-    ...(process.env.NODE_ENV === "production" && { proxy: true }),
   })
 );
 
+// Bọc route async: lỗi sẽ được trả về 500 thay vì làm treo request
+const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
 // ============ Serve frontend (production only) ============
 const distPath = path.join(__dirname, "..", "dist");
-if (process.env.NODE_ENV === "production") {
-  app.use(express.static(distPath));
+if (isProd) {
+  // File trong /assets có hash trong tên -> cache lâu dài; index.html thì không cache
+  app.use("/assets", express.static(path.join(distPath, "assets"), { immutable: true, maxAge: "1y" }));
+  app.use(express.static(distPath, { index: false, maxAge: "1h" }));
 }
 
 // ============ AUTH ROUTES (Google OAuth) ============
 
 app.get("/api/auth/me", (req, res) => {
-  if (!req.session?.user) return res.json({ user: null });
-  res.json({ user: req.session.user });
+  res.json({ user: req.session?.user || null });
 });
 
 app.get("/api/auth/google/login", (req, res) => {
   try {
     const authURL = getGoogleAuthURL(req);
-    res.redirect(authURL);
+    req.session.save(() => res.redirect(authURL));
   } catch (err) {
     console.error("Google login error:", err);
     res.redirect("/?error=login_failed");
@@ -64,26 +96,32 @@ app.get("/api/auth/google/login", (req, res) => {
 });
 
 app.get("/api/auth/google/callback", async (req, res) => {
-  const { code, error } = req.query;
+  const { code, error, state } = req.query;
   if (error || !code) return res.redirect("/?error=auth_denied");
+  if (!verifyOAuthState(req, state)) return res.redirect("/?error=invalid_state");
 
   try {
     const tokenData = await exchangeCodeForToken(code);
     const profile = await getGoogleProfile(tokenData.access_token);
+    if (!profile.email || profile.verified_email === false) return res.redirect("/?error=email_not_verified");
 
     const user = {
       id: profile.id,
       email: profile.email,
-      name: profile.name,
+      name: profile.name || profile.email,
       avatar: profile.picture || null,
       isAdmin: isAdmin(profile.email),
     };
 
-    req.session.user = user;
-    console.log(`Login: ${user.name} (${user.email}) - Admin: ${user.isAdmin}`);
-    res.redirect(FRONTEND_URL || "/");
+    // Tạo session mới sau khi đăng nhập (chống session fixation)
+    req.session.regenerate((err) => {
+      if (err) { console.error("Session error:", err); return res.redirect("/?error=callback_failed"); }
+      req.session.user = user;
+      req.session.save(() => res.redirect(FRONTEND_URL || "/"));
+    });
+    console.log(`Login: ${user.email} - Admin: ${user.isAdmin}`);
   } catch (err) {
-    console.error("Google callback error:", err);
+    console.error("Google callback error:", err.message);
     res.redirect("/?error=callback_failed");
   }
 });
@@ -98,93 +136,173 @@ app.post("/api/auth/logout", (req, res) => {
 
 // ============ RECORD ROUTES ============
 
-app.get("/api/records", (req, res) => {
-  const { subjectId, status, search } = req.query;
-  try { res.json(db.findAll({ subjectId, status, search })); }
-  catch (err) { res.status(500).json({ error: err.message }); }
-});
+const STATUSES = ["Chờ duyệt", "Mượn", "Trả", "Từ chối"];
+const str = (v, max) => String(v ?? "").trim().slice(0, max);
 
-app.post("/api/records", requireAuth, (req, res) => {
-  const { id, subjectId, subjectName, teacherName, className, equipment, borrowDate, returnDate, notes, period, periodPPCT } = req.body;
+/** Ẩn thông tin tài khoản khi người xem không phải admin */
+function publicView(r, viewer) {
+  if (viewer?.isAdmin) return r;
+  const { userId, ...rest } = r;
+  return rest;
+}
 
-  if (!subjectId || !subjectName || !teacherName || !className || !equipment || !borrowDate || !returnDate) {
+app.get("/api/records", wrap(async (req, res) => {
+  const subjectId = typeof req.query.subjectId === "string" ? req.query.subjectId : undefined;
+  const status = STATUSES.includes(req.query.status) ? req.query.status : undefined;
+  const search = typeof req.query.search === "string" ? req.query.search.slice(0, 100) : undefined;
+  const list = await db.records.findAll({ subjectId, status, search });
+  res.json(list.map((r) => publicView(r, req.session?.user)));
+}));
+
+app.post("/api/records", requireAuth, wrap(async (req, res) => {
+  const user = req.session.user;
+  const b = req.body || {};
+
+  const subject = SUBJECTS.find((s) => s.id === b.subjectId);
+  if (!subject) return res.status(400).json({ error: "Môn học không hợp lệ" });
+
+  const teacherName = str(b.teacherName, 80);
+  const className = str(b.className, 20);
+  const equipmentText = str(b.equipment, 500);
+  const period = str(b.period, 20);
+  const periodPPCT = str(b.periodPPCT, 120);
+  const notes = str(b.notes, 500);
+  if (!teacherName || !className || !equipmentText || !b.borrowDate || !b.returnDate) {
     return res.status(400).json({ error: "Điền đầy đủ thông tin" });
   }
+  if (period && !(period in PERIOD_START)) return res.status(400).json({ error: "Tiết dạy không hợp lệ" });
 
-  // User gửi yêu cầu -> trạng thái "Chờ duyệt", admin duyệt sau
+  const from = parseDate(b.borrowDate);
+  const to = parseDate(b.returnDate);
+  if (!from || !to) return res.status(400).json({ error: "Ngày không hợp lệ, hãy nhập theo dạng DD/MM/YYYY" });
+  if (to < from) return res.status(400).json({ error: "Ngày trả phải sau hoặc bằng ngày mượn" });
+
+  // Nội quy: đăng ký trước ít nhất 24 giờ (admin được phép đăng ký gấp)
+  if (!user.isAdmin) {
+    const hours = hoursUntilBorrow(b.borrowDate, period);
+    if (hours < MIN_NOTICE_HOURS) {
+      return res.status(400).json({ error: `Theo nội quy, phải đăng ký trước ít nhất ${MIN_NOTICE_HOURS} giờ so với giờ dạy.` });
+    }
+  }
+
+  // Phiếu do chatbot soạn có danh sách mã thiết bị -> kiểm tra tồn kho thật
+  let items;
+  if (Array.isArray(b.items) && b.items.length) {
+    items = [];
+    const active = await db.records.findActive();
+    for (const it of b.items.slice(0, 20)) {
+      const eq = getEquipment(it?.equipmentId);
+      const qty = Math.floor(Number(it?.quantity));
+      if (!eq || !qty || qty < 1 || qty > 100) return res.status(400).json({ error: "Danh sách thiết bị không hợp lệ" });
+      const { available } = availabilityOf(eq, from, to, active);
+      if (available < qty) {
+        return res.status(409).json({ error: `"${eq.name}" chỉ còn ${available} trong khoảng ngày này (bạn cần ${qty}).` });
+      }
+      items.push({ equipmentId: eq.id, quantity: qty });
+    }
+  }
+
+  // id luôn do server tạo, không nhận từ trình duyệt
   const newRecord = {
-    id: id || Date.now().toString(), subjectId, subjectName, teacherName, className,
-    equipment, quantity: 1, borrowDate, returnDate, notes: notes || "",
-    period: period || "", periodPPCT: periodPPCT || "",
+    id: newId(),
+    subjectId: subject.id,
+    subjectName: subject.name,
+    teacherName,
+    className,
+    equipment: equipmentText,
+    ...(items && { items }),
+    quantity: items ? items.reduce((sum, it) => sum + it.quantity, 0) : 1,
+    borrowDate: formatDate(from),
+    returnDate: formatDate(to),
+    notes,
+    period,
+    periodPPCT,
     status: "Chờ duyệt",
-    userId: req.session.user.id, userName: req.session.user.name,
+    userId: user.id,
+    userName: user.name,
     createdAt: new Date().toISOString(),
   };
 
-  try {
-    db.create(newRecord);
-    notifications.createNotification({
-      type: "borrow",
-      title: "Yêu cầu mượn mới",
-      message: `${teacherName} yêu cầu mượn "${equipment}" (${subjectName}) - Chờ duyệt`,
-      recordId: newRecord.id, userId: req.session.user.id, userName: req.session.user.name,
-    });
-    sendBorrowNotification(newRecord);
-    res.status(201).json(newRecord);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
+  await db.records.create(newRecord);
+  await notifications.createNotification({
+    type: "borrow",
+    title: "Yêu cầu mượn mới",
+    message: `${teacherName} yêu cầu mượn "${equipmentText}" (${subject.name}) - Chờ duyệt`,
+    recordId: newRecord.id, userId: user.id, userName: user.name,
+  });
+  sendBorrowNotification(newRecord); // không chờ gửi mail xong mới trả lời
+  res.status(201).json(newRecord);
+}));
 
-app.patch("/api/records/:id/status", requireAdmin, (req, res) => {
-  const { status } = req.body;
-  if (!["Chờ duyệt", "Mượn", "Trả", "Từ chối"].includes(status)) return res.status(400).json({ error: "Sai trạng thái" });
-  const existing = db.findById(req.params.id);
+app.patch("/api/records/:id/status", requireAdmin, wrap(async (req, res) => {
+  const { status } = req.body || {};
+  if (!STATUSES.includes(status)) return res.status(400).json({ error: "Sai trạng thái" });
+  const existing = await db.records.findById(req.params.id);
   if (!existing) return res.status(404).json({ error: "Không tìm thấy" });
-  try {
-    const updated = db.update(req.params.id, { status });
-    const actionText = status === "Mượn" ? "Đã duyệt cho mượn" : status === "Trả" ? "Đã trả" : status === "Từ chối" ? "Đã từ chối" : "Chờ duyệt";
-    notifications.createNotification({ type: "system", title: actionText, message: `"${existing.equipment}" - ${existing.teacherName}`, recordId: req.params.id, userId: req.session.user.id, userName: req.session.user.name });
-    res.json(updated);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
 
-app.delete("/api/records/:id", requireAdmin, (req, res) => {
-  if (!db.findById(req.params.id)) return res.status(404).json({ error: "Không tìm thấy" });
-  try { db.remove(req.params.id); res.json({ message: "Đã xóa" }); }
-  catch (err) { res.status(500).json({ error: err.message }); }
-});
+  const updated = await db.records.update(req.params.id, { status, updatedAt: new Date().toISOString() });
+  const actionText = { "Mượn": "Đã duyệt cho mượn", "Trả": "Đã trả", "Từ chối": "Đã từ chối", "Chờ duyệt": "Chờ duyệt" }[status];
+  await notifications.createNotification({
+    type: status === "Trả" ? "return" : "system",
+    title: actionText,
+    message: `"${existing.equipment}" - ${existing.teacherName}`,
+    recordId: req.params.id, userId: req.session.user.id, userName: req.session.user.name,
+  });
+  res.json(updated);
+}));
+
+app.delete("/api/records/:id", requireAdmin, wrap(async (req, res) => {
+  const ok = await db.records.remove(req.params.id);
+  if (!ok) return res.status(404).json({ error: "Không tìm thấy" });
+  res.json({ message: "Đã xóa" });
+}));
 
 // ============ STATS ============
-app.get("/api/stats", (req, res) => { try { res.json(db.countAll()); } catch (err) { res.status(500).json({ error: err.message }); } });
-app.get("/api/stats/:subjectId", (req, res) => { try { res.json(db.countBySubject(req.params.subjectId)); } catch (err) { res.status(500).json({ error: err.message }); } });
+app.get("/api/stats", wrap(async (req, res) => res.json(await db.records.stats())));
+app.get("/api/stats/:subjectId", wrap(async (req, res) => res.json(await db.records.stats(req.params.subjectId))));
 
 // ============ NOTIFICATIONS ============
-app.get("/api/notifications", requireAdmin, (req, res) => {
-  const { limit, unreadOnly } = req.query;
-  try { res.json(notifications.getNotifications({ limit: limit ? parseInt(limit) : 50, unreadOnly: unreadOnly === "true" })); }
-  catch (err) { res.status(500).json({ error: err.message }); }
-});
-app.get("/api/notifications/unread-count", requireAdmin, (req, res) => {
-  try { res.json({ count: notifications.getUnreadCount() }); } catch (err) { res.status(500).json({ error: err.message }); }
-});
-app.patch("/api/notifications/:id/read", requireAdmin, (req, res) => {
-  const r = notifications.markAsRead(req.params.id);
+app.get("/api/notifications", requireAdmin, wrap(async (req, res) => {
+  const limit = Math.min(Math.max(parseInt(req.query.limit) || 50, 1), 200);
+  res.json(await notifications.getNotifications({ limit, unreadOnly: req.query.unreadOnly === "true" }));
+}));
+app.get("/api/notifications/unread-count", requireAdmin, wrap(async (req, res) => {
+  res.json({ count: await notifications.getUnreadCount() });
+}));
+app.patch("/api/notifications/:id/read", requireAdmin, wrap(async (req, res) => {
+  const r = await notifications.markAsRead(req.params.id);
   if (!r) return res.status(404).json({ error: "Không tìm thấy" });
   res.json(r);
-});
-app.post("/api/notifications/mark-all-read", requireAdmin, (req, res) => { res.json(notifications.markAllAsRead()); });
+}));
+app.post("/api/notifications/mark-all-read", requireAdmin, wrap(async (req, res) => {
+  res.json(await notifications.markAllAsRead());
+}));
 
 // ============ CHAT (AI chatbot) ============
 app.use("/api/chat", createChatRouter({ requireAuth }));
 
+// API không tồn tại -> 404 JSON (không trả về index.html)
+app.use("/api", (req, res) => res.status(404).json({ error: "Không tìm thấy API" }));
+
 // ============ SPA fallback (production only) ============
-if (process.env.NODE_ENV === "production") {
+if (isProd) {
   app.get("*", (req, res) => {
+    res.set("Cache-Control", "no-cache");
     res.sendFile(path.join(distPath, "index.html"));
   });
 }
 
+// ============ Xử lý lỗi chung ============
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  if (err.type === "entity.parse.failed" || err.type === "entity.too.large") {
+    return res.status(400).json({ error: "Dữ liệu gửi lên không hợp lệ" });
+  }
+  console.error("Server error:", err);
+  res.status(500).json({ error: "Lỗi máy chủ, vui lòng thử lại" });
+});
+
 // ============ START ============
 app.listen(PORT, () => {
-  console.log(`Server: http://localhost:${PORT}`);
-  console.log(`Admin: ${process.env.ADMIN_EMAILS || "(chưa cấu hình)"}`);
+  console.log(`Server: http://localhost:${PORT} | Lưu trữ: ${db.kind}`);
 });

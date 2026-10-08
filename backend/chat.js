@@ -1,8 +1,5 @@
 /**
- * POST /api/chat  - chatbot tư vấn và gợi ý thiết bị (Google Gemini + function calling)
- *
- * Request : { messages: [{role:"user"|"assistant", content:string}], context?: { subjectId?: string } }
- * Response: { reply: string, draft: BorrowDraft | null }
+ * POST /api/chat  - chatbot tư vấn thiết bị (Google Gemini Interactions API)
  */
 import { Router } from "express";
 import { TOOLS, SUBJECTS, runTool } from "./chatTools.js";
@@ -12,8 +9,9 @@ const MAX_TURNS = 12;
 const MAX_CHARS = 2000;
 const MAX_STEPS = 6;
 const RATE_LIMIT = 10;
+const REQUEST_TIMEOUT_MS = 30_000;
 
-const getModel = () => process.env.GEMINI_MODEL || "gemini-3.8-flash";
+const getModel = () => process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const getApiKey = () => process.env.GEMINI_API_KEY || "";
 
 // ---------- Rate limit ----------
@@ -31,7 +29,7 @@ setInterval(() => {
   for (const [id, arr] of hits) if (!arr.some((t) => now - t < 60_000)) hits.delete(id);
 }, 5 * 60_000).unref();
 
-// ---------- Chuyển đổi định dạng tools từ Anthropic sang Gemini ----------
+// ---------- Chuyển đổi tools sang định dạng Gemini ----------
 function toGeminiTools(tools) {
   return [{
     functionDeclarations: tools.map((t) => ({
@@ -61,9 +59,10 @@ Nguyên tắc:
 Ngữ cảnh: tài khoản đang đăng nhập tên "${name}".${subject ? ` Giáo viên đang xem trang môn ${subject.name}; ưu tiên môn này.` : ""}`;
 }
 
-// ---------- Gọi Gemini API ----------
+// ---------- Gọi Gemini generateContent API ----------
 async function callGemini({ apiKey, model, systemInstruction, contents, tools }) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  // API key gửi qua header (không để trên URL, tránh lộ trong log)
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
   const body = {
     systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -74,25 +73,27 @@ async function callGemini({ apiKey, model, systemInstruction, contents, tools })
 
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 
+  const data = await res.json().catch(() => ({}));
+
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    const e = new Error(err?.error?.message || res.statusText);
+    const msg = data?.error?.message || res.statusText;
+    const e = new Error(msg);
     e.status = res.status;
     throw e;
   }
 
-  return res.json();
+  return data;
 }
 
 // ---------- Vòng lặp tool use ----------
 export async function runConversation({ apiKey, model, system, messages, ctx }) {
   const geminiTools = toGeminiTools(TOOLS);
 
-  // Chuyển messages sang định dạng Gemini
   const contents = messages.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
@@ -100,8 +101,7 @@ export async function runConversation({ apiKey, model, system, messages, ctx }) 
 
   for (let step = 0; step < MAX_STEPS; step++) {
     const data = await callGemini({
-      apiKey,
-      model,
+      apiKey, model,
       systemInstruction: system,
       contents,
       tools: geminiTools,
@@ -111,42 +111,31 @@ export async function runConversation({ apiKey, model, system, messages, ctx }) 
     if (!candidate) return "Mình chưa có câu trả lời phù hợp. Bạn thử hỏi cụ thể hơn nhé.";
 
     const parts = candidate.content?.parts || [];
-
-    // Thêm response của model vào lịch sử
     contents.push({ role: "model", parts });
 
-    // Kiểm tra có function call không
     const functionCalls = parts.filter((p) => p.functionCall);
 
     if (!functionCalls.length) {
-      // Không có function call -> trả lời văn bản
       const text = parts.filter((p) => p.text).map((p) => p.text).join("\n").trim();
       return text || "Mình chưa có câu trả lời phù hợp. Bạn thử hỏi cụ thể hơn nhé.";
     }
 
-    // Chạy từng function call
-    const functionResults = functionCalls.map((p) => {
+    const functionResults = await Promise.all(functionCalls.map(async (p) => {
       const { name, args } = p.functionCall;
       let output;
       try {
-        output = runTool(name, args, ctx);
+        output = await runTool(name, args || {}, ctx);
       } catch (err) {
         console.error(`Tool ${name} lỗi:`, err);
         output = { error: "Công cụ gặp lỗi, hãy thử lại." };
       }
-      return {
-        functionResponse: {
-          name,
-          response: { output },
-        },
-      };
-    });
+      return { functionResponse: { name, response: { output } } };
+    }));
 
-    // Thêm kết quả tool vào lịch sử
     contents.push({ role: "user", parts: functionResults });
   }
 
-  return "Mình xử lý chưa xong yêu cầu này. Bạn thử chia nhỏ câu hỏi hoặc nêu rõ môn, khối và ngày cần mượn nhé.";
+  return "Mình xử lý chưa xong. Bạn thử hỏi cụ thể hơn nhé.";
 }
 
 // ---------- Router ----------
@@ -155,14 +144,12 @@ export function createChatRouter({ requireAuth } = {}) {
 
   router.post("/", requireAuth, async (req, res) => {
     const user = req.session.user;
-
     const apiKey = getApiKey();
     if (!apiKey) return res.status(503).json({ error: "Chatbot chưa được cấu hình (thiếu GEMINI_API_KEY)." });
 
     const rawMessages = req.body?.messages;
     if (!Array.isArray(rawMessages)) return res.status(400).json({ error: "Tin nhắn không hợp lệ." });
 
-    // Sanitize messages
     const messages = [];
     for (const m of rawMessages.slice(-MAX_TURNS)) {
       if (!m || (m.role !== "user" && m.role !== "assistant") || typeof m.content !== "string") continue;
@@ -175,25 +162,23 @@ export function createChatRouter({ requireAuth } = {}) {
     if (rateLimited(user.id)) return res.status(429).json({ error: "Bạn gửi hơi nhanh, vui lòng thử lại sau ít phút." });
 
     const subjectId = SUBJECTS.some((s) => s.id === req.body?.context?.subjectId)
-      ? req.body.context.subjectId
-      : undefined;
+      ? req.body.context.subjectId : undefined;
 
     const ctx = { user, draft: null };
     try {
       const reply = await runConversation({
-        apiKey,
-        model: getModel(),
+        apiKey, model: getModel(),
         system: buildSystem(user, subjectId),
-        messages,
-        ctx,
+        messages, ctx,
       });
       res.json({ reply, draft: ctx.draft });
     } catch (err) {
       console.error("Chat error:", err?.status, err?.message);
-      if (err?.status === 429) return res.status(503).json({ error: "Trợ lý đang bận, vui lòng thử lại sau ít phút." });
-      if (err?.status === 400) return res.status(503).json({ error: `Lỗi cấu hình: ${err.message}` });
-      if (err?.status === 401 || err?.status === 403) return res.status(503).json({ error: "GEMINI_API_KEY không hợp lệ hoặc chưa được cấp quyền." });
-      res.status(502).json({ error: `Lỗi: ${err?.message || "Không rõ"}` });
+      if (err?.status === 429) return res.status(429).json({ error: "Trợ lý đang bận, vui lòng thử lại sau 1 phút." });
+      if (err?.status === 503) return res.status(503).json({ error: "Model đang quá tải, vui lòng thử lại sau ít phút." });
+      if (err?.name === "TimeoutError") return res.status(504).json({ error: "Trợ lý phản hồi quá lâu, vui lòng thử lại." });
+      // Không trả nguyên văn lỗi của Google cho người dùng (có thể lộ cấu hình)
+      res.status(502).json({ error: "Trợ lý đang gặp sự cố, vui lòng thử lại sau." });
     }
   });
 

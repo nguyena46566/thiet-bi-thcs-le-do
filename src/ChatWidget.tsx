@@ -160,7 +160,7 @@ export default function ChatWidget({
     if (!draft) return
     patch(id, { draftState: "sending", draftError: undefined })
     try {
-      await createRecord({ ...draft, quantity: 1, status: "Chờ duyệt" })
+      await createRecord(draft)
       patch(id, { draftState: "sent" })
       onRecordCreated?.()
     } catch (e) {
