@@ -63,6 +63,7 @@ async function createPgDriver(databaseUrl) {
       CREATE INDEX IF NOT EXISTS records_subject_idx ON records (subject_id);
       CREATE INDEX IF NOT EXISTS records_status_idx  ON records (status);
       CREATE INDEX IF NOT EXISTS records_created_idx ON records (created_at DESC);
+      CREATE INDEX IF NOT EXISTS records_user_idx    ON records ((data->>'userId'));
 
       CREATE TABLE IF NOT EXISTS notifications (
         id          TEXT PRIMARY KEY,
@@ -147,6 +148,11 @@ async function createPgDriver(databaseUrl) {
     /** Phiếu còn giữ thiết bị (Chờ duyệt / Mượn) - dùng để tính tồn kho */
     async findActive() {
       const { rows } = await q("SELECT data FROM records WHERE status IN ('Chờ duyệt','Mượn')");
+      return rows.map((r) => r.data);
+    },
+    /** Phiếu do một tài khoản tạo (trang "Phiếu của tôi") */
+    async findByUser(userId) {
+      const { rows } = await q("SELECT data FROM records WHERE data->>'userId' = $1 ORDER BY created_at DESC", [userId]);
       return rows.map((r) => r.data);
     },
   };
@@ -258,6 +264,9 @@ function createFileDriver() {
     },
     async findActive() {
       return load("records").filter((r) => r.status === "Chờ duyệt" || r.status === "Mượn");
+    },
+    async findByUser(userId) {
+      return load("records").filter((r) => r.userId === userId).sort(byNewest);
     },
   };
 

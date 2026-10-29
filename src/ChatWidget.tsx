@@ -49,15 +49,18 @@ function Rich({ text }: { text: string }) {
 }
 
 function DraftCard({
-  msg, onSend, onDismiss,
-}: { msg: UiMessage; onSend: () => void; onDismiss: () => void }) {
+  msg, onSend, onDismiss, onFill,
+}: { msg: UiMessage; onSend: () => void; onDismiss: () => void; onFill?: () => void }) {
   const d = msg.draft!
+  const missing = d.missing ?? []
+  const complete = missing.length === 0
+  const blank = "(chưa có)"
   const rows: [string, string][] = [
     ["Môn", d.subjectName],
-    ["Giáo viên", d.teacherName],
-    ["Lớp", d.className],
+    ["Giáo viên", d.teacherName || blank],
+    ["Lớp", d.className || blank],
     ["Ngày mượn", d.borrowDate === d.returnDate ? d.borrowDate : `${d.borrowDate} đến ${d.returnDate}`],
-    ["Tiết", `${d.period} (PPCT: ${d.periodPPCT})`],
+    ["Tiết", `${d.period || blank} (PPCT: ${d.periodPPCT || blank})`],
     ["Thiết bị", d.equipment],
   ]
   if (d.notes) rows.push(["Ghi chú", d.notes])
@@ -81,14 +84,31 @@ function DraftCard({
       ) : (
         <>
           {msg.draftError && <p role="alert" className="mt-2 text-xs text-red-600">{msg.draftError}</p>}
-          <div className="mt-3 flex gap-2">
-            <button
-              onClick={onSend}
-              disabled={msg.draftState === "sending"}
-              className="flex-1 rounded-lg bg-[#1a3670] px-3 py-2 text-xs font-semibold text-white hover:bg-[#15295a] disabled:opacity-60"
-            >
-              {msg.draftState === "sending" ? "Đang gửi..." : "Gửi yêu cầu"}
-            </button>
+          {!complete && (
+            <p className="mt-2 text-xs text-amber-700">
+              Còn thiếu: {missing.join(", ")}. Bấm "Điền vào form" để điền nốt, hoặc trả lời trợ lý để bổ sung.
+            </p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {onFill && (
+              <button
+                onClick={onFill}
+                disabled={msg.draftState === "sending"}
+                className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-60 ${complete ? "border border-[#1a3670] text-[#1a3670] hover:bg-white" : "bg-[#1a3670] text-white hover:bg-[#15295a]"}`}
+                title="Đưa thông tin vào form đăng ký để kiểm tra và sửa trước khi gửi"
+              >
+                Điền vào form
+              </button>
+            )}
+            {complete && (
+              <button
+                onClick={onSend}
+                disabled={msg.draftState === "sending"}
+                className="flex-1 rounded-lg bg-[#1a3670] px-3 py-2 text-xs font-semibold text-white hover:bg-[#15295a] disabled:opacity-60"
+              >
+                {msg.draftState === "sending" ? "Đang gửi..." : "Gửi yêu cầu"}
+              </button>
+            )}
             <button
               onClick={onDismiss}
               disabled={msg.draftState === "sending"}
@@ -106,9 +126,12 @@ function DraftCard({
 export default function ChatWidget({
   subjectId,
   onRecordCreated,
+  onFillForm,
 }: {
   subjectId?: string
   onRecordCreated?: () => void
+  /** Đưa bản nháp vào form đăng ký của trang môn học */
+  onFillForm?: (draft: BorrowDraft) => void
 }) {
   const { user, login } = useAuth()
   const [open, setOpen] = useState(() => sessionStorage.getItem(OPEN_KEY) === "1")
@@ -170,6 +193,12 @@ export default function ChatWidget({
 
   const close = () => { setOpen(false); toggleRef.current?.focus() }
 
+  const fillForm = (draft: BorrowDraft) => {
+    onFillForm?.(draft)
+    // Màn hình nhỏ: khung chat che mất form nên đóng lại
+    if (window.innerWidth < 1024) setOpen(false)
+  }
+
   return (
     <>
       <button
@@ -227,7 +256,12 @@ export default function ChatWidget({
                     <div className={m.role === "user" ? "max-w-[85%] rounded-2xl rounded-br-md bg-[#1a3670] px-3 py-2 text-sm text-white" : "max-w-[92%] rounded-2xl rounded-bl-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800"}>
                       <p className="whitespace-pre-wrap break-words"><Rich text={m.content} /></p>
                       {m.draft && (
-                        <DraftCard msg={m} onSend={() => sendDraft(m.id)} onDismiss={() => patch(m.id, { draftState: "dismissed" })} />
+                        <DraftCard
+                          msg={m}
+                          onSend={() => sendDraft(m.id)}
+                          onDismiss={() => patch(m.id, { draftState: "dismissed" })}
+                          onFill={onFillForm && m.draft ? () => fillForm(m.draft!) : undefined}
+                        />
                       )}
                     </div>
                   </div>

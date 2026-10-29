@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "@/AuthContext"
 import ChatWidget from "@/ChatWidget"
 import {
   fetchRecords,
+  fetchMyRecords,
   createRecord,
   updateRecordStatus,
   deleteRecord,
@@ -14,12 +15,14 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   type BorrowRecord,
+  type BorrowDraft,
+  type BorrowItem,
   type RecordStatus,
   type Stats,
   type Notification,
 } from "@/api"
 
-type Page = "home" | "admin" | "noiquy" | string
+type Page = "home" | "admin" | "noiquy" | "mine" | string
 
 const SUBJECTS = [
   { id: "hoa-hoc", name: "Hóa học", color: "#059669", img: "https://images.unsplash.com/photo-1614308460927-5024ba2e1dcb?w=600&h=400&fit=crop&auto=format", desc: "Thiết bị thí nghiệm, dụng cụ phòng lab hóa học" },
@@ -33,11 +36,51 @@ const SUBJECTS = [
   { id: "tieng-anh", name: "Tiếng Anh", color: "#0e7490", img: "https://images.unsplash.com/photo-1543109740-4bdb38fda756?w=600&h=400&fit=crop&auto=format", desc: "Sách giáo khoa, thiết bị nghe nhìn, flash cards" },
 ]
 
+// ============ TIỆN ÍCH NGÀY THÁNG ============
+/** "DD/MM/YYYY" -> Date (00:00 giờ máy) hoặc null */
+function parseVN(d?: string): Date | null {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec((d || "").trim())
+  if (!m) return null
+  const dt = new Date(0)
+  dt.setFullYear(+m[3], +m[2] - 1, +m[1]) // setFullYear: năm < 100 không bị đổi thành 19xx
+  dt.setHours(0, 0, 0, 0)
+  return dt.getDate() === +m[1] ? dt : null
+}
+/** "DD/MM/YYYY" -> "YYYY-MM-DD" cho ô chọn ngày */
+const vnToIso = (d: string) => { const dt = parseVN(d); return dt ? `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}` : "" }
+/** "YYYY-MM-DD" -> "DD/MM/YYYY" */
+const isoToVn = (d: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d); return m ? `${m[3]}/${m[2]}/${m[1]}` : "" }
+const todayStart = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t }
+const tomorrowVN = () => { const t = todayStart(); t.setDate(t.getDate() + 1); return `${String(t.getDate()).padStart(2, "0")}/${String(t.getMonth() + 1).padStart(2, "0")}/${t.getFullYear()}` }
+/** Phiếu đang mượn đã quá ngày trả */
+const isOverdue = (r: BorrowRecord) => r.status === "Mượn" && (parseVN(r.returnDate)?.getTime() ?? Infinity) < todayStart().getTime()
+/** Phiếu chưa được duyệt mà đã qua ngày mượn */
+const isStalePending = (r: BorrowRecord) => r.status === "Chờ duyệt" && (parseVN(r.borrowDate)?.getTime() ?? Infinity) < todayStart().getTime()
+
+const STATUS_LABEL: Record<string, string> = { "Chờ duyệt": "Chờ duyệt", "Mượn": "Đang mượn", "Trả": "Đã trả", "Từ chối": "Từ chối" }
+const STATUS_CLS: Record<string, string> = { "Chờ duyệt": "bg-amber-50 text-amber-700", "Mượn": "bg-blue-50 text-blue-700", "Trả": "bg-green-50 text-green-700", "Từ chối": "bg-red-50 text-red-700" }
+
+function StatusBadge({ r, small }: { r: BorrowRecord; small?: boolean }) {
+  const overdue = isOverdue(r)
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold whitespace-nowrap ${small ? "text-[10px]" : "text-xs"} ${overdue ? "bg-rose-100 text-rose-700" : STATUS_CLS[r.status] || "bg-gray-100 text-gray-600"}`}>
+      {overdue ? "Quá hạn trả" : STATUS_LABEL[r.status] || r.status}
+      {isStalePending(r) && <span className="ml-1 font-normal opacity-80" title="Đã qua ngày mượn mà chưa được duyệt">· đã qua ngày</span>}
+    </span>
+  )
+}
+
+/** Báo cho các thành phần khác (badge trên thanh điều hướng) rằng thông báo vừa thay đổi */
+const notifyNotifsChanged = () => window.dispatchEvent(new Event("notifs-changed"))
+
 // ============ NAV ============
 function Nav({ page, setPage }: { page: Page; setPage: (p: Page) => void }) {
   const { user, login, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [subjectsOpen, setSubjectsOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
+  const dropRef = useRef<HTMLDivElement>(null)
+  const isSubjectPage = SUBJECTS.some((s) => s.id === page)
 
   useEffect(() => {
     if (!user?.isAdmin) return
@@ -48,63 +91,105 @@ function Nav({ page, setPage }: { page: Page; setPage: (p: Page) => void }) {
     refresh()
     const interval = setInterval(refresh, 30000)
     document.addEventListener("visibilitychange", refresh)
-    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", refresh) }
+    window.addEventListener("notifs-changed", refresh)
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", refresh); window.removeEventListener("notifs-changed", refresh) }
   }, [user?.isAdmin])
+
+  // Đổi trang (kể cả bằng nút Back) thì đóng các menu đang mở
+  useEffect(() => { setMenuOpen(false); setSubjectsOpen(false) }, [page])
+
+  // Đóng menu môn học khi bấm ra ngoài hoặc nhấn Esc
+  useEffect(() => {
+    if (!subjectsOpen) return
+    const onDown = (e: MouseEvent) => { if (!dropRef.current?.contains(e.target as Node)) setSubjectsOpen(false) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setSubjectsOpen(false) }
+    document.addEventListener("mousedown", onDown)
+    document.addEventListener("keydown", onKey)
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey) }
+  }, [subjectsOpen])
+
+  const go = (p: Page) => { setPage(p); setMenuOpen(false); setSubjectsOpen(false) }
+  const badge = unreadCount > 9 ? "9+" : String(unreadCount)
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-[#1a3670] text-white shadow-xl">
-      <div className="max-w-screen-xl mx-auto px-4 flex items-center h-16 gap-3">
-        <button onClick={() => setPage("home")} className="flex items-center gap-3 flex-shrink-0 hover:opacity-90 transition-opacity">
+      <div className="max-w-screen-xl mx-auto px-4 flex items-center h-16 gap-2">
+        <button onClick={() => go("home")} className="flex items-center gap-3 flex-shrink-0 hover:opacity-90 transition-opacity" aria-label="Trang chủ">
           <img src={logoImg} alt="Logo" className="h-10 w-10 rounded-full object-cover border-2 border-white/40 shadow" />
-          <div className="hidden sm:block leading-tight">
+          <div className="hidden sm:block leading-tight text-left whitespace-nowrap">
             <div className="text-[10px] font-medium text-white/60 uppercase tracking-wider">Trường THCS</div>
             <div className="text-sm font-bold tracking-wide">Lê Độ</div>
           </div>
         </button>
 
-        <div className="hidden xl:flex items-center gap-0.5 flex-1 ml-4">
-          <NavBtn label="Trang chủ" active={page === "home"} onClick={() => setPage("home")} />
-          <NavBtn label="Nội quy" active={page === "noiquy"} onClick={() => setPage("noiquy")} />
-          {SUBJECTS.map((s) => <NavBtn key={s.id} label={s.name} active={page === s.id} onClick={() => setPage(s.id)} />)}
-        </div>
+        <nav className="hidden lg:flex items-center gap-1 flex-1 ml-4 min-w-0" aria-label="Điều hướng chính">
+          <NavBtn label="Trang chủ" active={page === "home"} onClick={() => go("home")} />
+          <NavBtn label="Nội quy" active={page === "noiquy"} onClick={() => go("noiquy")} />
+          <div className="relative" ref={dropRef}>
+            <button onClick={() => setSubjectsOpen(!subjectsOpen)} aria-expanded={subjectsOpen} aria-haspopup="true"
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${isSubjectPage || subjectsOpen ? "bg-white/20 text-white" : "text-white/80 hover:bg-white/10 hover:text-white"}`}>
+              {isSubjectPage ? SUBJECTS.find((s) => s.id === page)!.name : "Môn học"}
+              <svg className={`w-3.5 h-3.5 transition-transform ${subjectsOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            </button>
+            {subjectsOpen && (
+              <div className="absolute left-0 top-full mt-2 w-[22rem] bg-white text-gray-800 rounded-xl shadow-2xl border border-gray-100 p-2 grid grid-cols-2 gap-1">
+                {SUBJECTS.map((s) => (
+                  <button key={s.id} onClick={() => go(s.id)} className={`flex items-center gap-2 text-left px-3 py-2 rounded-lg text-sm ${page === s.id ? "bg-gray-100 font-semibold" : "hover:bg-gray-50"}`}>
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {user && <NavBtn label="Phiếu của tôi" active={page === "mine"} onClick={() => go("mine")} />}
+        </nav>
 
-        <div className="flex-1 xl:hidden" />
+        <div className="flex-1 lg:hidden" />
 
         {user?.isAdmin && (
-          <button onClick={() => setPage("admin")} className={`hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm font-medium border border-white/30 transition-colors relative ${page === "admin" ? "bg-white/20 border-white/50" : "hover:bg-white/10"}`}>
+          <button onClick={() => go("admin")} className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-white/30 transition-colors relative whitespace-nowrap flex-shrink-0 ${page === "admin" ? "bg-white text-[#1a3670]" : "hover:bg-white/10"}`}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
             Quản trị
-            {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">{unreadCount > 9 ? "9+" : unreadCount}</span>}
+            {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-5 h-5 px-1 flex items-center justify-center">{badge}</span>}
           </button>
         )}
 
         {user ? (
-          <div className="flex items-center gap-2">
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10">
+          <div className="hidden lg:flex items-center gap-1 flex-shrink-0">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10" title={user.email}>
               {user.avatar && <img src={user.avatar} alt="" className="w-6 h-6 rounded-full" />}
-              <span className="text-xs font-medium max-w-[120px] truncate">{user.name}</span>
+              <span className="text-xs font-medium max-w-[130px] truncate">{user.name}</span>
             </div>
-            <button onClick={logout} className="px-2.5 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Đăng xuất</button>
+            <button onClick={logout} className="px-2.5 py-1.5 rounded-lg text-xs text-white/80 hover:text-white hover:bg-white/10 transition-colors whitespace-nowrap">Đăng xuất</button>
           </div>
         ) : (
-          <button onClick={login} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/20 hover:bg-white/30 text-white text-sm font-medium transition-colors">
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+          <button onClick={login} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/20 hover:bg-white/30 text-white text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0">
             Đăng nhập
           </button>
         )}
 
-        <button onClick={() => setMenuOpen(!menuOpen)} className="xl:hidden p-2 hover:bg-white/10 rounded-lg transition-colors" aria-label="Menu">
+        <button onClick={() => setMenuOpen(!menuOpen)} className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors relative" aria-label="Menu" aria-expanded={menuOpen}>
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={menuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} /></svg>
+          {user?.isAdmin && unreadCount > 0 && <span className="sm:hidden absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />}
         </button>
       </div>
 
       {menuOpen && (
-        <div className="xl:hidden bg-[#132d5e] border-t border-white/10">
+        <div className="lg:hidden bg-[#132d5e] border-t border-white/10 max-h-[calc(100vh-4rem)] overflow-y-auto">
           <div className="max-w-screen-xl mx-auto px-4 py-3 grid grid-cols-2 gap-1">
-            <button onClick={() => { setPage("home"); setMenuOpen(false) }} className={`text-left px-3 py-2.5 rounded-lg text-sm font-medium col-span-2 ${page === "home" ? "bg-white/20" : "hover:bg-white/10"}`}>Trang chủ</button>
-            <button onClick={() => { setPage("noiquy"); setMenuOpen(false) }} className={`text-left px-3 py-2.5 rounded-lg text-sm font-medium col-span-2 ${page === "noiquy" ? "bg-white/20" : "hover:bg-white/10"}`}>Nội quy mượn thiết bị</button>
-            {SUBJECTS.map((s) => <button key={s.id} onClick={() => { setPage(s.id); setMenuOpen(false) }} className={`text-left px-3 py-2.5 rounded-lg text-sm ${page === s.id ? "bg-white/20" : "hover:bg-white/10"}`}>{s.name}</button>)}
-            {user?.isAdmin && <button onClick={() => { setPage("admin"); setMenuOpen(false) }} className="text-left px-3 py-2.5 rounded-lg text-sm font-medium col-span-2 border-t border-white/10 mt-1 pt-3 hover:bg-white/10">Quản trị</button>}
+            {user && (
+              <div className="col-span-2 flex items-center justify-between gap-2 px-3 py-2 mb-1 rounded-lg bg-white/10">
+                <span className="text-sm font-medium truncate">{user.name}</span>
+                <button onClick={() => { setMenuOpen(false); logout() }} className="text-xs text-white/80 hover:text-white whitespace-nowrap">Đăng xuất</button>
+              </div>
+            )}
+            <MenuItem label="Trang chủ" active={page === "home"} onClick={() => go("home")} wide />
+            <MenuItem label="Nội quy" active={page === "noiquy"} onClick={() => go("noiquy")} wide />
+            {user && <MenuItem label="Phiếu của tôi" active={page === "mine"} onClick={() => go("mine")} wide />}
+            {user?.isAdmin && <MenuItem label={unreadCount > 0 ? `Quản trị (${badge} thông báo mới)` : "Quản trị"} active={page === "admin"} onClick={() => go("admin")} wide />}
+            <div className="col-span-2 px-3 pt-2 pb-1 text-[11px] uppercase tracking-wider text-white/50">Môn học</div>
+            {SUBJECTS.map((s) => <MenuItem key={s.id} label={s.name} active={page === s.id} onClick={() => go(s.id)} />)}
           </div>
         </div>
       )}
@@ -113,7 +198,11 @@ function Nav({ page, setPage }: { page: Page; setPage: (p: Page) => void }) {
 }
 
 function NavBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return <button onClick={onClick} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${active ? "bg-white/20 text-white" : "text-white/80 hover:bg-white/10 hover:text-white"}`}>{label}</button>
+  return <button onClick={onClick} aria-current={active ? "page" : undefined} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${active ? "bg-white/20 text-white" : "text-white/80 hover:bg-white/10 hover:text-white"}`}>{label}</button>
+}
+
+function MenuItem({ label, active, onClick, wide }: { label: string; active: boolean; onClick: () => void; wide?: boolean }) {
+  return <button onClick={onClick} className={`text-left px-3 py-2.5 rounded-lg text-sm ${wide ? "col-span-2 font-medium" : ""} ${active ? "bg-white/20" : "hover:bg-white/10"}`}>{label}</button>
 }
 
 // ============ NỘI QUY PAGE ============
@@ -200,6 +289,7 @@ function NoiQuyPage() {
 function HomePage({ setPage }: { setPage: (p: Page) => void }) {
   const [records, setRecords] = useState<BorrowRecord[]>([])
   const [stats, setStats] = useState<Stats>({ total: 0, borrowing: 0, returned: 0, pending: 0 })
+  const [shown, setShown] = useState(10) // hiển thị dần, tránh bảng quá dài
 
   useEffect(() => {
     fetchRecords().then(setRecords).catch(console.error)
@@ -224,15 +314,15 @@ function HomePage({ setPage }: { setPage: (p: Page) => void }) {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-10">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-10">
           {[
             { label: "Tổng đăng ký", value: stats.total, icon: "📋", color: "bg-slate-50 border-slate-200 text-slate-700" },
             { label: "Chờ duyệt", value: stats.pending, icon: "⏳", color: "bg-amber-50 border-amber-200 text-amber-700" },
             { label: "Đang mượn", value: stats.borrowing, icon: "🔵", color: "bg-blue-50 border-blue-200 text-blue-700" },
             { label: "Đã trả", value: stats.returned, icon: "✅", color: "bg-green-50 border-green-200 text-green-700" },
           ].map((stat) => (
-            <div key={stat.label} className={`border rounded-2xl px-6 py-5 flex items-center gap-4 ${stat.color}`}>
-              <span className="text-3xl">{stat.icon}</span>
+            <div key={stat.label} className={`border rounded-2xl px-4 sm:px-6 py-4 sm:py-5 flex items-center gap-3 sm:gap-4 ${stat.color}`}>
+              <span className="text-2xl sm:text-3xl">{stat.icon}</span>
               <div><div className="text-2xl font-bold">{stat.value}</div><div className="text-sm opacity-75">{stat.label}</div></div>
             </div>
           ))}
@@ -243,9 +333,9 @@ function HomePage({ setPage }: { setPage: (p: Page) => void }) {
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-bold text-gray-900">Danh sách đăng ký mượn/trả</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Ai cũng có thể xem - Cập nhật realtime</p>
+              <p className="text-xs text-gray-500 mt-0.5">Công khai cho mọi người xem, mới nhất ở trên</p>
             </div>
-            <span className="text-sm text-gray-400">{records.length} bản ghi</span>
+            <span className="text-sm text-gray-400 whitespace-nowrap">{records.length} bản ghi</span>
           </div>
 
           {records.length === 0 ? (
@@ -264,7 +354,7 @@ function HomePage({ setPage }: { setPage: (p: Page) => void }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {records.map((r) => {
+                  {records.slice(0, shown).map((r) => {
                     const sub = SUBJECTS.find((s) => s.id === r.subjectId)
                     return (
                       <tr key={r.id} className="hover:bg-gray-50/60">
@@ -275,17 +365,19 @@ function HomePage({ setPage }: { setPage: (p: Page) => void }) {
                         <td className="px-4 py-3 text-gray-700 max-w-[160px] truncate" title={r.equipment}>{r.equipment}</td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{r.borrowDate}</td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{r.returnDate}</td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${r.status === "Chờ duyệt" ? "bg-amber-50 text-amber-700" : r.status === "Mượn" ? "bg-blue-50 text-blue-700" : r.status === "Từ chối" ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${r.status === "Chờ duyệt" ? "bg-amber-500" : r.status === "Mượn" ? "bg-blue-500" : r.status === "Từ chối" ? "bg-red-500" : "bg-green-500"}`} />
-                            {r.status === "Chờ duyệt" ? "Chờ duyệt" : r.status === "Mượn" ? "Đang mượn" : r.status === "Từ chối" ? "Từ chối" : "Đã trả"}
-                          </span>
-                        </td>
+                        <td className="px-4 py-3"><StatusBadge r={r} /></td>
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
+              {records.length > shown && (
+                <div className="px-6 py-3 border-t border-gray-100 text-center">
+                  <button onClick={() => setShown(shown + 20)} className="text-sm font-semibold text-[#1a3670] hover:underline">
+                    Xem thêm ({records.length - shown} phiếu)
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -326,12 +418,50 @@ interface FormState {
   notes: string
 }
 
-function BorrowForm({ subjectId, subjectName, onCreated }: { subjectId: string; subjectName: string; onCreated?: () => void }) {
+const EMPTY_FORM: FormState = { teacherName: "", className: "", borrowDate: "", period: "", periodPPCT: "", equipment: "", returnDate: "", notes: "" }
+
+function BorrowForm({ subjectId, subjectName, onCreated, prefill, onPrefillUsed }: {
+  subjectId: string
+  subjectName: string
+  onCreated?: () => void
+  prefill?: Prefill
+  onPrefillUsed?: () => void
+}) {
   const { user, login } = useAuth()
-  const [form, setForm] = useState<FormState>({ teacherName: "", className: "", borrowDate: "", period: "", periodPPCT: "", equipment: "", returnDate: "", notes: "" })
+  // Họ tên mặc định lấy từ tài khoản Google, giáo viên vẫn sửa được
+  const blankForm = (): FormState => ({ ...EMPTY_FORM, teacherName: user?.name || "" })
+  const [form, setForm] = useState<FormState>(blankForm)
+  useEffect(() => { if (user?.name) setForm((f) => (f.teacherName ? f : { ...f, teacherName: user.name })) }, [user?.name])
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  // Danh sách mã thiết bị do chatbot chọn (để server kiểm tra tồn kho chính xác)
+  const [chatItems, setChatItems] = useState<{ items: BorrowItem[]; equipment: string } | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
+  const [fromChat, setFromChat] = useState(false)
+
+  // Nhận bản nháp từ Trợ lý thiết bị -> điền sẵn vào form để giáo viên kiểm tra
+  useEffect(() => {
+    if (!prefill) return
+    const d = prefill.draft
+    setForm({
+      teacherName: d.teacherName || user?.name || "",
+      className: d.className || "",
+      borrowDate: vnToIso(d.borrowDate || ""),
+      period: d.period || "",
+      periodPPCT: d.periodPPCT || "",
+      equipment: d.equipment || "",
+      returnDate: vnToIso(d.returnDate || d.borrowDate || ""),
+      notes: d.notes || "",
+    })
+    setChatItems(d.items?.length ? { items: d.items, equipment: d.equipment } : null)
+    setFromChat(true)
+    setSubmitted(false)
+    setError("")
+    onPrefillUsed?.()
+    // Chờ form hiện ra rồi cuộn tới
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }))
+  }, [prefill?.key])
 
   // Chưa đăng nhập
   if (!user) {
@@ -355,10 +485,15 @@ function BorrowForm({ subjectId, subjectName, onCreated }: { subjectId: string; 
 
     setLoading(true)
     try {
-      await createRecord({ subjectId, subjectName, ...form })
+      // Chỉ gửi kèm mã thiết bị nếu giáo viên không sửa ô "Đồ dùng" so với bản nháp
+      const items = chatItems && chatItems.equipment === form.equipment ? chatItems.items : undefined
+      // Ô chọn ngày dùng YYYY-MM-DD, máy chủ nhận DD/MM/YYYY
+      await createRecord({ subjectId, subjectName, ...form, borrowDate: isoToVn(form.borrowDate), returnDate: isoToVn(form.returnDate), items })
       setSubmitted(true)
+      setChatItems(null)
+      setFromChat(false)
       onCreated?.()
-      setTimeout(() => { setSubmitted(false); setForm({ teacherName: "", className: "", borrowDate: "", period: "", periodPPCT: "", equipment: "", returnDate: "", notes: "" }) }, 3500)
+      setTimeout(() => { setSubmitted(false); setForm(blankForm()) }, 3500)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Có lỗi xảy ra")
     } finally {
@@ -382,7 +517,20 @@ function BorrowForm({ subjectId, subjectName, onCreated }: { subjectId: string; 
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form ref={formRef} onSubmit={handleSubmit} className="space-y-5 scroll-mt-24">
+      {fromChat && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-800 flex items-start justify-between gap-3">
+          <span>
+            Thông tin đã được điền sẵn từ Trợ lý thiết bị. Kiểm tra lại, sửa nếu cần rồi bấm "Gửi yêu cầu mượn".
+            {chatItems && chatItems.equipment !== form.equipment && (
+              <span className="block mt-1 text-xs text-emerald-700">Bạn đã sửa ô "Đồ dùng", hệ thống sẽ không tự kiểm tra tồn kho cho phiếu này.</span>
+            )}
+          </span>
+          <button type="button" onClick={() => { setFromChat(false); setChatItems(null); setForm(blankForm()) }} className="shrink-0 text-xs font-semibold text-emerald-700 hover:underline">
+            Xóa
+          </button>
+        </div>
+      )}
       <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-center gap-3 text-sm">
         {user.avatar && <img src={user.avatar} alt="" className="w-8 h-8 rounded-full" />}
         <div><span className="font-semibold text-blue-800">{user.name}</span><span className="text-blue-600 ml-1 text-xs">đang gửi yêu cầu</span></div>
@@ -394,10 +542,27 @@ function BorrowForm({ subjectId, subjectName, onCreated }: { subjectId: string; 
         <div><label className={labelCls}>Họ và tên giáo viên <span className="text-red-500">*</span></label><input required className={fieldCls} placeholder="Nguyễn Văn A" value={form.teacherName} onChange={(e) => setForm({ ...form, teacherName: e.target.value })} /></div>
         <div><label className={labelCls}>Lớp dạy học <span className="text-red-500">*</span></label><input required className={fieldCls} placeholder="8A1" value={form.className} onChange={(e) => setForm({ ...form, className: e.target.value })} /></div>
       </div>
-      <div><label className={labelCls}>Ngày mượn đồ dùng <span className="text-red-500">*</span></label><input required className={fieldCls} placeholder="DD/MM/YYYY" value={form.borrowDate} onChange={(e) => setForm({ ...form, borrowDate: e.target.value })} /></div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className={labelCls} htmlFor="borrowDate">Ngày mượn đồ dùng <span className="text-red-500">*</span></label>
+          <input id="borrowDate" type="date" required className={fieldCls} min={user.isAdmin ? undefined : vnToIso(tomorrowVN())} value={form.borrowDate}
+            onChange={(e) => {
+              const v = e.target.value // YYYY-MM-DD (có thể đang gõ dở)
+              // Ngày trả mặc định = ngày mượn; nếu ngày trả đang sớm hơn ngày mượn thì kéo theo (chỉ khi năm đã đủ 4 số)
+              const complete = /^[1-9]\d{3}-\d{2}-\d{2}$/.test(v)
+              const follow = complete && (!form.returnDate || form.returnDate < v)
+              setForm({ ...form, borrowDate: v, returnDate: follow ? v : form.returnDate })
+            }} />
+        </div>
+        <div>
+          <label className={labelCls} htmlFor="returnDate">Ngày trả đồ dùng <span className="text-red-500">*</span></label>
+          <input id="returnDate" type="date" required className={fieldCls} min={form.borrowDate || undefined} value={form.returnDate} onChange={(e) => setForm({ ...form, returnDate: e.target.value })} />
+        </div>
+      </div>
+      <p className="-mt-3 text-xs text-gray-500">Theo nội quy, cần đăng ký trước giờ dạy ít nhất 24 giờ.</p>
       <div>
         <label className={labelCls}>Tiết dạy trong ngày <span className="text-red-500">*</span></label>
-        <div className="grid grid-cols-5 gap-2 mt-1">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-1">
           {["Tiết 1", "Tiết 2", "Tiết 3", "Tiết 4", "Tiết 5"].map((t) => (
             <label key={t} className={`flex items-center gap-2 cursor-pointer px-3 py-2.5 rounded-xl border-2 text-sm font-medium transition-all select-none ${form.period === t ? "bg-[#1a3670] border-[#1a3670] text-white" : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"}`}>
               <input type="radio" name="period" value={t} checked={form.period === t} onChange={() => setForm({ ...form, period: t })} className="sr-only" required />
@@ -408,10 +573,9 @@ function BorrowForm({ subjectId, subjectName, onCreated }: { subjectId: string; 
       </div>
       <div><label className={labelCls}>Tiết theo PPCT <span className="text-red-500">*</span></label><input required className={fieldCls} placeholder="VD: Tiết 25 - Bài 12" value={form.periodPPCT} onChange={(e) => setForm({ ...form, periodPPCT: e.target.value })} /></div>
       <div><label className={labelCls}>Đồ dùng cần mượn <span className="text-red-500">*</span></label><textarea required rows={2} className={fieldCls} placeholder="Ống nghiệm, kính hiển vi, mô hình..." value={form.equipment} onChange={(e) => setForm({ ...form, equipment: e.target.value })} /></div>
-      <div><label className={labelCls}>Ngày trả đồ dùng <span className="text-red-500">*</span></label><input required className={fieldCls} placeholder="DD/MM/YYYY" value={form.returnDate} onChange={(e) => setForm({ ...form, returnDate: e.target.value })} /></div>
       <div><label className={labelCls}>Ghi chú</label><textarea rows={2} className={fieldCls} placeholder="Ghi chú thêm nếu có..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
       <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-700">
-        <strong>Lưu ý:</strong> Yêu cầu mượn sẽ được gửi đến admin để duyệt. Bạn sẽ nhận được thông báo khi yêu cầu được xử lý.
+        <strong>Lưu ý:</strong> Yêu cầu mượn sẽ được gửi đến admin để duyệt. Bạn sẽ nhận email khi yêu cầu được duyệt hoặc từ chối, và có thể theo dõi tại mục “Phiếu của tôi”.
       </div>
 
       <button type="submit" disabled={loading} className="w-full bg-[#1a3670] hover:bg-[#132d5e] active:scale-[.99] text-white font-bold py-3.5 rounded-xl transition-all text-sm shadow-md hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed">
@@ -422,7 +586,15 @@ function BorrowForm({ subjectId, subjectName, onCreated }: { subjectId: string; 
 }
 
 // ============ SUBJECT PAGE ============
-function SubjectPage({ subjectId, setPage }: { subjectId: string; setPage: (p: Page) => void }) {
+type Prefill = { draft: BorrowDraft; key: number } | null
+
+function SubjectPage({ subjectId, setPage, refreshKey = 0, prefill = null, onPrefillUsed }: {
+  subjectId: string
+  setPage: (p: Page) => void
+  refreshKey?: number
+  prefill?: Prefill
+  onPrefillUsed?: () => void
+}) {
   const subject = SUBJECTS.find((s) => s.id === subjectId)!
   const [stats, setStats] = useState<Stats>({ total: 0, borrowing: 0, returned: 0, pending: 0 })
   const [records, setRecords] = useState<BorrowRecord[]>([])
@@ -432,7 +604,7 @@ function SubjectPage({ subjectId, setPage }: { subjectId: string; setPage: (p: P
     fetchRecords({ subjectId }).then(setRecords).catch(console.error)
   }, [subjectId])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { loadData() }, [loadData, refreshKey])
 
   return (
     <main className="pt-16 pb-20">
@@ -461,7 +633,7 @@ function SubjectPage({ subjectId, setPage }: { subjectId: string; setPage: (p: P
                 <p className="text-xs text-gray-500 mt-0.5">{subject.name} - Trường THCS Lê Độ</p>
               </div>
               <div className="p-6">
-                <BorrowForm subjectId={subjectId} subjectName={subject.name} onCreated={loadData} />
+                <BorrowForm subjectId={subjectId} subjectName={subject.name} onCreated={loadData} prefill={prefill} onPrefillUsed={onPrefillUsed} />
               </div>
             </div>
 
@@ -489,11 +661,7 @@ function SubjectPage({ subjectId, setPage }: { subjectId: string; setPage: (p: P
                           <td className="px-4 py-2.5 text-gray-700">{r.equipment}</td>
                           <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{r.borrowDate}</td>
                           <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{r.returnDate}</td>
-                          <td className="px-4 py-2.5">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${r.status === "Chờ duyệt" ? "bg-amber-50 text-amber-700" : r.status === "Mượn" ? "bg-blue-50 text-blue-700" : r.status === "Từ chối" ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
-                              {r.status === "Chờ duyệt" ? "Chờ duyệt" : r.status === "Mượn" ? "Đang mượn" : r.status === "Từ chối" ? "Từ chối" : "Đã trả"}
-                            </span>
-                          </td>
+                          <td className="px-4 py-2.5"><StatusBadge r={r} /></td>
                         </tr>
                       ))}
                     </tbody>
@@ -558,8 +726,9 @@ function AdminPage() {
     const ctrl = new AbortController()
     latestRequest.current = ctrl
     setLoading(true)
-    fetchRecords({ subjectId: filterSubject || undefined, status: filterStatus || undefined, search: debouncedSearch || undefined }, ctrl.signal)
-      .then(setRecords)
+    const status = filterStatus === "overdue" ? "Mượn" : filterStatus
+    fetchRecords({ subjectId: filterSubject || undefined, status: status || undefined, search: debouncedSearch || undefined }, ctrl.signal)
+      .then((list) => setRecords(filterStatus === "overdue" ? list.filter(isOverdue) : list))
       .catch((err) => { if (err?.name !== "AbortError") console.error(err) })
       .finally(() => { if (latestRequest.current === ctrl) setLoading(false) })
   }, [isAdmin, filterSubject, filterStatus, debouncedSearch])
@@ -567,7 +736,7 @@ function AdminPage() {
   const loadNotifs = useCallback(() => {
     if (!isAdmin) return
     fetchNotifications().then(setNotifs).catch(console.error)
-    fetchUnreadCount().then(setUnreadCount).catch(() => {})
+    fetchUnreadCount().then((n) => { setUnreadCount(n); notifyNotifsChanged() }).catch(() => {})
   }, [isAdmin])
 
   useEffect(() => { loadData() }, [loadData])
@@ -589,7 +758,13 @@ function AdminPage() {
   }
 
   const handleStatusChange = async (id: string, newStatus: RecordStatus) => {
-    try { await updateRecordStatus(id, newStatus); loadData() } catch (err) { alert(err instanceof Error ? err.message : "Lỗi") }
+    let reason: string | undefined
+    if (newStatus === "Từ chối") {
+      const r = prompt("Lý do từ chối (sẽ gửi cho giáo viên, có thể để trống):", "")
+      if (r === null) return // bấm Hủy
+      reason = r.trim()
+    }
+    try { await updateRecordStatus(id, newStatus, reason); loadData(); loadNotifs() } catch (err) { alert(err instanceof Error ? err.message : "Lỗi") }
   }
   const handleDelete = async (id: string) => {
     if (!confirm("Xác nhận xóa?")) return
@@ -615,10 +790,12 @@ function AdminPage() {
           </div>
         </div>
 
+        {tab === "records" && <AdminSummary onPick={(st) => { setFilterStatus(st); setFilterSubject(""); setSearch("") }} active={filterStatus} refreshKey={records} />}
+
         {tab === "records" && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-4 border-b border-gray-100 flex flex-wrap gap-3 items-center">
-              <input type="text" placeholder="Tìm kiếm..." className="border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/20 bg-white w-52 placeholder:text-gray-400" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <input type="search" aria-label="Tìm kiếm" placeholder="Tìm giáo viên, lớp, đồ dùng..." className="border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/20 bg-white w-full sm:w-64 placeholder:text-gray-400" value={search} onChange={(e) => setSearch(e.target.value)} />
               <select className={selectCls} value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}>
                 <option value="">Tất cả môn</option>
                 {SUBJECTS.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -629,6 +806,7 @@ function AdminPage() {
                 <option value="Mượn">Đang mượn</option>
                 <option value="Trả">Đã trả</option>
                 <option value="Từ chối">Từ chối</option>
+                <option value="overdue">Quá hạn trả</option>
               </select>
               <span className="text-sm text-gray-400 ml-auto">{loading ? "..." : `${records.length} kết quả`}</span>
             </div>
@@ -638,28 +816,32 @@ function AdminPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead><tr className="bg-gray-50 border-b border-gray-100">
-                    {["GV", "Lớp", "Môn", "Tiết", "Đồ dùng", "Mượn", "Trả", "TT", ""].map((h) => <th key={h} className="px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap">{h}</th>)}
+                    {["Giáo viên", "Lớp", "Môn", "Tiết", "Đồ dùng", "Mượn", "Trả", "Trạng thái", "Thao tác"].map((h) => <th key={h} className="px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap">{h}</th>)}
                   </tr></thead>
                   <tbody className="divide-y divide-gray-50">
                     {records.map((r) => {
                       const sub = SUBJECTS.find((s) => s.id === r.subjectId)
+                      const btn = "px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap"
                       return (
-                        <tr key={r.id} className="hover:bg-gray-50/60 group">
+                        <tr key={r.id} className={isOverdue(r) ? "bg-rose-50/50" : "hover:bg-gray-50/60"}>
                           <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">{r.teacherName}</td>
                           <td className="px-3 py-3 text-gray-600">{r.className}</td>
-                          <td className="px-3 py-3"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white" style={{ backgroundColor: sub?.color || "#888" }}>{r.subjectName}</span></td>
-                          <td className="px-3 py-3 text-gray-600 text-xs">{r.period || "-"}</td>
-                          <td className="px-3 py-3 text-gray-700 max-w-[140px] truncate">{r.equipment}</td>
+                          <td className="px-3 py-3"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white whitespace-nowrap" style={{ backgroundColor: sub?.color || "#888" }}>{r.subjectName}</span></td>
+                          <td className="px-3 py-3 text-gray-600 text-xs whitespace-nowrap">{r.period || "-"}</td>
+                          <td className="px-3 py-3 text-gray-700 min-w-[180px] max-w-[280px]">
+                            <div className="line-clamp-2" title={r.equipment}>{r.equipment}</div>
+                            {r.notes && <div className="text-[11px] text-gray-400 truncate" title={r.notes}>Ghi chú: {r.notes}</div>}
+                          </td>
                           <td className="px-3 py-3 text-gray-600 whitespace-nowrap text-xs">{r.borrowDate}</td>
                           <td className="px-3 py-3 text-gray-600 whitespace-nowrap text-xs">{r.returnDate}</td>
-                          <td className="px-3 py-3"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${r.status === "Chờ duyệt" ? "bg-amber-50 text-amber-700" : r.status === "Mượn" ? "bg-blue-50 text-blue-700" : r.status === "Từ chối" ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{r.status}</span></td>
+                          <td className="px-3 py-3"><StatusBadge r={r} small /></td>
                           <td className="px-3 py-3">
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              {r.status === "Chờ duyệt" && <button onClick={() => handleStatusChange(r.id, "Mượn")} className="px-2 py-0.5 bg-green-50 hover:bg-green-100 text-green-700 rounded text-[10px] font-bold">Duyệt</button>}
-                              {r.status === "Chờ duyệt" && <button onClick={() => handleStatusChange(r.id, "Từ chối")} className="px-2 py-0.5 bg-red-50 hover:bg-red-100 text-red-600 rounded text-[10px] font-bold">Từ chối</button>}
-                              {r.status === "Mượn" && <button onClick={() => handleStatusChange(r.id, "Trả")} className="px-2 py-0.5 bg-green-50 hover:bg-green-100 text-green-700 rounded text-[10px] font-bold">Đã trả</button>}
-                              {r.status === "Trả" && <button onClick={() => handleStatusChange(r.id, "Mượn")} className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-[10px] font-bold">Hoàn tác</button>}
-                              <button onClick={() => handleDelete(r.id)} className="px-2 py-0.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded text-[10px] font-bold">Xóa</button>
+                            <div className="flex gap-1.5">
+                              {r.status === "Chờ duyệt" && <button onClick={() => handleStatusChange(r.id, "Mượn")} className={`${btn} bg-green-600 hover:bg-green-700 text-white`}>Duyệt</button>}
+                              {r.status === "Chờ duyệt" && <button onClick={() => handleStatusChange(r.id, "Từ chối")} className={`${btn} bg-red-50 hover:bg-red-100 text-red-700`}>Từ chối</button>}
+                              {r.status === "Mượn" && <button onClick={() => handleStatusChange(r.id, "Trả")} className={`${btn} bg-[#1a3670] hover:bg-[#132d5e] text-white`}>Đã trả</button>}
+                              {r.status === "Trả" && <button onClick={() => handleStatusChange(r.id, "Mượn")} className={`${btn} bg-gray-100 hover:bg-gray-200 text-gray-700`}>Hoàn tác</button>}
+                              <button onClick={() => handleDelete(r.id)} className={`${btn} text-gray-400 hover:text-red-600 hover:bg-red-50`} aria-label="Xóa phiếu" title="Xóa phiếu">Xóa</button>
                             </div>
                           </td>
                         </tr>
@@ -704,10 +886,150 @@ function AdminPage() {
   )
 }
 
+// ============ ADMIN: Ô TÓM TẮT VIỆC CẦN LÀM ============
+function AdminSummary({ onPick, active, refreshKey }: { onPick: (status: string) => void; active: string; refreshKey: unknown }) {
+  const [all, setAll] = useState<BorrowRecord[]>([])
+  useEffect(() => { fetchRecords().then(setAll).catch(() => {}) }, [refreshKey])
+  const items = [
+    { key: "Chờ duyệt", label: "Chờ duyệt", value: all.filter((r) => r.status === "Chờ duyệt").length, cls: "border-amber-200 bg-amber-50 text-amber-800" },
+    { key: "overdue", label: "Quá hạn trả", value: all.filter(isOverdue).length, cls: "border-rose-200 bg-rose-50 text-rose-800" },
+    { key: "Mượn", label: "Đang mượn", value: all.filter((r) => r.status === "Mượn").length, cls: "border-blue-200 bg-blue-50 text-blue-800" },
+    { key: "", label: "Tất cả phiếu", value: all.length, cls: "border-gray-200 bg-white text-gray-700" },
+  ]
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      {items.map((it) => (
+        <button key={it.label} onClick={() => onPick(it.key)} aria-pressed={active === it.key}
+          className={`text-left border rounded-xl px-4 py-3 transition-shadow hover:shadow-md ${it.cls} ${active === it.key ? "ring-2 ring-[#1a3670]/40" : ""}`}>
+          <div className="text-2xl font-bold">{it.value}</div>
+          <div className="text-xs font-medium opacity-80">{it.label}</div>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ============ PHIẾU CỦA TÔI (giáo viên) ============
+function MyRecordsPage({ setPage }: { setPage: (p: Page) => void }) {
+  const { user, login } = useAuth()
+  const [records, setRecords] = useState<BorrowRecord[] | null>(null)
+  const [error, setError] = useState("")
+
+  const load = useCallback(() => {
+    if (!user) return
+    fetchMyRecords().then(setRecords).catch((e) => setError(e.message))
+  }, [user])
+  useEffect(() => { load() }, [load])
+
+  if (!user) {
+    return (
+      <main className="pt-24 pb-20 px-4">
+        <div className="max-w-md mx-auto text-center py-16">
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Đăng nhập để xem phiếu của bạn</h2>
+          <button onClick={login} className="mt-3 px-6 py-3 rounded-xl bg-[#1a3670] text-white font-semibold text-sm">Đăng nhập bằng Google</button>
+        </div>
+      </main>
+    )
+  }
+
+  const cancel = async (r: BorrowRecord) => {
+    if (!confirm(`Hủy yêu cầu mượn "${r.equipment}" ngày ${r.borrowDate}?`)) return
+    try { await deleteRecord(r.id); load() } catch (e) { alert(e instanceof Error ? e.message : "Lỗi") }
+  }
+
+  const list = records || []
+  const overdue = list.filter(isOverdue)
+
+  return (
+    <main className="pt-24 pb-20 px-4">
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-6">
+          <h1 className="text-2xl font-extrabold text-[#1a3670]">Phiếu của tôi</h1>
+          <p className="text-gray-500 text-sm mt-1">Theo dõi các yêu cầu mượn thiết bị bạn đã gửi.</p>
+        </div>
+        {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm mb-4">{error}</div>}
+        {overdue.length > 0 && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl px-4 py-3 text-sm mb-4">
+            Bạn có <strong>{overdue.length}</strong> phiếu đã quá ngày trả. Vui lòng mang thiết bị trả phòng thiết bị sớm.
+          </div>
+        )}
+        {records === null ? (
+          <p className="text-sm text-gray-400">Đang tải...</p>
+        ) : list.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 text-center py-14 text-gray-500">
+            <p className="text-sm mb-3">Bạn chưa gửi yêu cầu mượn nào.</p>
+            <button onClick={() => setPage("home")} className="text-sm font-semibold text-[#1a3670] hover:underline">Chọn môn học để đăng ký</button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {list.map((r) => {
+              const sub = SUBJECTS.find((s) => s.id === r.subjectId)
+              return (
+                <div key={r.id} className={`bg-white rounded-2xl border p-4 sm:p-5 ${isOverdue(r) ? "border-rose-200" : "border-gray-100"}`}>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white" style={{ backgroundColor: sub?.color || "#888" }}>{r.subjectName}</span>
+                        <span className="text-xs text-gray-500">Lớp {r.className}</span>
+                      </div>
+                      <div className="font-semibold text-gray-900">{r.equipment}</div>
+                    </div>
+                    <StatusBadge r={r} />
+                  </div>
+                  <div className="mt-2 text-sm text-gray-600 flex flex-wrap gap-x-5 gap-y-1">
+                    <span>Mượn: <strong className="font-medium text-gray-800">{r.borrowDate}</strong>{r.period ? ` (${r.period})` : ""}</span>
+                    <span>Trả: <strong className="font-medium text-gray-800">{r.returnDate}</strong></span>
+                    {r.periodPPCT && <span>PPCT: {r.periodPPCT}</span>}
+                  </div>
+                  {r.status === "Từ chối" && r.adminNote && <p className="mt-2 text-sm text-red-700">Lý do từ chối: {r.adminNote}</p>}
+                  {r.status === "Chờ duyệt" && (
+                    <div className="mt-3">
+                      <button onClick={() => cancel(r)} className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 text-gray-700 hover:border-red-300 hover:text-red-700">Hủy yêu cầu</button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </main>
+  )
+}
+
 // ============ MAIN APP ============
+const PAGES = new Set<string>(["home", "noiquy", "admin", "mine", ...SUBJECTS.map((s) => s.id)])
+function readHash(): Page {
+  const h = decodeURIComponent(window.location.hash.replace(/^#\/?/, ""))
+  return PAGES.has(h) ? h : "home"
+}
+
 function AppContent() {
   const { loading } = useAuth()
-  const [page, setPage] = useState<Page>("home")
+  // Trang hiện tại lưu trên URL (#vat-li, #admin...) để tải lại trang không bị mất,
+  // nút Back của trình duyệt hoạt động và có thể gửi link cho người khác.
+  const [page, setPageState] = useState<Page>(readHash)
+  useEffect(() => {
+    const onHash = () => { setPageState(readHash()); window.scrollTo(0, 0) }
+    window.addEventListener("hashchange", onHash)
+    return () => window.removeEventListener("hashchange", onHash)
+  }, [])
+  const setPage = useCallback((p: Page) => {
+    if (p === readHash()) { window.scrollTo(0, 0); return }
+    window.location.hash = p === "home" ? "" : p
+  }, [])
+  useEffect(() => {
+    const name = page === "home" ? "" : page === "noiquy" ? "Nội quy" : page === "admin" ? "Quản trị" : page === "mine" ? "Phiếu của tôi" : SUBJECTS.find((s) => s.id === page)?.name
+    document.title = (name ? `${name} – ` : "") + "Quản lý thiết bị THCS Lê Độ"
+  }, [page])
+  // Bản nháp từ chatbot chờ được điền vào form (key để điền lại được nhiều lần)
+  const [prefill, setPrefill] = useState<{ draft: BorrowDraft; key: number } | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const fillFormFromChat = useCallback((draft: BorrowDraft) => {
+    setPage(draft.subjectId)
+    setPrefill({ draft, key: Date.now() })
+  }, [])
 
   if (loading) {
     return (
@@ -728,8 +1050,22 @@ function AppContent() {
       {page === "home" && <HomePage setPage={setPage} />}
       {page === "noiquy" && <NoiQuyPage />}
       {page === "admin" && <AdminPage />}
-      {SUBJECTS.some((s) => s.id === page) && <SubjectPage subjectId={page} setPage={setPage} />}
-      <ChatWidget subjectId={currentSubjectId} />
+      {page === "mine" && <MyRecordsPage setPage={setPage} />}
+      {SUBJECTS.some((s) => s.id === page) && (
+        <SubjectPage
+          key={page}
+          subjectId={page}
+          setPage={setPage}
+          refreshKey={refreshKey}
+          prefill={prefill?.draft.subjectId === page ? prefill : null}
+          onPrefillUsed={() => setPrefill(null)}
+        />
+      )}
+      <ChatWidget
+        subjectId={currentSubjectId}
+        onFillForm={fillFormFromChat}
+        onRecordCreated={() => setRefreshKey((k) => k + 1)}
+      />
     </div>
   )
 }

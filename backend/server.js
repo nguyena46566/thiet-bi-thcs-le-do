@@ -15,7 +15,7 @@ import {
   requireAdmin,
 } from "./auth.js";
 import notifications from "./notifications.js";
-import { sendBorrowNotification } from "./mailer.js";
+import { sendBorrowNotification, sendStatusEmail } from "./mailer.js";
 import { createChatRouter } from "./chat.js";
 import { SUBJECTS } from "./chatTools.js";
 import {
@@ -142,7 +142,7 @@ const str = (v, max) => String(v ?? "").trim().slice(0, max);
 /** Ẩn thông tin tài khoản khi người xem không phải admin */
 function publicView(r, viewer) {
   if (viewer?.isAdmin) return r;
-  const { userId, ...rest } = r;
+  const { userId, userEmail, ...rest } = r;
   return rest;
 }
 
@@ -152,6 +152,12 @@ app.get("/api/records", wrap(async (req, res) => {
   const search = typeof req.query.search === "string" ? req.query.search.slice(0, 100) : undefined;
   const list = await db.records.findAll({ subjectId, status, search });
   res.json(list.map((r) => publicView(r, req.session?.user)));
+}));
+
+// Phiếu của người đang đăng nhập
+app.get("/api/records/mine", requireAuth, wrap(async (req, res) => {
+  const list = await db.records.findByUser(req.session.user.id);
+  res.json(list.map(({ userEmail, ...r }) => r));
 }));
 
 app.post("/api/records", requireAuth, wrap(async (req, res) => {
@@ -220,6 +226,7 @@ app.post("/api/records", requireAuth, wrap(async (req, res) => {
     status: "Chờ duyệt",
     userId: user.id,
     userName: user.name,
+    userEmail: user.email, // chỉ dùng để gửi email báo kết quả, không trả ra danh sách công khai
     createdAt: new Date().toISOString(),
   };
 
@@ -237,10 +244,18 @@ app.post("/api/records", requireAuth, wrap(async (req, res) => {
 app.patch("/api/records/:id/status", requireAdmin, wrap(async (req, res) => {
   const { status } = req.body || {};
   if (!STATUSES.includes(status)) return res.status(400).json({ error: "Sai trạng thái" });
+  const reason = str(req.body?.reason, 300);
   const existing = await db.records.findById(req.params.id);
   if (!existing) return res.status(404).json({ error: "Không tìm thấy" });
 
-  const updated = await db.records.update(req.params.id, { status, updatedAt: new Date().toISOString() });
+  const changes = { status, updatedAt: new Date().toISOString() };
+  if (status === "Từ chối") changes.adminNote = reason;
+  if (status === "Trả") changes.returnedAt = changes.updatedAt;
+  const updated = await db.records.update(req.params.id, changes);
+  // Báo kết quả cho giáo viên khi phiếu được duyệt/từ chối lần đầu (không chờ gửi xong)
+  if (existing.status === "Chờ duyệt" && (status === "Mượn" || status === "Từ chối")) {
+    sendStatusEmail(updated, status, reason);
+  }
   const actionText = { "Mượn": "Đã duyệt cho mượn", "Trả": "Đã trả", "Từ chối": "Đã từ chối", "Chờ duyệt": "Chờ duyệt" }[status];
   await notifications.createNotification({
     type: status === "Trả" ? "return" : "system",
@@ -251,10 +266,25 @@ app.patch("/api/records/:id/status", requireAdmin, wrap(async (req, res) => {
   res.json(updated);
 }));
 
-app.delete("/api/records/:id", requireAdmin, wrap(async (req, res) => {
-  const ok = await db.records.remove(req.params.id);
-  if (!ok) return res.status(404).json({ error: "Không tìm thấy" });
-  res.json({ message: "Đã xóa" });
+// Admin xóa bất kỳ phiếu nào; giáo viên chỉ hủy được phiếu "Chờ duyệt" của chính mình
+app.delete("/api/records/:id", requireAuth, wrap(async (req, res) => {
+  const user = req.session.user;
+  const existing = await db.records.findById(req.params.id);
+  if (!existing) return res.status(404).json({ error: "Không tìm thấy" });
+  if (!user.isAdmin) {
+    if (existing.userId !== user.id) return res.status(403).json({ error: "Không có quyền" });
+    if (existing.status !== "Chờ duyệt") return res.status(409).json({ error: "Chỉ hủy được yêu cầu đang chờ duyệt" });
+  }
+  await db.records.remove(req.params.id);
+  if (!user.isAdmin) {
+    await notifications.createNotification({
+      type: "system",
+      title: "Giáo viên hủy yêu cầu",
+      message: `${existing.teacherName} đã hủy yêu cầu mượn "${existing.equipment}" (${existing.subjectName})`,
+      recordId: existing.id, userId: user.id, userName: user.name,
+    });
+  }
+  res.json({ message: user.isAdmin ? "Đã xóa" : "Đã hủy yêu cầu" });
 }));
 
 // ============ STATS ============

@@ -96,4 +96,43 @@ export async function sendBorrowNotification(record) {
   }
 }
 
-export default { sendBorrowNotification };
+/**
+ * Gửi email cho giáo viên khi phiếu được duyệt hoặc bị từ chối.
+ */
+export async function sendStatusEmail(record, status, reason) {
+  const transport = getTransporter();
+  if (!transport || !record.userEmail) return;
+  const approved = status === "Mượn";
+  const st = STATUS_STYLE[status];
+  const plain = (v, n) => String(v ?? "").replace(/[\r\n]+/g, " ").slice(0, n);
+  const subject = `[Thiết bị] ${approved ? "Đã duyệt" : "Từ chối"} yêu cầu mượn: ${plain(record.equipment, 80)}`;
+  const row = (label, value) =>
+    `<tr><td style="padding: 6px 0; color: #6b7280; width: 130px;">${label}:</td><td style="padding: 6px 0;">${value}</td></tr>`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: ${approved ? "#1a3670" : "#991b1b"}; color: white; padding: 20px; border-radius: 12px 12px 0 0;">
+        <h2 style="margin: 0; font-size: 18px;">${approved ? "Yêu cầu mượn đã được duyệt" : "Yêu cầu mượn bị từ chối"}</h2>
+        <p style="margin: 5px 0 0; opacity: 0.85; font-size: 13px;">Trường THCS Lê Độ - Hệ thống quản lý thiết bị</p>
+      </div>
+      <div style="border: 1px solid #e5e7eb; border-top: none; padding: 24px; border-radius: 0 0 12px 12px;">
+        <p style="margin: 0 0 12px; font-size: 14px;">Chào ${esc(record.teacherName)},</p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          ${row("Thiết bị", `<b>${esc(record.equipment)}</b>`)}
+          ${row("Lớp", esc(record.className))}
+          ${row("Ngày mượn", esc(record.borrowDate) + (record.period ? ` (${esc(record.period)})` : ""))}
+          ${row("Ngày trả", esc(record.returnDate))}
+          ${row("Trạng thái", `<span style="background: ${st.bg}; color: ${st.fg}; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 12px;">${st.label}</span>`)}
+          ${reason ? row("Lý do", esc(reason)) : ""}
+        </table>
+        <p style="font-size: 13px; color: #374151; margin: 16px 0 0;">${approved ? "Thầy/cô vui lòng đến phòng thiết bị nhận đồ dùng trước giờ dạy và trả đúng hạn." : "Thầy/cô có thể đăng ký lại với ngày hoặc thiết bị khác trên website."}</p>
+      </div>
+    </div>`;
+  try {
+    await transport.sendMail({ from: `"Hệ thống Thiết bị THCS Lê Độ" <${process.env.SMTP_USER}>`, to: record.userEmail, subject, html });
+    console.log(`[Mailer] Đã gửi email trạng thái đến ${record.userEmail}`);
+  } catch (err) {
+    console.error("[Mailer] Lỗi gửi email:", err.message);
+  }
+}
+
+export default { sendBorrowNotification, sendStatusEmail };

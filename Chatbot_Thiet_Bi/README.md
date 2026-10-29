@@ -2,7 +2,6 @@
 
 ## Cấu trúc
 - `code/`  : file mới và file đã sửa, cùng đường dẫn với dự án "Website Quan Ly Thiet Bi". Giải nén đè vào thư mục dự án.
-- `docs/De_xuat_va_trien_khai_chatbot_AI.docx` : tài liệu đề xuất + kết quả triển khai (10 mục).
 
 ## Cài đặt
 1. Chép nội dung `code/` đè vào dự án.
@@ -14,8 +13,8 @@
 5. Chạy bộ kiểm thử chatbot: `cd backend && node eval/run-eval.js`
 
 ## File mới
-- backend/chat.js            Endpoint POST /api/chat (vòng lặp tool use, giới hạn tần suất)
-- backend/chatTools.js       5 công cụ: search_equipment, suggest_for_lesson, check_availability, draft_borrow_request, get_rules
+- backend/chat.js             Endpoint POST /api/chat (vòng lặp tool use, giới hạn tần suất)
+- backend/chatTools.js       5công cụ: search_equipment, suggest_for_lesson, check_availability, draft_borrow_request, get_rules
 - backend/equipment.js       Tìm kiếm bỏ dấu, tồn kho theo ngày, gợi ý theo bài, tra nội quy, quy tắc 24 giờ
 - backend/catalog/*.json     Danh mục thiết bị, bài học (PPCT), nội quy - DỮ LIỆU MẪU, cần thay bằng dữ liệu thật
 - backend/eval/              14 ca kiểm thử + trình chấm điểm

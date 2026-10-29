@@ -35,6 +35,10 @@ export interface BorrowRecord {
   userId?: string;
   userName?: string;
   createdAt: string;
+  updatedAt?: string;
+  returnedAt?: string;
+  /** Lý do admin ghi khi từ chối */
+  adminNote?: string;
 }
 
 export interface Stats {
@@ -90,6 +94,13 @@ export async function fetchRecords(params?: {
   return res.json();
 }
 
+/** Phiếu do chính người đang đăng nhập tạo */
+export async function fetchMyRecords(): Promise<BorrowRecord[]> {
+  const res = await fetch(`${API_BASE}/api/records/mine`, { credentials: "include" });
+  if (!res.ok) throw new Error("Không thể tải phiếu của bạn");
+  return res.json();
+}
+
 /** Dữ liệu gửi lên khi tạo phiếu. id, trạng thái, số lượng... do server tự điền. */
 export type NewRecordInput = Pick<
   BorrowRecord,
@@ -110,12 +121,12 @@ export async function createRecord(data: NewRecordInput): Promise<BorrowRecord> 
   return res.json();
 }
 
-export async function updateRecordStatus(id: string, status: RecordStatus): Promise<BorrowRecord> {
+export async function updateRecordStatus(id: string, status: RecordStatus, reason?: string): Promise<BorrowRecord> {
   const res = await fetch(`${API_BASE}/api/records/${encodeURIComponent(id)}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, reason }),
   });
   if (!res.ok) throw new Error("Không thể cập nhật trạng thái");
   return res.json();
@@ -126,7 +137,10 @@ export async function deleteRecord(id: string): Promise<void> {
     method: "DELETE",
     credentials: "include",
   });
-  if (!res.ok) throw new Error("Không thể xóa bản ghi");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Không thể xóa bản ghi");
+  }
 }
 
 // ============ STATS ============
@@ -202,6 +216,8 @@ export interface BorrowDraft {
   period: string;
   periodPPCT: string;
   notes: string;
+  /** Các mục bắt buộc còn thiếu - phải điền nốt trong form trước khi gửi */
+  missing?: string[];
 }
 
 export async function sendChat(

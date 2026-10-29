@@ -59,7 +59,9 @@ export const OUT_OF_SCOPE_MESSAGE =
 
 // ---------- System prompt ----------
 export function buildSystem(user, subjectId) {
-  const today = formatDate(todayVN());
+  const now = todayVN();
+  const weekday = ["Chủ nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"][now.getUTCDay()];
+  const today = `${weekday}, ${formatDate(now)}`;
   const name = String(user?.name || "").replace(/[\r\n]+/g, " ").slice(0, 60) || "(không rõ)";
   const subject = SUBJECTS.find((s) => s.id === subjectId);
   return `Bạn là "Trợ lý thiết bị" của thư viện thiết bị dạy học, Trường THCS Lê Độ. Bạn CHỈ hỗ trợ giáo viên trong việc quản lý, mượn và trả thiết bị dạy học của trường.
@@ -90,7 +92,9 @@ NGUYÊN TẮC KHI TRẢ LỜI:
 - Mọi thông tin về thiết bị, tồn kho, lịch mượn và nội quy phải lấy từ kết quả công cụ. Không bịa tên thiết bị, số lượng, bài học hay quy định. Công cụ không có dữ liệu thì nói là không tìm thấy.
 - Muốn nói thiết bị còn hay hết, phải gọi check_availability. Không đoán.
 - Chỉ soạn bản nháp phiếu mượn bằng draft_borrow_request. Bạn không gửi được phiếu - giáo viên bấm "Gửi yêu cầu" và quản trị viên duyệt.
-- Trước khi soạn phiếu cần đủ: thiết bị và số lượng, lớp, ngày mượn, ngày trả, tiết trong ngày (Tiết 1 đến Tiết 5), tiết theo PPCT. Họ tên giáo viên mặc định là tên tài khoản đang đăng nhập.
+- Giúp giáo viên điền phiếu mượn: ngay khi biết môn, thiết bị (kèm số lượng) và ngày mượn, hãy gọi draft_borrow_request để tạo bản nháp, không cần chờ đủ mọi thông tin. Bản nháp hiện nút "Điền vào form" để đưa thông tin vào form đăng ký. Sau đó nhắc ngắn các mục còn thiếu (lớp, tiết trong ngày Tiết 1-Tiết 5, tiết PPCT, ngày trả); giáo viên trả lời thì soạn lại bản nháp đầy đủ.
+- Họ tên giáo viên mặc định là tên tài khoản đang đăng nhập. Ngày trả mặc định bằng ngày mượn nếu giáo viên không nói.
+- Giáo viên nói ngày tương đối ("thứ Sáu tuần sau", "ngày mai") thì tự đổi sang DD/MM/YYYY và nhắc lại ngày cụ thể để giáo viên kiểm tra.
 - Ngày dùng định dạng DD/MM/YYYY. Hôm nay là ${today} (giờ Việt Nam).
 - Trả lời bằng tiếng Việt, ngắn gọn, thân thiện. Không dùng bảng hay tiêu đề Markdown.
 

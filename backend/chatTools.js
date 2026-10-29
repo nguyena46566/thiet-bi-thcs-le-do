@@ -75,8 +75,9 @@ export const TOOLS = [
   {
     name: "draft_borrow_request",
     description:
-      "Soạn BẢN NHÁP phiếu mượn để giáo viên xem và bấm gửi. Công cụ này KHÔNG gửi phiếu. " +
-      "Chỉ gọi khi đã có đủ thông tin và giáo viên đã đồng ý thiết bị/ngày. Công cụ tự kiểm tra ngày và tồn kho; nếu lỗi sẽ trả về lý do.",
+      "Soạn BẢN NHÁP phiếu mượn để giáo viên xem, bấm 'Điền vào form' hoặc bấm gửi. Công cụ này KHÔNG gửi phiếu. " +
+      "Gọi khi đã biết môn, thiết bị và ngày mượn, giáo viên đã đồng ý thiết bị/ngày. Các mục chưa biết (lớp, tiết, PPCT, ngày trả) có thể bỏ trống: " +
+      "giáo viên sẽ tự điền nốt trong form. Công cụ tự kiểm tra ngày và tồn kho; nếu lỗi sẽ trả về lý do.",
     input_schema: {
       type: "object",
       properties: {
@@ -92,12 +93,12 @@ export const TOOLS = [
           },
         },
         borrowDate: { type: "string", description: "DD/MM/YYYY" },
-        returnDate: { type: "string", description: "DD/MM/YYYY" },
+        returnDate: { type: "string", description: "DD/MM/YYYY. Bỏ trống = trả trong ngày mượn." },
         period: { type: "string", enum: PERIODS, description: "Tiết dạy trong ngày." },
         periodPPCT: { type: "string", description: "Tiết theo PPCT, ví dụ 'Tiết 25 - Bài 12'." },
         notes: { type: "string" },
       },
-      required: ["subjectId", "teacherName", "className", "items", "borrowDate", "returnDate", "period", "periodPPCT"],
+      required: ["subjectId", "items", "borrowDate"],
     },
   },
   {
@@ -116,17 +117,19 @@ async function draftBorrowRequest(input, ctx) {
   if (!subject) return { ok: false, error: "Môn học không hợp lệ." };
 
   const from = parseDate(input.borrowDate);
-  const to = parseDate(input.returnDate);
+  const to = parseDate(input.returnDate || input.borrowDate);
   if (!from || !to) return { ok: false, error: "Ngày không hợp lệ, cần định dạng DD/MM/YYYY." };
   if (to < from) return { ok: false, error: "Ngày trả phải sau hoặc bằng ngày mượn." };
 
-  if (!PERIODS.includes(input.period)) return { ok: false, error: `Tiết trong ngày phải là một trong: ${PERIODS.join(", ")}.` };
+  const period = input.period ? String(input.period) : "";
+  if (period && !PERIODS.includes(period)) return { ok: false, error: `Tiết trong ngày phải là một trong: ${PERIODS.join(", ")}.` };
   if (!Array.isArray(input.items) || !input.items.length) return { ok: false, error: "Cần ít nhất một thiết bị." };
 
   // Quy định: đăng ký trước ít nhất 24 giờ (tính đến giờ bắt đầu của tiết dạy).
-  const hours = hoursUntilBorrow(input.borrowDate, input.period);
+  // Chưa biết tiết thì tính theo tiết sớm nhất (Tiết 1) cho chắc chắn.
+  const hours = hoursUntilBorrow(input.borrowDate, period || "Tiết 1");
   if (hours === null || hours < MIN_NOTICE_HOURS) {
-    return { ok: false, error: `Phải đăng ký trước ít nhất ${MIN_NOTICE_HOURS} giờ, nhưng ${input.period} ngày ${formatDate(from)} chỉ còn khoảng ${Math.max(0, Math.floor(hours))} giờ. Hãy chọn ngày hoặc tiết muộn hơn.` };
+    return { ok: false, error: `Phải đăng ký trước ít nhất ${MIN_NOTICE_HOURS} giờ, nhưng ${period || "buổi sáng"} ngày ${formatDate(from)} chỉ còn khoảng ${Math.max(0, Math.floor(hours ?? 0))} giờ. Hãy chọn ngày hoặc tiết muộn hơn.` };
   }
 
   const records = await db.records.findActive();
@@ -147,22 +150,33 @@ async function draftBorrowRequest(input, ctx) {
     return { ok: false, error: "Không đủ thiết bị trong khoảng ngày này.", conflicts };
   }
 
+  const teacherName = String(input.teacherName || ctx.user?.name || "").trim().slice(0, 80);
   ctx.draft = {
     subjectId: subject.id,
     subjectName: subject.name,
-    teacherName: String(input.teacherName || "").trim().slice(0, 80),
+    teacherName,
     className: String(input.className || "").trim().slice(0, 20),
     equipment: lines.join(", "),
     items,
     borrowDate: formatDate(from),
     returnDate: formatDate(to),
-    period: input.period,
+    period,
     periodPPCT: String(input.periodPPCT || "").trim().slice(0, 120),
     notes: String(input.notes || "").trim().slice(0, 300),
   };
+  // Các mục form bắt buộc mà bản nháp còn thiếu
+  const missing = [
+    !ctx.draft.teacherName && "họ tên giáo viên",
+    !ctx.draft.className && "lớp",
+    !period && "tiết trong ngày",
+    !ctx.draft.periodPPCT && "tiết theo PPCT",
+  ].filter(Boolean);
+  ctx.draft.missing = missing;
   return {
     ok: true,
-    message: "Đã soạn bản nháp, giao diện sẽ hiển thị cho giáo viên xác nhận. Phiếu CHƯA được gửi.",
+    message: missing.length
+      ? `Đã soạn bản nháp còn thiếu: ${missing.join(", ")}. Giáo viên có thể bấm "Điền vào form" rồi tự điền nốt, hoặc trả lời bạn để bổ sung. Phiếu CHƯA được gửi.`
+      : "Đã soạn bản nháp đầy đủ, giáo viên có thể bấm 'Gửi yêu cầu' hoặc 'Điền vào form' để sửa. Phiếu CHƯA được gửi.",
     draft: ctx.draft,
   };
 }
