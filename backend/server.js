@@ -37,7 +37,9 @@ if (isProd && !process.env.SESSION_SECRET) {
 if (isProd && db.kind === "file") {
   console.warn("⚠️  Chưa có DATABASE_URL: dữ liệu đang lưu vào file và SẼ MẤT khi Render deploy lại / khởi động lại.");
 }
-await db.init();
+// Trạng thái kết nối CSDL: server mở cổng ngay, kết nối CSDL chạy nền và tự thử lại
+let dbReady = false;
+let dbError = "";
 
 // ============ Session store ============
 let sessionStore; // undefined = MemoryStore (chỉ dùng khi chạy thử trên máy)
@@ -51,6 +53,11 @@ if (db.kind === "postgres") {
 if (isProd) app.set("trust proxy", 1); // Render đứng sau proxy HTTPS
 app.disable("x-powered-by");
 app.use(cors({ origin: FRONTEND_URL || true, credentials: true }));
+// Khi CSDL chưa sẵn sàng: API trả 503 thay vì treo; trang giao diện vẫn tải bình thường
+app.use("/api", (req, res, next) => {
+  if (dbReady) return next();
+  res.status(503).json({ error: "Máy chủ đang kết nối cơ sở dữ liệu, vui lòng thử lại sau ít giây." });
+});
 app.use(express.json({ limit: "100kb" }));
 app.use(
   session({
@@ -333,6 +340,30 @@ app.use((err, req, res, next) => {
 });
 
 // ============ START ============
+// Mở cổng TRƯỚC để Render nhận ra dịch vụ đang chạy (tránh lỗi "no open ports detected")
 app.listen(PORT, () => {
   console.log(`Server: http://localhost:${PORT} | Lưu trữ: ${db.kind}`);
 });
+
+// Kết nối CSDL ở nền; lỗi thì ghi log rõ ràng và thử lại (5s, 10s, ... tối đa 60s), không làm sập server
+const DB_INIT_TIMEOUT_MS = 20_000;
+async function connectDatabase(attempt = 1) {
+  try {
+    await Promise.race([
+      db.init(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`quá ${DB_INIT_TIMEOUT_MS / 1000} giây không phản hồi`)), DB_INIT_TIMEOUT_MS)),
+    ]);
+    dbReady = true;
+    dbError = "";
+    console.log(`[DB] Kết nối ${db.kind} thành công${attempt > 1 ? ` sau ${attempt} lần thử` : ""}`);
+  } catch (err) {
+    dbError = err.message;
+    const wait = Math.min(60, 5 * attempt);
+    console.error(`[DB] Kết nối thất bại (lần ${attempt}): ${err.message}. Thử lại sau ${wait} giây.`);
+    if (/tenant|password authentication|ENOTFOUND/i.test(err.message)) {
+      console.error("[DB] Gợi ý: kiểm tra DATABASE_URL (chuỗi Session pooler của Supabase) và project Supabase có đang bị tạm dừng không.");
+    }
+    setTimeout(() => connectDatabase(attempt + 1), wait * 1000);
+  }
+}
+connectDatabase();
