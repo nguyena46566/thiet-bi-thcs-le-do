@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   fetchAudits, startAudit, fetchAudit, saveAudit, finishAudit, cancelAudit,
   fetchInventory, fetchMaintenance, createMaintenance, completeMaintenance, fetchReport, fetchEquipmentDetail,
-  type Audit, type AuditItem, type Equipment, type Maintenance, type Report, type BorrowDraft,
+  fetchDisposals, createDisposal, fetchRecords, fetchNotifications,
+  type Audit, type AuditItem, type Equipment, type Maintenance, type Report, type BorrowDraft, type Disposal, type BorrowRecord, type Notification,
 } from "@/api"
 import type { Subject } from "./Inventory"
 
@@ -21,7 +22,7 @@ const fmtTime = (iso?: string) => (iso ? new Date(iso).toLocaleString("vi-VN", {
 const Err = ({ msg }: { msg: string }) => (msg ? <div role="alert" className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-sm mb-3">{msg}</div> : null)
 
 /** Xuất nhiều bảng ra một file Excel (thư viện chỉ tải khi bấm nút) */
-async function exportExcel(filename: string, sheets: { name: string; rows: Record<string, unknown>[] }[]) {
+export async function exportExcel(filename: string, sheets: { name: string; rows: Record<string, unknown>[] }[]) {
   const XLSX = await import("xlsx")
   const wb = XLSX.utils.book_new()
   for (const s of sheets) {
@@ -476,5 +477,267 @@ export function EquipmentPage({ id, isAdmin, loggedIn, login, onBorrow, goHome }
         </div>
       )}
     </>,
+  )
+}
+
+// ===================================================================
+// TỔNG QUAN (bảng điều khiển)
+// ===================================================================
+const parseVnDate = (d: string) => { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(d || ""); return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null }
+
+export function Dashboard({ go }: { go: (section: string) => void }) {
+  const [rep, setRep] = useState<Report | null>(null)
+  const [records, setRecords] = useState<BorrowRecord[]>([])
+  const [inv, setInv] = useState<Equipment[]>([])
+  const [notifs, setNotifs] = useState<Notification[]>([])
+  const [running, setRunning] = useState(0)
+  useEffect(() => {
+    const p = presets()[3]
+    fetchReport(isoToVn(p.from), isoToVn(p.to)).then(setRep).catch(() => {})
+    fetchRecords().then(setRecords).catch(() => {})
+    fetchInventory().then(setInv).catch(() => {})
+    fetchNotifications({ limit: 8 }).then(setNotifs).catch(() => {})
+    fetchMaintenance().then((l) => setRunning(l.filter((m) => m.status === "Đang thực hiện").length)).catch(() => {})
+  }, [])
+  const t0 = new Date(); t0.setHours(0, 0, 0, 0)
+  const pending = records.filter((r) => r.status === "Chờ duyệt").sort((a, b) => (parseVnDate(a.borrowDate)?.getTime() || 0) - (parseVnDate(b.borrowDate)?.getTime() || 0))
+  const overdue = records.filter((r) => r.status === "Mượn" && (parseVnDate(r.returnDate)?.getTime() ?? Infinity) < t0.getTime())
+  const todayOut = records.filter((r) => r.status === "Mượn" && parseVnDate(r.borrowDate)?.getTime() === t0.getTime())
+  const broken = inv.reduce((s, e) => s + e.qtyBroken, 0)
+  const value = inv.reduce((s, e) => s + (e.qtyGood + e.qtyBroken + e.qtyRepair) * (e.unitPrice || 0), 0)
+  const kpis: [string, string | number, string, string][] = [
+    ["Chờ duyệt", pending.length, "bg-amber-50 border-amber-200 text-amber-800", "muon-tra"],
+    ["Quá hạn trả", overdue.length, "bg-rose-50 border-rose-200 text-rose-800", "muon-tra"],
+    ["Đang cho mượn", records.filter((r) => r.status === "Mượn").length, "bg-blue-50 border-blue-200 text-blue-800", "muon-tra"],
+    ["Thiết bị hỏng chờ xử lý", broken, "bg-orange-50 border-orange-200 text-orange-800", "bao-tri"],
+    ["Đang bảo trì", running, "bg-violet-50 border-violet-200 text-violet-800", "bao-tri"],
+    ["Giá trị tài sản", money(value), "bg-emerald-50 border-emerald-200 text-emerald-800", "danh-muc"],
+  ]
+  const months = rep?.byMonth || []
+  const maxM = Math.max(1, ...months.map((m: Report) => m.count))
+  const task = (r: BorrowRecord, extra: string) => (
+    <li key={r.id} className="py-2 flex items-center justify-between gap-3 text-sm">
+      <span className="min-w-0"><span className="font-medium text-gray-900">{r.teacherName}</span> <span className="text-gray-500">· {r.className} · {r.subjectName}</span><span className="block text-xs text-gray-500 truncate">{r.equipment}</span></span>
+      <span className="text-xs whitespace-nowrap text-gray-600">{extra}</span>
+    </li>
+  )
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        {kpis.map(([l, v, c, s]) => (
+          <button key={l} onClick={() => go(s)} className={`text-left border rounded-xl px-4 py-3 hover:shadow-md transition-shadow ${c}`}>
+            <div className="text-2xl font-bold truncate">{v}</div><div className="text-xs opacity-80">{l}</div>
+          </button>
+        ))}
+      </div>
+      <div className="grid lg:grid-cols-3 gap-4">
+        <div className={`${card} p-5 lg:col-span-2`}>
+          <div className="flex items-center justify-between mb-3"><h3 className="font-bold text-gray-900">Việc cần làm</h3><button onClick={() => go("muon-tra")} className="text-xs font-semibold text-[#1a3670] hover:underline">Mở Mượn – trả</button></div>
+          {pending.length + overdue.length + todayOut.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">Không có việc tồn đọng</p> : (
+            <div className="grid md:grid-cols-2 gap-4">
+              <div><div className="text-xs font-bold text-amber-700 uppercase mb-1">Chờ duyệt ({pending.length})</div><ul className="divide-y divide-gray-50">{pending.slice(0, 5).map((r) => task(r, `mượn ${r.borrowDate}`))}</ul></div>
+              <div><div className="text-xs font-bold text-rose-700 uppercase mb-1">Quá hạn trả ({overdue.length})</div><ul className="divide-y divide-gray-50">{overdue.slice(0, 5).map((r) => task(r, `hạn ${r.returnDate}`))}</ul>
+                {todayOut.length > 0 && <><div className="text-xs font-bold text-blue-700 uppercase mt-3 mb-1">Giao trong hôm nay ({todayOut.length})</div><ul className="divide-y divide-gray-50">{todayOut.slice(0, 4).map((r) => task(r, r.period || ""))}</ul></>}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className={`${card} p-5`}>
+          <h3 className="font-bold text-gray-900 mb-3">Hoạt động gần đây</h3>
+          {notifs.length === 0 ? <p className="text-sm text-gray-400">Chưa có</p> : (
+            <ul className="space-y-2.5">{notifs.map((n) => <li key={n.id} className="text-sm"><div className="font-medium text-gray-800">{n.title}</div><div className="text-xs text-gray-500 truncate" title={n.message}>{n.message}</div><div className="text-[10px] text-gray-400">{fmtTime(n.createdAt)}</div></li>)}</ul>
+          )}
+        </div>
+      </div>
+      <div className="grid lg:grid-cols-3 gap-4">
+        <div className={`${card} p-5 lg:col-span-2`}>
+          <h3 className="font-bold text-gray-900 mb-3">Lượt mượn theo tháng – năm học {rep?.schoolYear || ""}</h3>
+          {months.length === 0 ? <p className="text-sm text-gray-400">Chưa có dữ liệu</p> : (
+            <div className="flex items-end gap-3 h-40">{months.map((m: Report) => (
+              <div key={m.month} className="flex-1 flex flex-col items-center justify-end h-full min-w-0">
+                <span className="text-xs font-semibold text-gray-700 mb-1">{m.count}</span>
+                <div className="w-full max-w-12 bg-[#1a3670] rounded-t" style={{ height: `${(m.count / maxM) * 100}%` }} />
+                <span className="text-[10px] text-gray-500 mt-1">{m.month.slice(0, 5)}</span>
+              </div>
+            ))}</div>
+          )}
+        </div>
+        <div className={`${card} p-5`}>
+          <h3 className="font-bold text-gray-900 mb-3">Năm học này</h3>
+          {rep ? (
+            <dl className="text-sm space-y-2">
+              {[["Phiếu mượn", rep.summary.records], ["Giáo viên đã mượn", rep.summary.teachers], ["Lần trả trễ", rep.summary.lateReturns], ["Hỏng / mất khi trả", `${rep.summary.damaged} / ${rep.summary.lost}`], ["Chi mua mới", money(rep.summary.purchaseTotal)], ["Chi bảo trì", money(rep.summary.maintenanceCost)], ["Ghi giảm", `${rep.summary.disposedCount || 0} thiết bị`]].map(([k, v]) => (
+                <div key={String(k)} className="flex justify-between gap-3"><dt className="text-gray-500">{k}</dt><dd className="font-semibold text-gray-900">{v}</dd></div>
+              ))}
+            </dl>
+          ) : <p className="text-sm text-gray-400">Đang tải…</p>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ===================================================================
+// GHI GIẢM THIẾT BỊ
+// ===================================================================
+export function DisposalTab({ subjects }: { subjects: Subject[] }) {
+  const [inventory, setInventory] = useState<Equipment[]>([])
+  const [list, setList] = useState<Disposal[] | null>(null)
+  const [f, setF] = useState({ equipmentId: "", quantity: 1, source: "broken", reason: "Thanh lý", decisionNo: "", note: "", date: todayIso() })
+  const [error, setError] = useState("")
+  const [ok, setOk] = useState("")
+  const [busy, setBusy] = useState(false)
+  const load = useCallback(() => { fetchInventory().then(setInventory).catch(() => {}); fetchDisposals().then(setList).catch((e) => setError(e.message)) }, [])
+  useEffect(() => { load() }, [load])
+  const eq = inventory.find((e) => e.id === f.equipmentId)
+  const max = eq ? (f.source === "good" ? eq.qtyGood : f.source === "lost" ? eq.qtyLost : eq.qtyBroken) : 0
+  const save = async () => {
+    setBusy(true); setError(""); setOk("")
+    try { const d = await createDisposal({ ...f, date: isoToVn(f.date) }); setOk(`Đã ghi giảm ${d.quantity} “${d.name}” (${d.reason}).`); setF({ ...f, equipmentId: "", quantity: 1, decisionNo: "", note: "" }); load() }
+    catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } finally { setBusy(false) }
+  }
+  const total = (list || []).reduce((s, d) => s + d.value, 0)
+  return (
+    <div className="grid lg:grid-cols-5 gap-5 items-start">
+      <div className={`lg:col-span-2 ${card} p-5`}>
+        <h3 className="font-bold text-gray-900 mb-1">Lập chứng từ ghi giảm</h3>
+        <p className="text-xs text-gray-500 mb-4">Dùng khi thanh lý, xác nhận mất, điều chuyển sang đơn vị khác. Thiết bị ghi giảm rời khỏi số liệu kho.</p>
+        <Err msg={error} />
+        {ok && <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 text-sm mb-3">{ok}</div>}
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={label} htmlFor="d-reason">Lý do</label><select id="d-reason" className={field} value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value, source: e.target.value === "Mất" ? "lost" : e.target.value === "Điều chuyển" ? "good" : "broken" })}>{["Thanh lý", "Mất", "Điều chuyển", "Hư hỏng không sửa được", "Khác"].map((r) => <option key={r}>{r}</option>)}</select></div>
+            <div><label className={label} htmlFor="d-date">Ngày</label><input id="d-date" type="date" className={field} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></div>
+          </div>
+          <div><label className={label} htmlFor="d-eq">Thiết bị *</label>
+            <select id="d-eq" className={field} value={f.equipmentId} onChange={(e) => setF({ ...f, equipmentId: e.target.value })}>
+              <option value="">Chọn thiết bị…</option>
+              {subjects.map((s) => <optgroup key={s.id} label={s.name}>{inventory.filter((e) => e.subjectId === s.id).map((e) => <option key={e.id} value={e.id}>{e.name} (tốt {e.qtyGood}, hỏng {e.qtyBroken}, mất {e.qtyLost})</option>)}</optgroup>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={label} htmlFor="d-src">Lấy từ nhóm</label><select id="d-src" className={field} value={f.source} onChange={(e) => setF({ ...f, source: e.target.value })}><option value="broken">Đang hỏng</option><option value="lost">Đã ghi mất</option><option value="good">Đang tốt</option></select></div>
+            <div><label className={label} htmlFor="d-qty">Số lượng {eq && `(tối đa ${max})`}</label><input id="d-qty" type="number" min={1} className={field} value={f.quantity} onChange={(e) => setF({ ...f, quantity: Math.max(1, Math.floor(Number(e.target.value) || 1)) })} /></div>
+          </div>
+          <div><label className={label} htmlFor="d-no">Số quyết định / biên bản</label><input id="d-no" className={field} value={f.decisionNo} onChange={(e) => setF({ ...f, decisionNo: e.target.value })} placeholder="VD: 12/QĐ-THCSLĐ" /></div>
+          <div><label className={label} htmlFor="d-note">Ghi chú</label><input id="d-note" className={field} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></div>
+        </div>
+        <div className="flex justify-end mt-4"><button onClick={save} disabled={busy || !f.equipmentId || f.quantity > max} className={btnPrimary}>Ghi giảm</button></div>
+      </div>
+      <div className={`lg:col-span-3 ${card} overflow-hidden`}>
+        <div className="px-5 py-4 border-b border-gray-100 flex justify-between gap-2 flex-wrap"><h3 className="font-bold text-gray-900">Lịch sử ghi giảm</h3>
+          <div className="flex items-center gap-3"><span className="text-sm text-gray-500">Giá trị: <strong className="text-gray-800">{money(total)}</strong></span>
+            <button disabled={!list?.length} onClick={() => exportExcel("Ghi-giam-thiet-bi.xlsx", [{ name: "Ghi giảm", rows: (list || []).map((d) => ({ "Ngày": d.date, "Thiết bị": d.name, "Số lượng": d.quantity, "Lý do": d.reason, "Số QĐ/BB": d.decisionNo, "Đơn giá (đ)": d.unitPrice, "Giá trị (đ)": d.value, "Ghi chú": d.note, "Người lập": d.createdBy })) }])} className={btnGhost}>Xuất Excel</button></div>
+        </div>
+        {list === null ? <p className="p-6 text-sm text-gray-400">Đang tải…</p> : list.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">Chưa có chứng từ ghi giảm</p> : (
+          <div className="overflow-x-auto"><table className="w-full text-sm">
+            <thead><tr className="bg-gray-50">{["Ngày", "Thiết bị", "SL", "Lý do", "Số QĐ/BB", "Giá trị"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-gray-50">{list.map((d) => <tr key={d.id}><td className="px-3 py-2 text-xs whitespace-nowrap">{d.date}</td><td className="px-3 py-2">{d.name}{d.note && <div className="text-[11px] text-gray-400">{d.note}</div>}</td><td className="px-3 py-2 font-semibold">{d.quantity}</td><td className="px-3 py-2">{d.reason}</td><td className="px-3 py-2 text-xs">{d.decisionNo}</td><td className="px-3 py-2 whitespace-nowrap text-xs">{money(d.value)}</td></tr>)}</tbody>
+          </table></div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ===================================================================
+// SỔ SÁCH, BIỂU MẪU IN
+// ===================================================================
+const escH = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!)
+
+function printDoc(title: string, subtitle: string, head: string[], rows: (string | number)[][], landscape = true) {
+  const w = window.open("", "_blank")
+  if (!w) { alert("Trình duyệt chặn cửa sổ mới. Hãy cho phép pop-up để in."); return }
+  const today = new Date()
+  w.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${escH(title)}</title><style>
+    @page{size:A4 ${landscape ? "landscape" : "portrait"};margin:12mm}
+    body{font-family:"Times New Roman",serif;font-size:12px;color:#000;margin:0}
+    .hd{display:flex;justify-content:space-between;text-align:center;margin-bottom:10px}.hd div{width:48%}.hd b{display:block}
+    h1{text-align:center;font-size:16px;margin:12px 0 2px}.sub{text-align:center;font-style:italic;margin-bottom:10px}
+    table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:3px 4px;vertical-align:top}th{background:#eee}
+    td.c{text-align:center}.sign{display:flex;justify-content:space-around;margin-top:18px;text-align:center}.sign div{width:30%}.sign i{display:block}
+    .bar{margin:8px 0}@media print{.bar{display:none}}</style></head><body>
+    <div class="bar"><button onclick="window.print()">In</button></div>
+    <div class="hd"><div>PHÒNG GIÁO DỤC VÀ ĐÀO TẠO<b>TRƯỜNG THCS LÊ ĐỘ</b></div><div><b>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</b><b>Độc lập – Tự do – Hạnh phúc</b></div></div>
+    <h1>${escH(title)}</h1><div class="sub">${escH(subtitle)}</div>
+    <table><thead><tr>${head.map((h) => `<th>${escH(h)}</th>`).join("")}</tr></thead><tbody>
+    ${rows.length ? rows.map((r) => `<tr>${r.map((c, i) => `<td${i === 0 || typeof c === "number" ? ' class="c"' : ""}>${escH(c)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${head.length}" class="c">Không có dữ liệu</td></tr>`}
+    </tbody></table>
+    <div class="sign"><div><b>Người lập</b><i>(Ký, ghi rõ họ tên)</i></div><div><b>Tổ trưởng chuyên môn</b><i>(Ký, ghi rõ họ tên)</i></div><div><i>Ngày ${today.getDate()} tháng ${today.getMonth() + 1} năm ${today.getFullYear()}</i><b>Hiệu trưởng</b><i>(Ký, đóng dấu)</i></div></div>
+    </body></html>`)
+  w.document.close()
+}
+
+export function BooksTab({ subjects }: { subjects: Subject[] }) {
+  const ps = useMemo(presets, [])
+  const [from, setFrom] = useState(ps[3].from)
+  const [to, setTo] = useState(ps[3].to)
+  const [subjectId, setSubjectId] = useState("")
+  const [error, setError] = useState("")
+  const sName = (id: string) => subjects.find((s) => s.id === id)?.name || ""
+  const scope = subjectId ? ` – môn ${sName(subjectId)}` : ""
+
+  const borrowBook = async (excel: boolean) => {
+    setError("")
+    try {
+      const r = await fetchReport(isoToVn(from), isoToVn(to))
+      // Sổ ghi theo thứ tự thời gian: phiếu mượn sớm nhất ở trên
+      const list = (r.records as Report[]).filter((x) => !subjectId || x.subject === sName(subjectId))
+        .sort((a, b) => (parseVnDate(a.borrowDate)?.getTime() || 0) - (parseVnDate(b.borrowDate)?.getTime() || 0))
+      const head = ["STT", "Ngày mượn", "Họ tên giáo viên", "Lớp", "Môn", "Tiết", "Tên thiết bị", "Số lượng", "Ngày trả", "Tình trạng khi trả", "Trạng thái"]
+      const rows = list.map((x, i) => [i + 1, x.borrowDate, x.teacherName, x.className, x.subject, x.period || "", x.equipment, x.quantity, x.status === "Trả" ? x.returnDate : "", [x.lateDays ? `trễ ${x.lateDays} ngày` : "", x.damaged ? `hỏng ${x.damaged}` : "", x.lost ? `mất ${x.lost}` : ""].filter(Boolean).join(", ") || (x.status === "Trả" ? "Đầy đủ" : ""), x.status])
+      if (excel) await exportExcel(`So-theo-doi-muon-tra_${r.from.replace(/\//g, "-")}_${r.to.replace(/\//g, "-")}.xlsx`, [{ name: "Sổ mượn trả", rows: rows.map((row) => Object.fromEntries(head.map((h, i) => [h, row[i]]))) }])
+      else printDoc("SỔ THEO DÕI MƯỢN – TRẢ THIẾT BỊ DẠY HỌC", `Từ ngày ${r.from} đến ngày ${r.to}${scope}`, head, rows)
+    } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
+  }
+  const assetBook = async (excel: boolean) => {
+    setError("")
+    try {
+      const inv = (await fetchInventory()).filter((e) => !subjectId || e.subjectId === subjectId)
+      const head = ["STT", "Mã thiết bị", "Tên thiết bị", "Môn", "ĐVT", "Nước SX", "Năm SD", "Nguồn KP", "Tốt", "Hỏng", "Đang sửa", "Mất", "Đơn giá (đ)", "Thành tiền (đ)", "Vị trí"]
+      const rows = inv.map((e, i) => [i + 1, e.id, e.name, sName(e.subjectId), e.unit || "", e.origin || "", e.yearInUse || "", e.fundSource || "", e.qtyGood, e.qtyBroken, e.qtyRepair, e.qtyLost, (e.unitPrice || 0).toLocaleString("vi-VN"), ((e.qtyGood + e.qtyBroken + e.qtyRepair) * (e.unitPrice || 0)).toLocaleString("vi-VN"), e.location])
+      if (excel) await exportExcel("So-quan-ly-thiet-bi.xlsx", [{ name: "Sổ quản lý thiết bị", rows: rows.map((row) => Object.fromEntries(head.map((h, i) => [h, row[i]]))) }])
+      else printDoc("SỔ QUẢN LÝ THIẾT BỊ DẠY HỌC", `Tính đến ngày ${new Date().toLocaleDateString("vi-VN")}${scope}`, head, rows)
+    } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
+  }
+  const damageBook = async (excel: boolean) => {
+    setError("")
+    try {
+      const [m, d] = await Promise.all([fetchMaintenance(), fetchDisposals()])
+      const inRange = (x: string) => { const t = parseVnDate(x); return !!t && t >= new Date(from) && t <= new Date(to + "T23:59:59") }
+      const rows: (string | number)[][] = [
+        ...m.filter((x) => inRange(x.date) && (!subjectId || x.subjectId === subjectId)).map((x) => [x.date, x.name, x.quantity, `${x.kind}: ${x.content || ""}`, x.status === "Hoàn thành" ? `Sửa được ${x.repaired}, thanh lý ${x.disposed}` : "Đang thực hiện", (x.cost || 0).toLocaleString("vi-VN")]),
+        ...d.filter((x) => inRange(x.date) && (!subjectId || x.subjectId === subjectId)).map((x) => [x.date, x.name, x.quantity, `Ghi giảm: ${x.reason}${x.decisionNo ? ` (${x.decisionNo})` : ""}`, x.note || "", (x.value || 0).toLocaleString("vi-VN")]),
+      ].sort((a, b) => (parseVnDate(String(a[0]))?.getTime() || 0) - (parseVnDate(String(b[0]))?.getTime() || 0)).map((r, i) => [i + 1, ...r])
+      const head = ["STT", "Ngày", "Thiết bị", "Số lượng", "Nội dung", "Kết quả / ghi chú", "Chi phí / giá trị (đ)"]
+      if (excel) await exportExcel("So-sua-chua-thanh-ly.xlsx", [{ name: "Sửa chữa – thanh lý", rows: rows.map((row) => Object.fromEntries(head.map((h, i) => [h, row[i]]))) }])
+      else printDoc("SỔ THEO DÕI SỬA CHỮA, THANH LÝ THIẾT BỊ", `Từ ngày ${isoToVn(from)} đến ngày ${isoToVn(to)}${scope}`, head, rows)
+    } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
+  }
+  const books: [string, string, (excel: boolean) => void][] = [
+    ["Sổ theo dõi mượn – trả thiết bị", "Ghi theo từng lượt mượn: ngày, giáo viên, lớp, tiết, thiết bị, ngày trả, tình trạng khi trả.", borrowBook],
+    ["Sổ quản lý thiết bị", "Danh mục toàn bộ thiết bị: mã, đơn vị tính, nước sản xuất, năm sử dụng, nguồn kinh phí, số lượng theo tình trạng, giá trị.", assetBook],
+    ["Sổ theo dõi sửa chữa, thanh lý", "Các lần bảo trì, sửa chữa và chứng từ ghi giảm trong kỳ, kèm chi phí.", damageBook],
+  ]
+  return (
+    <div className="space-y-4">
+      <div className={`${card} p-5 flex flex-wrap items-end gap-3`}>
+        <div className="flex flex-wrap gap-2">{ps.map((p) => <button key={p.k} onClick={() => { setFrom(p.from); setTo(p.to) }} aria-pressed={from === p.from && to === p.to} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${from === p.from && to === p.to ? "bg-[#1a3670] text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>{p.l}</button>)}</div>
+        <div><label className={label} htmlFor="b-from">Từ ngày</label><input id="b-from" type="date" className={fieldBase} value={from} onChange={(e) => setFrom(e.target.value)} /></div>
+        <div><label className={label} htmlFor="b-to">Đến ngày</label><input id="b-to" type="date" className={fieldBase} value={to} onChange={(e) => setTo(e.target.value)} /></div>
+        <div><label className={label} htmlFor="b-sub">Môn</label><select id="b-sub" className={fieldBase} value={subjectId} onChange={(e) => setSubjectId(e.target.value)}><option value="">Tất cả</option>{subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+      </div>
+      <Err msg={error} />
+      <div className="grid md:grid-cols-3 gap-4">
+        {books.map(([t, d, fn]) => (
+          <div key={t} className={`${card} p-5 flex flex-col`}>
+            <h3 className="font-bold text-gray-900 mb-1">{t}</h3>
+            <p className="text-xs text-gray-500 flex-1 mb-4">{d}</p>
+            <div className="flex gap-2"><button onClick={() => fn(false)} className={btnPrimary}>Xem & in</button><button onClick={() => fn(true)} className={btnGhost}>Xuất Excel</button></div>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-gray-500">Biên bản kiểm kê được xuất trong mục Kiểm kê. Mẫu sổ in ra theo bố cục chung (quốc hiệu, tên trường, chữ ký); nếu trường có mẫu riêng theo quy định của Phòng/Sở, cần đối chiếu và điều chỉnh cột cho khớp.</p>
+    </div>
   )
 }

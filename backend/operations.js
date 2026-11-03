@@ -14,6 +14,7 @@ import { sendReminderEmail } from "./mailer.js";
 
 const auditCol = () => db.collection("audits");
 const maintCol = () => db.collection("maintenance");
+const disposalCol = () => db.collection("disposals");
 const DAY = 864e5;
 
 /** Số lượng đang nằm ngoài phòng thiết bị (phiếu "Mượn" có mã thiết bị) */
@@ -180,6 +181,36 @@ export function completeMaintenance(id, body, user) {
 }
 
 // =====================================================================
+// GHI GIẢM THIẾT BỊ (thanh lý, mất, điều chuyển)
+// =====================================================================
+const DISPOSAL_REASONS = ["Thanh lý", "Mất", "Điều chuyển", "Hư hỏng không sửa được", "Khác"];
+const BUCKETS = { good: "qtyGood", broken: "qtyBroken", lost: "qtyLost" };
+
+export const listDisposals = () => disposalCol().all();
+
+export function createDisposal(body, user) {
+  return serial(async () => {
+    const eq = await equipmentCol().get(body?.equipmentId);
+    if (!eq) return { error: "Chọn thiết bị cần ghi giảm" };
+    const qty = int(body.quantity, 1, 10000);
+    if (qty === null) return { error: "Số lượng không hợp lệ" };
+    const key = BUCKETS[body.source] || "qtyBroken";
+    if ((eq[key] || 0) < qty) return { error: `Chỉ có ${eq[key] || 0} thiết bị ở nhóm đã chọn` };
+    const reason = DISPOSAL_REASONS.includes(body.reason) ? body.reason : "Thanh lý";
+    const date = parseDate(body.date) || todayVN();
+    await applyDelta(eq.id, { [key]: -qty, qtyDisposed: qty });
+    const doc = {
+      id: newId(), equipmentId: eq.id, name: eq.name, subjectId: eq.subjectId, quantity: qty, source: body.source in BUCKETS ? body.source : "broken",
+      reason, decisionNo: str(body.decisionNo, 60), note: str(body.note, 300), date: formatDate(date),
+      unitPrice: eq.unitPrice || 0, value: qty * (eq.unitPrice || 0), createdBy: user.name, createdAt: new Date().toISOString(),
+    };
+    await disposalCol().insert(doc);
+    await refreshCache();
+    return { value: doc };
+  });
+}
+
+// =====================================================================
 // BÁO CÁO TỔNG HỢP
 // =====================================================================
 const inRange = (d, from, to) => { const x = parseDate(d); return !!x && x >= from && x <= to; };
@@ -240,6 +271,7 @@ export async function buildReport(q) {
   const purchases = (await purchaseCol().all()).filter((p) => inRange(p.date, from, to));
   const maintenance = (await maintCol().all()).filter((m) => inRange(m.date, from, to));
   const penalties = (await penaltyCol().all()).filter((p) => isoIn(p.createdAt, from, to));
+  const disposals = (await disposalCol().all()).filter((d) => inRange(d.date, from, to));
 
   const invBySubject = SUBJECTS.map((s) => {
     const list = inventory.filter((e) => e.subjectId === s.id);
@@ -257,13 +289,14 @@ export async function buildReport(q) {
       maintenanceCount: maintenance.length, maintenanceCost: maintenance.reduce((s, m) => s + (m.cost || 0), 0),
       pointsDeducted: penalties.filter((p) => p.points < 0).reduce((s, p) => s + p.points, 0),
       inventoryValue: invBySubject.reduce((s, x) => s + x.value, 0),
+      disposedCount: disposals.reduce((s, d) => s + d.quantity, 0), disposedValue: disposals.reduce((s, d) => s + d.value, 0),
     },
     bySubject, byEquipment, unusedEquipment, manualRecords: manual, byTeacher, byMonth, invBySubject,
     records: records.map((r) => ({ borrowDate: r.borrowDate, returnDate: r.returnDate, teacherName: r.teacherName, className: r.className, subject: r.subjectName, period: r.period,
       equipment: r.equipment, quantity: r.quantity, status: r.status, lateDays: r.returnReport?.lateDays || 0,
       damaged: (r.returnReport?.items || []).reduce((a, x) => a + x.damaged, 0), lost: (r.returnReport?.items || []).reduce((a, x) => a + x.lost, 0) })),
-    inventory: inventory.map((e) => ({ name: e.name, subject: subjectName(e.subjectId), good: e.qtyGood, broken: e.qtyBroken, repair: e.qtyRepair, lost: e.qtyLost, disposed: e.qtyDisposed || 0, unitPrice: e.unitPrice || 0, location: e.location })),
-    purchases, maintenance,
+    inventory: inventory.map((e) => ({ code: e.id, unit: e.unit || "", origin: e.origin || "", yearInUse: e.yearInUse || "", fundSource: e.fundSource || "", name: e.name, subject: subjectName(e.subjectId), good: e.qtyGood, broken: e.qtyBroken, repair: e.qtyRepair, lost: e.qtyLost, disposed: e.qtyDisposed || 0, unitPrice: e.unitPrice || 0, location: e.location })),
+    purchases, maintenance, disposals,
   } };
 }
 
@@ -352,6 +385,9 @@ export function registerOperationRoutes(app, { requireAuth, requireAdmin, wrap }
   app.get("/api/maintenance", requireAdmin, wrap(async (req, res) => res.json(await listMaintenance())));
   app.post("/api/maintenance", requireAdmin, wrap(async (req, res) => send(res, await createMaintenance(req.body || {}, req.session.user), 201)));
   app.post("/api/maintenance/:id/complete", requireAdmin, wrap(async (req, res) => send(res, await completeMaintenance(req.params.id, req.body || {}, req.session.user))));
+
+  app.get("/api/disposals", requireAdmin, wrap(async (req, res) => res.json(await listDisposals())));
+  app.post("/api/disposals", requireAdmin, wrap(async (req, res) => send(res, await createDisposal(req.body || {}, req.session.user), 201)));
 
   app.get("/api/reports", requireAdmin, wrap(async (req, res) => send(res, await buildReport(req.query || {}))));
 

@@ -6,7 +6,7 @@ import {
   type Equipment, type Purchase, type PenaltyEntry, type PointRules, type TeacherScore, type BorrowRecord,
 } from "@/api"
 
-import { printQrLabels } from "./Operations"
+import { printQrLabels, exportExcel } from "./Operations"
 
 export type Subject = { id: string; name: string; color: string }
 
@@ -139,7 +139,7 @@ export function ReturnDialog({ record, subjects, onClose, onDone }: { record: Bo
 // ===================================================================
 // KHO THIẾT BỊ
 // ===================================================================
-const emptyEq = (subjectId: string): Partial<Equipment> => ({ name: "", subjectId, grades: [], keywords: [], location: "", unitPrice: 0, qtyGood: 0, qtyBroken: 0, qtyLost: 0, qtyRepair: 0, note: "" })
+const emptyEq = (subjectId: string): Partial<Equipment> => ({ name: "", subjectId, grades: [], keywords: [], location: "", unitPrice: 0, qtyGood: 0, qtyBroken: 0, qtyLost: 0, qtyRepair: 0, note: "", unit: "Cái", origin: "Việt Nam", fundSource: "Ngân sách", yearInUse: new Date().getFullYear() })
 
 function EquipmentForm({ initial, subjects, onClose, onSaved }: { initial: Partial<Equipment>; subjects: Subject[]; onClose: () => void; onSaved: () => void }) {
   const [f, setF] = useState<Partial<Equipment>>(initial)
@@ -181,6 +181,12 @@ function EquipmentForm({ initial, subjects, onClose, onSaved }: { initial: Parti
           <div><label className={label}>Mất</label>{num("qtyLost")}</div>
         </div>
         {initial.id && <p className="text-xs text-gray-500 -mt-1">Số lượng sửa ở đây là điều chỉnh trực tiếp. Mua thêm nên dùng “Nhập kho” để lưu chứng từ.</p>}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div><label className={label}>Đơn vị tính</label><input className={field} value={f.unit ?? ""} onChange={(e) => setF({ ...f, unit: e.target.value })} placeholder="Cái, Bộ…" /></div>
+          <div><label className={label}>Nước sản xuất</label><input className={field} value={f.origin ?? ""} onChange={(e) => setF({ ...f, origin: e.target.value })} /></div>
+          <div><label className={label}>Năm sử dụng</label><input type="number" min={1990} max={2100} className={field} value={f.yearInUse ?? ""} onChange={(e) => setF({ ...f, yearInUse: e.target.value ? Number(e.target.value) : null })} /></div>
+          <div><label className={label}>Nguồn kinh phí</label><select className={field} value={f.fundSource || "Ngân sách"} onChange={(e) => setF({ ...f, fundSource: e.target.value })}>{["Ngân sách", "Xã hội hóa", "Tài trợ", "Khác"].map((x) => <option key={x}>{x}</option>)}</select></div>
+        </div>
         <div><label className={label}>Vị trí cất</label><input className={field} value={f.location || ""} onChange={(e) => setF({ ...f, location: e.target.value })} placeholder="VD: Phòng thiết bị – Tủ Lí 2" /></div>
         <div><label className={label}>Từ khóa (giúp trợ lý AI tìm, cách nhau bằng dấu phẩy)</label><input className={field} value={kw} onChange={(e) => setKw(e.target.value)} /></div>
         <div><label className={label}>Ghi chú</label><input className={field} value={f.note || ""} onChange={(e) => setF({ ...f, note: e.target.value })} /></div>
@@ -200,13 +206,22 @@ export function InventoryTab({ subjects }: { subjects: Subject[] }) {
   const [onlyIssue, setOnlyIssue] = useState(false)
   const [editing, setEditing] = useState<Partial<Equipment> | null>(null)
   const [error, setError] = useState("")
+  const [pageNo, setPageNo] = useState(1)
+  const PAGE = 20
   const load = useCallback(() => { fetchInventory().then(setList).catch((e) => setError(e.message)) }, [])
+  useEffect(() => { setPageNo(1) }, [q, subject, onlyIssue])
   useEffect(() => { load() }, [load])
 
   const shown = (list || []).filter((e) =>
     (!subject || e.subjectId === subject) &&
     (!onlyIssue || e.qtyBroken > 0 || e.qtyLost > 0 || e.qtyRepair > 0) &&
-    (!q || e.name.toLowerCase().includes(q.toLowerCase()) || e.location.toLowerCase().includes(q.toLowerCase())))
+    (!q || [e.name, e.location, e.id].some((v) => (v || "").toLowerCase().includes(q.toLowerCase()))))
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE))
+  const pageItems = shown.slice((pageNo - 1) * PAGE, pageNo * PAGE)
+  const exportList = () => exportExcel("Danh-muc-thiet-bi.xlsx", [{ name: "Danh mục thiết bị", rows: shown.map((e, i) => ({
+    "STT": i + 1, "Mã thiết bị": e.id, "Tên thiết bị": e.name, "Môn": subjects.find((s) => s.id === e.subjectId)?.name, "Khối": (e.grades || []).join(", "), "ĐVT": e.unit || "",
+    "Nước SX": e.origin || "", "Năm SD": e.yearInUse || "", "Nguồn KP": e.fundSource || "", "Tốt": e.qtyGood, "Hỏng": e.qtyBroken, "Đang sửa": e.qtyRepair, "Mất": e.qtyLost,
+    "Đơn giá (đ)": e.unitPrice || 0, "Thành tiền (đ)": (e.qtyGood + e.qtyBroken + e.qtyRepair) * (e.unitPrice || 0), "Vị trí": e.location })) }])
   const sum = (k: "qtyGood" | "qtyBroken" | "qtyLost" | "qtyRepair") => shown.reduce((s, e) => s + e[k], 0)
   const value = shown.reduce((s, e) => s + (e.qtyGood + e.qtyBroken + e.qtyRepair) * e.unitPrice, 0)
   const noPrice = shown.filter((e) => !e.unitPrice).length
@@ -231,27 +246,30 @@ export function InventoryTab({ subjects }: { subjects: Subject[] }) {
       <ErrorBox msg={error} />
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center gap-3">
-          <input type="search" aria-label="Tìm thiết bị" placeholder="Tìm tên, vị trí…" className={`${fieldBase} w-full sm:w-60`} value={q} onChange={(e) => setQ(e.target.value)} />
+          <input type="search" aria-label="Tìm thiết bị" placeholder="Tìm mã, tên, vị trí…" className={`${fieldBase} w-full sm:w-60`} value={q} onChange={(e) => setQ(e.target.value)} />
           <select aria-label="Lọc theo môn" className={fieldBase} value={subject} onChange={(e) => setSubject(e.target.value)}>
             <option value="">Tất cả môn</option>{subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
           <label className="flex items-center gap-1.5 text-sm text-gray-600"><input type="checkbox" checked={onlyIssue} onChange={(e) => setOnlyIssue(e.target.checked)} />Chỉ thiết bị có hỏng/mất/đang sửa</label>
-          <button onClick={() => printQrLabels(shown, subjects)} disabled={!shown.length} className={`${btnGhost} ml-auto`} title="In nhãn mã QR cho các thiết bị đang hiển thị">In nhãn QR ({shown.length})</button>
+          <button onClick={exportList} disabled={!shown.length} className={`${btnGhost} ml-auto`}>Xuất Excel</button>
+          <button onClick={() => printQrLabels(shown, subjects)} disabled={!shown.length} className={btnGhost} title="In nhãn mã QR cho các thiết bị đang hiển thị">In nhãn QR ({shown.length})</button>
           <button onClick={() => setEditing(emptyEq(subject || subjects[0].id))} className={btnPrimary}>+ Thêm thiết bị</button>
         </div>
         {list === null ? <p className="p-6 text-sm text-gray-400">Đang tải…</p> : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="bg-gray-50 border-b border-gray-100">
-                {["Thiết bị", "Môn", "Tốt", "Hỏng", "Đang sửa", "Mất", "Đơn giá", "Vị trí", ""].map((h) => <th key={h} className="px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap">{h}</th>)}
+                {["Mã", "Thiết bị", "Môn", "ĐVT", "Tốt", "Hỏng", "Đang sửa", "Mất", "Đơn giá", "Vị trí", ""].map((h) => <th key={h} className="px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap">{h}</th>)}
               </tr></thead>
               <tbody className="divide-y divide-gray-50">
-                {shown.map((e) => {
+                {pageItems.map((e) => {
                   const s = subjects.find((x) => x.id === e.subjectId)
                   return (
                     <tr key={e.id} className="hover:bg-gray-50/60">
+                      <td className="px-3 py-2.5 text-[11px] text-gray-400 font-mono whitespace-nowrap">{e.id}</td>
                       <td className="px-3 py-2.5 font-medium text-gray-900 min-w-[200px]">{e.name}{e.grades?.length ? <span className="block text-[11px] text-gray-400">Lớp {e.grades.join(", ")}</span> : null}</td>
                       <td className="px-3 py-2.5"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white whitespace-nowrap" style={{ backgroundColor: s?.color || "#888" }}>{s?.name}</span></td>
+                      <td className="px-3 py-2.5 text-xs text-gray-500">{e.unit || ""}</td>
                       <td className="px-3 py-2.5 font-semibold text-green-700">{e.qtyGood}</td>
                       <td className={`px-3 py-2.5 ${e.qtyBroken ? "text-amber-700 font-semibold" : "text-gray-400"}`}>{e.qtyBroken}</td>
                       <td className={`px-3 py-2.5 ${e.qtyRepair ? "text-amber-700 font-semibold" : "text-gray-400"}`}>{e.qtyRepair}</td>
@@ -265,9 +283,19 @@ export function InventoryTab({ subjects }: { subjects: Subject[] }) {
                     </tr>
                   )
                 })}
-                {shown.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">Không có thiết bị phù hợp</td></tr>}
+                {shown.length === 0 && <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-400">Không có thiết bị phù hợp</td></tr>}
               </tbody>
             </table>
+            {pages > 1 && (
+              <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between text-sm">
+                <span className="text-gray-500">{(pageNo - 1) * PAGE + 1}–{Math.min(pageNo * PAGE, shown.length)} / {shown.length} thiết bị</span>
+                <div className="flex gap-1">
+                  <button disabled={pageNo === 1} onClick={() => setPageNo(pageNo - 1)} className="px-3 py-1 rounded-lg bg-gray-100 disabled:opacity-40">‹ Trước</button>
+                  <span className="px-3 py-1">Trang {pageNo}/{pages}</span>
+                  <button disabled={pageNo === pages} onClick={() => setPageNo(pageNo + 1)} className="px-3 py-1 rounded-lg bg-gray-100 disabled:opacity-40">Sau ›</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

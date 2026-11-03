@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import logoImg from "@/imports/Logo.jpg"
 import { AuthProvider, useAuth } from "@/AuthContext"
 import { InventoryTab, PurchasesTab, PointsTab, ReturnDialog, MyPointsCard } from "./Inventory"
-import { AuditTab, MaintenanceTab, ReportsTab, EquipmentPage } from "./Operations"
+import { AuditTab, MaintenanceTab, ReportsTab, EquipmentPage, Dashboard, DisposalTab, BooksTab } from "./Operations"
 import ChatWidget from "@/ChatWidget"
 import {
   fetchRecords,
@@ -151,7 +151,7 @@ function Nav({ page, setPage }: { page: Page; setPage: (p: Page) => void }) {
         <div className="flex-1 lg:hidden" />
 
         {user?.isAdmin && (
-          <button onClick={() => go("admin")} className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-white/30 transition-colors relative whitespace-nowrap flex-shrink-0 ${page === "admin" ? "bg-white text-[#1a3670]" : "hover:bg-white/10"}`}>
+          <button onClick={() => go("admin")} className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-white/30 transition-colors relative whitespace-nowrap flex-shrink-0 ${page.startsWith("admin") ? "bg-white text-[#1a3670]" : "hover:bg-white/10"}`}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
             Quản trị
             {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-5 h-5 px-1 flex items-center justify-center">{badge}</span>}
@@ -190,7 +190,7 @@ function Nav({ page, setPage }: { page: Page; setPage: (p: Page) => void }) {
             <MenuItem label="Trang chủ" active={page === "home"} onClick={() => go("home")} wide />
             <MenuItem label="Nội quy" active={page === "noiquy"} onClick={() => go("noiquy")} wide />
             {user && <MenuItem label="Phiếu của tôi" active={page === "mine"} onClick={() => go("mine")} wide />}
-            {user?.isAdmin && <MenuItem label={unreadCount > 0 ? `Quản trị (${badge} thông báo mới)` : "Quản trị"} active={page === "admin"} onClick={() => go("admin")} wide />}
+            {user?.isAdmin && <MenuItem label={unreadCount > 0 ? `Quản trị (${badge} thông báo mới)` : "Quản trị"} active={page.startsWith("admin")} onClick={() => go("admin")} wide />}
             <div className="col-span-2 px-3 pt-2 pb-1 text-[11px] uppercase tracking-wider text-white/50">Môn học</div>
             {SUBJECTS.map((s) => <MenuItem key={s.id} label={s.name} active={page === s.id} onClick={() => go(s.id)} />)}
           </div>
@@ -702,9 +702,32 @@ function SubjectPage({ subjectId, setPage, refreshKey = 0, prefill = null, onPre
 }
 
 // ============ ADMIN PAGE ============
-function AdminPage() {
+// Menu trang quản trị (bố cục kiểu phần mềm quản lý: thanh bên trái chia nhóm nghiệp vụ)
+const ADMIN_MENU: { group: string; items: { id: string; label: string; tab: string }[] }[] = [
+  { group: "", items: [{ id: "tong-quan", label: "Tổng quan", tab: "dashboard" }] },
+  { group: "Nghiệp vụ", items: [
+    { id: "muon-tra", label: "Mượn – trả thiết bị", tab: "records" },
+    { id: "ghi-tang", label: "Ghi tăng (nhập kho)", tab: "purchases" },
+    { id: "ghi-giam", label: "Ghi giảm (thanh lý, mất)", tab: "disposals" },
+    { id: "kiem-ke", label: "Kiểm kê", tab: "audit" },
+    { id: "bao-tri", label: "Bảo trì – sửa chữa", tab: "maintenance" },
+  ] },
+  { group: "Danh mục", items: [{ id: "danh-muc", label: "Danh mục thiết bị", tab: "inventory" }] },
+  { group: "Giáo viên", items: [{ id: "thi-dua", label: "Điểm thi đua", tab: "points" }] },
+  { group: "Báo cáo", items: [
+    { id: "bao-cao", label: "Báo cáo tổng hợp", tab: "reports" },
+    { id: "so-sach", label: "Sổ sách, biểu mẫu", tab: "books" },
+  ] },
+  { group: "Hệ thống", items: [{ id: "thong-bao", label: "Thông báo", tab: "notifications" }] },
+]
+const ADMIN_ITEMS = ADMIN_MENU.flatMap((g) => g.items)
+
+function AdminPage({ section = "tong-quan", go }: { section?: string; go: (section: string) => void }) {
   const { user } = useAuth()
-  const [tab, setTab] = useState<"records" | "inventory" | "purchases" | "audit" | "maintenance" | "points" | "reports" | "notifications">("records")
+  const current = ADMIN_ITEMS.find((i) => i.id === section) || ADMIN_ITEMS[0]
+  const tab = current.tab
+  useEffect(() => { if (tab === "notifications") loadNotifsRef.current?.() }, [tab])
+  const loadNotifsRef = useRef<(() => void) | null>(null)
   const [returning, setReturning] = useState<BorrowRecord | null>(null)
   const [records, setRecords] = useState<BorrowRecord[]>([])
   const [filterSubject, setFilterSubject] = useState("")
@@ -745,6 +768,7 @@ function AdminPage() {
 
   useEffect(() => { loadData() }, [loadData])
   useEffect(() => { loadNotifs() }, [loadNotifs])
+  loadNotifsRef.current = loadNotifs
   useEffect(() => () => latestRequest.current?.abort(), [])
 
   if (!user?.isAdmin) {
@@ -779,23 +803,42 @@ function AdminPage() {
 
   return (
     <main className="pt-24 pb-20 px-4">
-      <div className="max-w-screen-xl mx-auto">
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-extrabold text-[#1a3670]">Trang Quản Trị</h1>
-            <p className="text-gray-500 text-sm mt-1">Mượn – trả, kho, nhập kho, kiểm kê, bảo trì, điểm thi đua, báo cáo</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {([["records", "Mượn/Trả"], ["inventory", "Kho thiết bị"], ["purchases", "Nhập kho"], ["audit", "Kiểm kê"], ["maintenance", "Bảo trì"], ["points", "Điểm thi đua"], ["reports", "Báo cáo"]] as const).map(([k, l]) => (
-              <button key={k} onClick={() => setTab(k)} aria-pressed={tab === k} className={`px-4 py-2 rounded-xl text-sm font-semibold ${tab === k ? "bg-[#1a3670] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>{l}</button>
+      <div className="max-w-[1500px] mx-auto">
+        <div className="flex gap-6">
+        <aside className="hidden lg:block w-60 shrink-0 self-start sticky top-24">
+          <nav aria-label="Menu quản trị" className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3">
+            <div className="px-3 pt-1 pb-3 border-b border-gray-100 mb-2">
+              <div className="text-xs text-gray-500">Phân hệ</div>
+              <div className="font-bold text-[#1a3670] leading-tight">Quản lý thiết bị dạy học</div>
+            </div>
+            {ADMIN_MENU.map((g) => (
+              <div key={g.group || "home"} className="mb-1">
+                {g.group && <div className="px-3 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">{g.group}</div>}
+                {g.items.map((it) => (
+                  <button key={it.id} onClick={() => go(it.id)} aria-current={section === it.id ? "page" : undefined}
+                    className={`w-full flex items-center justify-between text-left px-3 py-2 rounded-lg text-sm ${current.id === it.id ? "bg-[#1a3670] text-white font-semibold" : "text-gray-700 hover:bg-gray-100"}`}>
+                    {it.label}
+                    {it.id === "thong-bao" && unreadCount > 0 && <span className={`text-[10px] font-bold rounded-full px-1.5 ${current.id === it.id ? "bg-white text-[#1a3670]" : "bg-red-500 text-white"}`}>{unreadCount > 99 ? "99+" : unreadCount}</span>}
+                  </button>
+                ))}
+              </div>
             ))}
-            <button onClick={() => { setTab("notifications"); loadNotifs() }} className={`px-4 py-2 rounded-xl text-sm font-semibold relative ${tab === "notifications" ? "bg-[#1a3670] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
-              Thông báo
-              {unreadCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{unreadCount}</span>}
-            </button>
+          </nav>
+        </aside>
+        <section className="flex-1 min-w-0">
+        <div className="mb-5 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+          <div>
+            <div className="text-xs text-gray-500 mb-1">Quản trị <span className="mx-1">›</span> {ADMIN_MENU.find((g) => g.items.includes(current))?.group || "Tổng quan"}</div>
+            <h1 className="text-2xl font-extrabold text-[#1a3670]">{current.label}</h1>
           </div>
+          <select aria-label="Chọn chức năng" className="lg:hidden border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white" value={current.id} onChange={(e) => go(e.target.value)}>
+            {ADMIN_MENU.map((g) => <optgroup key={g.group || "home"} label={g.group || "Chung"}>{g.items.map((it) => <option key={it.id} value={it.id}>{it.label}</option>)}</optgroup>)}
+          </select>
         </div>
 
+        {tab === "dashboard" && <Dashboard go={go} />}
+        {tab === "disposals" && <DisposalTab subjects={SUBJECTS} />}
+        {tab === "books" && <BooksTab subjects={SUBJECTS} />}
         {tab === "records" && <AdminSummary onPick={(st) => { setFilterStatus(st); setFilterSubject(""); setSearch("") }} active={filterStatus} refreshKey={records} />}
         {tab === "records" && (
           <div className="flex justify-end -mt-2 mb-3">
@@ -909,6 +952,8 @@ function AdminPage() {
             )}
           </div>
         )}
+        </section>
+        </div>
       </div>
     </main>
   )
@@ -1037,6 +1082,7 @@ function MyRecordsPage({ setPage }: { setPage: (p: Page) => void }) {
 const PAGES = new Set<string>(["home", "noiquy", "admin", "mine", ...SUBJECTS.map((s) => s.id)])
 function readHash(): Page {
   const h = decodeURIComponent(window.location.hash.replace(/^#\/?/, ""))
+  if (/^admin\/[a-z-]+$/.test(h)) return h // các mục trong trang quản trị
   if (/^thiet-bi\/[\w.-]+$/.test(h)) return h // trang chi tiết thiết bị (mở từ mã QR)
   return PAGES.has(h) ? h : "home"
 }
@@ -1056,7 +1102,7 @@ function AppContent() {
     window.location.hash = p === "home" ? "" : p
   }, [])
   useEffect(() => {
-    const name = page === "home" ? "" : page === "noiquy" ? "Nội quy" : page === "admin" ? "Quản trị" : page === "mine" ? "Phiếu của tôi" : page.startsWith("thiet-bi/") ? "Thiết bị" : SUBJECTS.find((s) => s.id === page)?.name
+    const name = page === "home" ? "" : page === "noiquy" ? "Nội quy" : page.startsWith("admin") ? "Quản trị" : page === "mine" ? "Phiếu của tôi" : page.startsWith("thiet-bi/") ? "Thiết bị" : SUBJECTS.find((s) => s.id === page)?.name
     document.title = (name ? `${name} – ` : "") + "Quản lý thiết bị THCS Lê Độ"
   }, [page])
   // Bản nháp từ chatbot chờ được điền vào form (key để điền lại được nhiều lần)
@@ -1086,7 +1132,7 @@ function AppContent() {
       <Nav page={page} setPage={setPage} />
       {page === "home" && <HomePage setPage={setPage} />}
       {page === "noiquy" && <NoiQuyPage />}
-      {page === "admin" && <AdminPage />}
+      {page.startsWith("admin") && <AdminPage section={page.split("/")[1]} go={(sec) => setPage(`admin/${sec}`)} />}
       {page === "mine" && <MyRecordsPage setPage={setPage} />}
       {page.startsWith("thiet-bi/") && <EquipmentPage key={page} id={page.slice(9)} isAdmin={!!user?.isAdmin} loggedIn={!!user} login={login} onBorrow={fillFormFromChat} goHome={() => setPage("home")} />}
       {SUBJECTS.some((s) => s.id === page) && (

@@ -61,7 +61,7 @@ export async function initInventory() {
     for (const e of seed) {
       await equipmentCol().insert({
         id: e.id, name: e.name, subjectId: e.subjectId, grades: e.grades || [], keywords: e.keywords || [],
-        location: e.location || "", unitPrice: 0,
+        location: e.location || "", unitPrice: 0, unit: "Bộ", origin: "", fundSource: "Ngân sách", yearInUse: null, shared: false,
         qtyGood: /hỏng|đang sửa|thanh lý/i.test(e.condition || "") ? 0 : Number(e.stock) || 0,
         qtyBroken: 0, qtyLost: 0, qtyRepair: 0, note: "", createdAt: now, updatedAt: now,
       });
@@ -99,6 +99,16 @@ function validateEquipment(b, partial = false) {
     out.unitPrice = p;
   }
   if (b.location !== undefined || !partial) out.location = str(b.location, 120);
+  // Thông tin quản lý tài sản (theo cách các phần mềm quản lý trường học ghi sổ)
+  if (b.unit !== undefined || !partial) out.unit = str(b.unit, 20) || "Cái";
+  if (b.origin !== undefined || !partial) out.origin = str(b.origin, 60);
+  if (b.fundSource !== undefined || !partial) out.fundSource = ["Ngân sách", "Xã hội hóa", "Tài trợ", "Khác"].includes(b.fundSource) ? b.fundSource : "Ngân sách";
+  if (b.yearInUse !== undefined || !partial) {
+    const y = b.yearInUse === "" || b.yearInUse == null ? null : int(b.yearInUse, 1990, 2100);
+    if (b.yearInUse !== "" && b.yearInUse != null && y === null) return { error: "Năm đưa vào sử dụng không hợp lệ" };
+    out.yearInUse = y;
+  }
+  if (b.shared !== undefined || !partial) out.shared = !!b.shared; // thiết bị dùng chung nhiều môn
   if (b.note !== undefined || !partial) out.note = str(b.note, 300);
   if (b.grades !== undefined || !partial) out.grades = (Array.isArray(b.grades) ? b.grades : []).map(Number).filter((g) => g >= 6 && g <= 9);
   if (b.keywords !== undefined || !partial) {

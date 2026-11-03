@@ -16,7 +16,7 @@ const dataDir = path.join(__dirname, "data");
 const MAX_NOTIFICATIONS = 200;
 
 export const newId = () => crypto.randomUUID();
-const DOC_TABLES = ["equipment", "purchases", "penalties", "audits", "maintenance"];
+const DOC_TABLES = ["equipment", "purchases", "penalties", "audits", "maintenance", "disposals"];
 
 function countStats(list) {
   return {

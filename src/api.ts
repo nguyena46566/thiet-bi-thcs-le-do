@@ -257,6 +257,11 @@ export interface Equipment {
   qtyLost: number;
   qtyRepair: number;
   qtyDisposed?: number;
+  unit?: string;
+  origin?: string;
+  fundSource?: string;
+  yearInUse?: number | null;
+  shared?: boolean;
   note: string;
   condition?: string;
   updatedAt?: string;
@@ -317,3 +322,8 @@ export const completeMaintenance = (id: string, b: { repaired: number; disposed:
 export const fetchReport = (from: string, to: string) => call<Report>("GET", `/api/reports?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
 export const sendRemindersNow = () => call<{ due: number; overdue: number; sent: number; noEmail: number }>("POST", "/api/cron/reminders");
 export const fetchEquipmentDetail = (id: string) => call<{ equipment: Equipment; subjectName: string; days: { date: string; available: number }[]; history?: { id: string; teacherName: string; className: string; borrowDate: string; returnDate: string; status: string; quantity: number }[]; maintenance?: Maintenance[] }>("GET", `/api/inventory/equipment/${encodeURIComponent(id)}/detail`);
+
+// ============ GHI GIẢM ============
+export interface Disposal { id: string; equipmentId: string; name: string; subjectId: string; quantity: number; source: "good" | "broken" | "lost"; reason: string; decisionNo: string; note: string; date: string; unitPrice: number; value: number; createdBy: string; createdAt: string }
+export const fetchDisposals = () => call<Disposal[]>("GET", "/api/disposals");
+export const createDisposal = (b: { equipmentId: string; quantity: number; source: string; reason: string; decisionNo: string; note: string; date: string }) => call<Disposal>("POST", "/api/disposals", b);
