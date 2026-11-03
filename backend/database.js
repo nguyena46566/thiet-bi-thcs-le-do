@@ -16,6 +16,7 @@ const dataDir = path.join(__dirname, "data");
 const MAX_NOTIFICATIONS = 200;
 
 export const newId = () => crypto.randomUUID();
+const DOC_TABLES = ["equipment", "purchases", "penalties", "audits", "maintenance"];
 
 function countStats(list) {
   return {
@@ -73,6 +74,14 @@ async function createPgDriver(databaseUrl) {
       );
       CREATE INDEX IF NOT EXISTS notifications_created_idx ON notifications (created_at DESC);
     `);
+    // Các bảng của phân hệ kho: thiết bị, phiếu nhập kho, điểm thi đua
+    for (const t of DOC_TABLES) {
+      await q(`CREATE TABLE IF NOT EXISTS ${t} (
+        id TEXT PRIMARY KEY,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        data JSONB NOT NULL
+      ); CREATE INDEX IF NOT EXISTS ${t}_created_idx ON ${t} (created_at DESC);`);
+    }
     await importLegacyJson();
   }
 
@@ -195,7 +204,38 @@ async function createPgDriver(databaseUrl) {
     },
   };
 
-  return { kind: "postgres", pool, init, records, notifications };
+  /** Bảng dạng tài liệu đơn giản (id, created_at, data JSONB) */
+  function collection(t) {
+    if (!DOC_TABLES.includes(t)) throw new Error("Bảng không hợp lệ: " + t);
+    return {
+      async all() {
+        const { rows } = await q(`SELECT data FROM ${t} ORDER BY created_at DESC`);
+        return rows.map((r) => r.data);
+      },
+      async get(id) {
+        const { rows } = await q(`SELECT data FROM ${t} WHERE id = $1`, [id]);
+        return rows[0]?.data || null;
+      },
+      async insert(doc) {
+        await q(`INSERT INTO ${t} (id, created_at, data) VALUES ($1, $2, $3)`, [doc.id, doc.createdAt || new Date().toISOString(), doc]);
+        return doc;
+      },
+      async update(id, patch) {
+        const { rows } = await q(`UPDATE ${t} SET data = data || $2::jsonb WHERE id = $1 RETURNING data`, [id, JSON.stringify(patch)]);
+        return rows[0]?.data || null;
+      },
+      async remove(id) {
+        const { rowCount } = await q(`DELETE FROM ${t} WHERE id = $1`, [id]);
+        return rowCount > 0;
+      },
+      async count() {
+        const { rows } = await q(`SELECT COUNT(*)::int AS n FROM ${t}`);
+        return rows[0].n;
+      },
+    };
+  }
+
+  return { kind: "postgres", pool, init, records, notifications, collection };
 }
 
 // =====================================================================
@@ -310,7 +350,27 @@ function createFileDriver() {
     },
   };
 
-  return { kind: "file", pool: null, init: async () => {}, records, notifications };
+  function collection(t) {
+    if (!DOC_TABLES.includes(t)) throw new Error("Bảng không hợp lệ: " + t);
+    return {
+      async all() { return [...load(t)].sort(byNewest); },
+      async get(id) { return load(t).find((x) => x.id === id) || null; },
+      async insert(doc) { load(t).push(doc); save(t); return doc; },
+      async update(id, patch) {
+        const list = load(t); const i = list.findIndex((x) => x.id === id);
+        if (i === -1) return null;
+        list[i] = { ...list[i], ...patch }; save(t); return list[i];
+      },
+      async remove(id) {
+        const list = load(t); const i = list.findIndex((x) => x.id === id);
+        if (i === -1) return false;
+        list.splice(i, 1); save(t); return true;
+      },
+      async count() { return load(t).length; },
+    };
+  }
+
+  return { kind: "file", pool: null, init: async () => {}, records, notifications, collection };
 }
 
 // =====================================================================

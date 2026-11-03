@@ -1,0 +1,22 @@
+# Mỗi sáng gọi API nhắc hạn trả: gửi email cho giáo viên sắp đến hạn / quá hạn.
+# Đồng thời "đánh thức" Render và giữ Supabase không bị tạm dừng vì không hoạt động.
+#
+# Cần khai báo 2 secret ở GitHub > Settings > Secrets and variables > Actions:
+#   APP_URL     = địa chỉ web, ví dụ https://thiet-bi-thcs-le-do.onrender.com (không có dấu / cuối)
+#   CRON_SECRET = giống biến CRON_SECRET đã đặt trên Render
+name: Nhac han tra thiet bi
+on:
+  schedule:
+    - cron: "30 0 * * *" # 7 giờ 30 sáng giờ Việt Nam, hằng ngày
+  workflow_dispatch: # cho phép bấm chạy tay trong tab Actions
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Goi API nhac han tra
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -fsS --retry 6 --retry-delay 30 --retry-all-errors --max-time 120 \
+            -X POST -H "x-cron-secret: $CRON_SECRET" "$APP_URL/api/cron/reminders"

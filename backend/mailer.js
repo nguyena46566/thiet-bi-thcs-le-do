@@ -135,4 +135,37 @@ export async function sendStatusEmail(record, status, reason) {
   }
 }
 
-export default { sendBorrowNotification, sendStatusEmail };
+/**
+ * Nhắc giáo viên trả thiết bị: kind = "due" (hạn trả là ngày mai) | "overdue" (đã quá hạn)
+ */
+export async function sendReminderEmail(record, kind, lateDays = 0) {
+  const transport = getTransporter();
+  if (!transport || !record.userEmail) return false;
+  const due = kind === "due";
+  const subject = due
+    ? `[Thiết bị] Nhắc trả thiết bị ngày mai: ${String(record.equipment).slice(0, 80)}`
+    : `[Thiết bị] Quá hạn trả ${lateDays} ngày: ${String(record.equipment).slice(0, 80)}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: ${due ? "#1a3670" : "#9f1239"}; color: white; padding: 20px; border-radius: 12px 12px 0 0;">
+        <h2 style="margin: 0; font-size: 18px;">${due ? "Nhắc hạn trả thiết bị" : "Thiết bị đã quá hạn trả"}</h2>
+        <p style="margin: 5px 0 0; opacity: 0.85; font-size: 13px;">Trường THCS Lê Độ - Hệ thống quản lý thiết bị</p>
+      </div>
+      <div style="border: 1px solid #e5e7eb; border-top: none; padding: 24px; border-radius: 0 0 12px 12px; font-size: 14px;">
+        <p style="margin: 0 0 12px;">Chào ${esc(record.teacherName)},</p>
+        <p style="margin: 0 0 12px;">${due ? "Thầy/cô có thiết bị cần trả vào <b>ngày mai</b>" : `Thầy/cô đang giữ thiết bị đã <b>quá hạn ${lateDays} ngày</b>`}:</p>
+        <p style="margin: 0 0 4px;"><b>${esc(record.equipment)}</b></p>
+        <p style="margin: 0 0 12px; color: #6b7280;">Lớp ${esc(record.className)} · mượn ${esc(record.borrowDate)} · hạn trả ${esc(record.returnDate)}</p>
+        <p style="margin: 0; color: #374151;">${due ? "Vui lòng mang trả phòng thiết bị đúng hạn. Nếu cần gia hạn, hãy báo trước cho phòng thiết bị." : "Theo quy chế, trả trễ từ lần thứ 2 trong năm học sẽ bị trừ điểm thi đua. Vui lòng trả thiết bị sớm."}</p>
+      </div>
+    </div>`;
+  try {
+    await transport.sendMail({ from: `"Hệ thống Thiết bị THCS Lê Độ" <${process.env.SMTP_USER}>`, to: record.userEmail, subject, html });
+    return true;
+  } catch (err) {
+    console.error("[Mailer] Lỗi gửi email nhắc:", err.message);
+    return false;
+  }
+}
+
+export default { sendBorrowNotification, sendStatusEmail, sendReminderEmail };

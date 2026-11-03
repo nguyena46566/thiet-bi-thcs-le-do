@@ -15,6 +15,8 @@ import {
   requireAdmin,
 } from "./auth.js";
 import notifications from "./notifications.js";
+import { initInventory, registerInventoryRoutes, processReturn, undoReturn, scoreOf, RULES } from "./inventory.js";
+import { registerOperationRoutes, startReminderScheduler } from "./operations.js";
 import { sendBorrowNotification, sendStatusEmail } from "./mailer.js";
 import { createChatRouter } from "./chat.js";
 import { SUBJECTS } from "./chatTools.js";
@@ -59,7 +61,9 @@ app.use("/api", (req, res, next) => {
   res.status(503).json({ error: "Máy chủ đang kết nối cơ sở dữ liệu, vui lòng thử lại sau ít giây." });
 });
 app.use(express.json({ limit: "100kb" }));
+// Phiên đăng nhập chỉ cần cho API: trang giao diện vẫn tải được kể cả khi CSDL đang lỗi
 app.use(
+  "/api",
   session({
     store: sessionStore,
     secret: process.env.SESSION_SECRET || "dev-only-secret",
@@ -171,6 +175,12 @@ app.post("/api/records", requireAuth, wrap(async (req, res) => {
   const user = req.session.user;
   const b = req.body || {};
 
+  // Quy chế: điểm thi đua dưới ngưỡng thì tạm khóa quyền đăng ký (quản trị viên không bị khóa)
+  if (!user.isAdmin) {
+    const { score, locked } = await scoreOf(user.id);
+    if (locked) return res.status(403).json({ error: `Tài khoản đang tạm khóa quyền mượn vì điểm thi đua còn ${score} (dưới ${RULES.lockBelow}). Vui lòng liên hệ phòng thiết bị.` });
+  }
+
   const subject = SUBJECTS.find((s) => s.id === b.subjectId);
   if (!subject) return res.status(400).json({ error: "Môn học không hợp lệ" });
 
@@ -234,6 +244,7 @@ app.post("/api/records", requireAuth, wrap(async (req, res) => {
     userId: user.id,
     userName: user.name,
     userEmail: user.email, // chỉ dùng để gửi email báo kết quả, không trả ra danh sách công khai
+    createdByAdmin: !!user.isAdmin, // admin đăng ký hộ: điểm thi đua tính theo tên giáo viên
     createdAt: new Date().toISOString(),
   };
 
@@ -257,7 +268,19 @@ app.patch("/api/records/:id/status", requireAdmin, wrap(async (req, res) => {
 
   const changes = { status, updatedAt: new Date().toISOString() };
   if (status === "Từ chối") changes.adminNote = reason;
-  if (status === "Trả") changes.returnedAt = changes.updatedAt;
+  if (status === "Trả" && existing.status !== "Trả") {
+    changes.returnedAt = changes.updatedAt;
+    // Ghi nhận hỏng / mất, tính điểm trả trễ
+    const r = await processReturn(existing, req.body?.returnReport, req.session.user);
+    if (r.error) return res.status(r.status || 400).json({ error: r.error });
+    Object.assign(changes, r.value);
+  }
+  if (existing.status === "Trả" && status !== "Trả") {
+    // Hoàn tác trả: trả lại số lượng kho, xóa điểm đã trừ của phiếu này
+    await undoReturn(existing);
+    changes.returnReport = null;
+    changes.returnedAt = null;
+  }
   const updated = await db.records.update(req.params.id, changes);
   // Báo kết quả cho giáo viên khi phiếu được duyệt/từ chối lần đầu (không chờ gửi xong)
   if (existing.status === "Chờ duyệt" && (status === "Mượn" || status === "Từ chối")) {
@@ -319,6 +342,11 @@ app.post("/api/notifications/mark-all-read", requireAdmin, wrap(async (req, res)
 app.use("/api/chat", createChatRouter({ requireAuth }));
 
 // API không tồn tại -> 404 JSON (không trả về index.html)
+// ============ KHO THIẾT BỊ, NHẬP KHO, ĐIỂM THI ĐUA ============
+registerInventoryRoutes(app, { requireAuth, requireAdmin, wrap });
+// ============ KIỂM KÊ, BẢO TRÌ, BÁO CÁO, NHẮC HẠN TRẢ ============
+registerOperationRoutes(app, { requireAuth, requireAdmin, wrap });
+
 app.use("/api", (req, res) => res.status(404).json({ error: "Không tìm thấy API" }));
 
 // ============ SPA fallback (production only) ============
@@ -353,6 +381,7 @@ async function connectDatabase(attempt = 1) {
       db.init(),
       new Promise((_, reject) => setTimeout(() => reject(new Error(`quá ${DB_INIT_TIMEOUT_MS / 1000} giây không phản hồi`)), DB_INIT_TIMEOUT_MS)),
     ]);
+    await initInventory(); // khởi tạo kho thiết bị (lần đầu chép từ catalog/equipment.json)
     dbReady = true;
     dbError = "";
     console.log(`[DB] Kết nối ${db.kind} thành công${attempt > 1 ? ` sau ${attempt} lần thử` : ""}`);
@@ -367,3 +396,4 @@ async function connectDatabase(attempt = 1) {
   }
 }
 connectDatabase();
+startReminderScheduler(() => dbReady);

@@ -31,3 +31,5 @@ services:
         generateValue: true
       - key: GEMINI_API_KEY
         sync: false
+      - key: CRON_SECRET
+        sync: false

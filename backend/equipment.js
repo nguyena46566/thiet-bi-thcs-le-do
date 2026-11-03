@@ -112,8 +112,18 @@ export function todayVN() {
 
 // ---------- Thiết bị ----------
 
+// Danh mục thiết bị: lúc đầu đọc từ catalog/equipment.json; khi có phân hệ kho (inventory.js)
+// thì được thay bằng dữ liệu trong CSDL qua setEquipmentCatalog().
 export const listEquipment = () => readCatalog("equipment.json");
 let equipmentById = null;
+export function setEquipmentCatalog(list) {
+  catalogCache.set("equipment.json", list);
+  equipmentById = null;
+}
+/** Đọc file danh mục gốc (chỉ dùng để khởi tạo kho lần đầu) */
+export function loadSeedEquipment() {
+  try { return JSON.parse(fs.readFileSync(path.join(catalogDir, "equipment.json"), "utf-8")); } catch { return []; }
+}
 export const getEquipment = (id) => {
   if (!equipmentById) equipmentById = new Map(listEquipment().map((e) => [e.id, e]));
   return equipmentById.get(id) || null;
@@ -150,6 +160,8 @@ export function bookedQuantity(eq, from, to, records) {
 }
 
 function usableStock(eq) {
+  // Có dữ liệu kho: chỉ tính số thiết bị còn tốt
+  if (eq.qtyGood !== undefined) return Math.max(0, Number(eq.qtyGood) || 0);
   return /hỏng|đang sửa|thanh lý/i.test(eq.condition || "") ? 0 : Number(eq.stock) || 0;
 }
 
@@ -175,7 +187,8 @@ export async function checkAvailability({ equipmentIds = [], borrowDate, returnD
 
 const brief = (eq) => ({
   id: eq.id, name: eq.name, subjectId: eq.subjectId, grades: eq.grades,
-  stock: eq.stock, condition: eq.condition, location: eq.location,
+  stock: eq.qtyGood ?? eq.stock, condition: eq.condition, location: eq.location,
+  ...(eq.qtyBroken || eq.qtyRepair ? { broken: eq.qtyBroken || 0, inRepair: eq.qtyRepair || 0 } : {}),
 });
 
 export function searchEquipment({ query = "", subjectId, grade, limit = 8 } = {}) {

@@ -39,6 +39,11 @@ export interface BorrowRecord {
   returnedAt?: string;
   /** Lý do admin ghi khi từ chối */
   adminNote?: string;
+  /** Biên bản trả: hỏng / mất / trễ hạn */
+  returnReport?: {
+    items: { equipmentId: string; name: string; damaged: number; lost: number; unitPrice: number }[];
+    note: string; lateDays: number; returnedOn: string; pointsDeducted: number; compensation: number;
+  } | null;
 }
 
 export interface Stats {
@@ -236,3 +241,79 @@ export async function sendChat(
   }
   return res.json();
 }
+
+// ============ KHO THIẾT BỊ, NHẬP KHO, ĐIỂM THI ĐUA ============
+
+export interface Equipment {
+  id: string;
+  name: string;
+  subjectId: string;
+  grades: number[];
+  keywords: string[];
+  location: string;
+  unitPrice: number;
+  qtyGood: number;
+  qtyBroken: number;
+  qtyLost: number;
+  qtyRepair: number;
+  qtyDisposed?: number;
+  note: string;
+  condition?: string;
+  updatedAt?: string;
+}
+
+export interface PurchaseItem { equipmentId: string; name?: string; quantity: number; unitPrice: number; amount?: number }
+export interface Purchase { id: string; date: string; supplier: string; note: string; items: PurchaseItem[]; total: number; createdBy: string; createdAt: string }
+
+export interface PenaltyEntry {
+  id: string; createdAt: string; userId: string; teacherName: string; recordId?: string;
+  kind: "late" | "damage" | "loss" | "manual"; points: number; reason: string; compensation?: number; createdBy?: string;
+}
+export interface PointRules { startPoints: number; lockBelow: number; latePerDay: number; lateMaxPerRecord: number; damagePerUnit: number; lossPerUnit: number }
+export interface TeacherScore { userId: string; teacherName: string; score: number; locked: boolean; records: number; late: number; damaged: number; lost: number }
+export interface ReturnReportInput { items: { equipmentId: string; damaged: number; lost: number }[]; note?: string }
+
+async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    credentials: "include",
+    headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Có lỗi xảy ra, vui lòng thử lại");
+  return data as T;
+}
+
+export const fetchInventory = () => call<Equipment[]>("GET", "/api/inventory/equipment");
+export const createEquipment = (e: Partial<Equipment>) => call<Equipment>("POST", "/api/inventory/equipment", e);
+export const updateEquipment = (id: string, e: Partial<Equipment>) => call<Equipment>("PATCH", `/api/inventory/equipment/${encodeURIComponent(id)}`, e);
+export const deleteEquipment = (id: string) => call<boolean>("DELETE", `/api/inventory/equipment/${encodeURIComponent(id)}`);
+export const fetchPurchases = () => call<Purchase[]>("GET", "/api/inventory/purchases");
+export const createPurchase = (p: { date: string; supplier: string; note: string; items: PurchaseItem[] }) => call<Purchase>("POST", "/api/inventory/purchases", p);
+export const fetchMyPoints = () => call<{ score: number; locked: boolean; history: PenaltyEntry[]; rules: PointRules; schoolYear: string }>("GET", "/api/points/me");
+export const fetchAllPoints = () => call<{ teachers: TeacherScore[]; rules: PointRules; schoolYear: string }>("GET", "/api/points");
+export const fetchTeacherPoints = (userId: string) => call<{ score: number; locked: boolean; history: PenaltyEntry[] }>("GET", `/api/points/${encodeURIComponent(userId)}`);
+export const adjustPoints = (b: { userId: string; teacherName: string; points: number; reason: string }) => call<PenaltyEntry>("POST", "/api/points/adjust", b);
+export const unlockTeacher = (b: { userId: string; teacherName: string }) => call<PenaltyEntry>("POST", "/api/points/unlock", b);
+export const returnRecord = (id: string, returnReport: ReturnReportInput) => call<BorrowRecord>("PATCH", `/api/records/${encodeURIComponent(id)}/status`, { status: "Trả", returnReport });
+
+// ============ KIỂM KÊ, BẢO TRÌ, BÁO CÁO ============
+export interface AuditItem { equipmentId: string; name: string; subjectId: string; location: string; sysGood: number; sysBroken: number; out: number; countGood: number | null; countBroken: number | null; note: string; expected?: number; diff?: number }
+export interface Audit { id: string; status: "Đang kiểm kê" | "Hoàn tất"; title: string; subjectId: string; createdAt: string; createdBy: string; finishedAt?: string; items: AuditItem[]; summary?: { counted: number; notCounted: number; missing: number; surplus: number; discrepancies: number }; itemCount?: number; countedCount?: number }
+export interface Maintenance { id: string; equipmentId: string; name: string; subjectId: string; quantity: number; source: "good" | "broken"; kind: string; content: string; vendor: string; date: string; status: "Đang thực hiện" | "Hoàn thành"; cost: number; repaired?: number; disposed?: number; resultNote?: string; finishedOn?: string; createdBy: string }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type Report = any
+
+export const fetchAudits = () => call<Audit[]>("GET", "/api/audits");
+export const startAudit = (b: { subjectId?: string; title?: string }) => call<Audit>("POST", "/api/audits", b);
+export const fetchAudit = (id: string) => call<Audit>("GET", `/api/audits/${encodeURIComponent(id)}`);
+export const saveAudit = (id: string, items: { equipmentId: string; countGood: number | null; countBroken: number | null; note: string }[]) => call<Audit>("PATCH", `/api/audits/${encodeURIComponent(id)}`, { items });
+export const finishAudit = (id: string) => call<Audit>("POST", `/api/audits/${encodeURIComponent(id)}/finish`);
+export const cancelAudit = (id: string) => call<boolean>("DELETE", `/api/audits/${encodeURIComponent(id)}`);
+export const fetchMaintenance = () => call<Maintenance[]>("GET", "/api/maintenance");
+export const createMaintenance = (b: { equipmentId: string; quantity: number; source: string; kind: string; content: string; vendor: string; date: string }) => call<Maintenance>("POST", "/api/maintenance", b);
+export const completeMaintenance = (id: string, b: { repaired: number; disposed: number; cost: number; note: string }) => call<Maintenance>("POST", `/api/maintenance/${encodeURIComponent(id)}/complete`, b);
+export const fetchReport = (from: string, to: string) => call<Report>("GET", `/api/reports?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+export const sendRemindersNow = () => call<{ due: number; overdue: number; sent: number; noEmail: number }>("POST", "/api/cron/reminders");
+export const fetchEquipmentDetail = (id: string) => call<{ equipment: Equipment; subjectName: string; days: { date: string; available: number }[]; history?: { id: string; teacherName: string; className: string; borrowDate: string; returnDate: string; status: string; quantity: number }[]; maintenance?: Maintenance[] }>("GET", `/api/inventory/equipment/${encodeURIComponent(id)}/detail`);

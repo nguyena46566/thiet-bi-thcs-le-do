@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import logoImg from "@/imports/Logo.jpg"
 import { AuthProvider, useAuth } from "@/AuthContext"
+import { InventoryTab, PurchasesTab, PointsTab, ReturnDialog, MyPointsCard } from "./Inventory"
+import { AuditTab, MaintenanceTab, ReportsTab, EquipmentPage } from "./Operations"
 import ChatWidget from "@/ChatWidget"
 import {
   fetchRecords,
@@ -20,6 +22,7 @@ import {
   type RecordStatus,
   type Stats,
   type Notification,
+  sendRemindersNow,
 } from "@/api"
 
 type Page = "home" | "admin" | "noiquy" | "mine" | string
@@ -701,7 +704,8 @@ function SubjectPage({ subjectId, setPage, refreshKey = 0, prefill = null, onPre
 // ============ ADMIN PAGE ============
 function AdminPage() {
   const { user } = useAuth()
-  const [tab, setTab] = useState<"records" | "notifications">("records")
+  const [tab, setTab] = useState<"records" | "inventory" | "purchases" | "audit" | "maintenance" | "points" | "reports" | "notifications">("records")
+  const [returning, setReturning] = useState<BorrowRecord | null>(null)
   const [records, setRecords] = useState<BorrowRecord[]>([])
   const [filterSubject, setFilterSubject] = useState("")
   const [filterStatus, setFilterStatus] = useState("")
@@ -779,10 +783,12 @@ function AdminPage() {
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-extrabold text-[#1a3670]">Trang Quản Trị</h1>
-            <p className="text-gray-500 text-sm mt-1">Quản lý thiết bị & thông báo</p>
+            <p className="text-gray-500 text-sm mt-1">Mượn – trả, kho, nhập kho, kiểm kê, bảo trì, điểm thi đua, báo cáo</p>
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => setTab("records")} className={`px-4 py-2 rounded-xl text-sm font-semibold ${tab === "records" ? "bg-[#1a3670] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Mượn/Trả</button>
+          <div className="flex flex-wrap gap-2">
+            {([["records", "Mượn/Trả"], ["inventory", "Kho thiết bị"], ["purchases", "Nhập kho"], ["audit", "Kiểm kê"], ["maintenance", "Bảo trì"], ["points", "Điểm thi đua"], ["reports", "Báo cáo"]] as const).map(([k, l]) => (
+              <button key={k} onClick={() => setTab(k)} aria-pressed={tab === k} className={`px-4 py-2 rounded-xl text-sm font-semibold ${tab === k ? "bg-[#1a3670] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>{l}</button>
+            ))}
             <button onClick={() => { setTab("notifications"); loadNotifs() }} className={`px-4 py-2 rounded-xl text-sm font-semibold relative ${tab === "notifications" ? "bg-[#1a3670] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
               Thông báo
               {unreadCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{unreadCount}</span>}
@@ -791,6 +797,14 @@ function AdminPage() {
         </div>
 
         {tab === "records" && <AdminSummary onPick={(st) => { setFilterStatus(st); setFilterSubject(""); setSearch("") }} active={filterStatus} refreshKey={records} />}
+        {tab === "records" && (
+          <div className="flex justify-end -mt-2 mb-3">
+            <button onClick={async () => {
+              try { const r = await sendRemindersNow(); alert(`Đã kiểm tra: ${r.due} phiếu sắp đến hạn, ${r.overdue} phiếu quá hạn. Đã gửi ${r.sent} email nhắc.${r.sent < r.due + r.overdue ? "\nMột số phiếu không gửi được (chưa cấu hình email hoặc phiếu cũ không có email giáo viên)." : ""}`) }
+              catch (e) { alert(e instanceof Error ? e.message : "Lỗi") }
+            }} className="text-xs font-semibold text-[#1a3670] hover:underline">Gửi email nhắc hạn trả ngay</button>
+          </div>
+        )}
 
         {tab === "records" && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -834,12 +848,18 @@ function AdminPage() {
                           </td>
                           <td className="px-3 py-3 text-gray-600 whitespace-nowrap text-xs">{r.borrowDate}</td>
                           <td className="px-3 py-3 text-gray-600 whitespace-nowrap text-xs">{r.returnDate}</td>
-                          <td className="px-3 py-3"><StatusBadge r={r} small /></td>
+                          <td className="px-3 py-3"><StatusBadge r={r} small />
+                            {r.returnReport && (r.returnReport.items.length > 0 || r.returnReport.lateDays > 0) && (
+                              <div className="text-[10px] text-rose-600 mt-1 whitespace-nowrap" title={r.returnReport.note || undefined}>
+                                {[r.returnReport.lateDays > 0 && `trễ ${r.returnReport.lateDays} ngày`, r.returnReport.items.some((x) => x.damaged) && `hỏng ${r.returnReport.items.reduce((a, x) => a + x.damaged, 0)}`, r.returnReport.items.some((x) => x.lost) && `mất ${r.returnReport.items.reduce((a, x) => a + x.lost, 0)}`].filter(Boolean).join(" · ")}
+                              </div>
+                            )}
+                          </td>
                           <td className="px-3 py-3">
                             <div className="flex gap-1.5">
                               {r.status === "Chờ duyệt" && <button onClick={() => handleStatusChange(r.id, "Mượn")} className={`${btn} bg-green-600 hover:bg-green-700 text-white`}>Duyệt</button>}
                               {r.status === "Chờ duyệt" && <button onClick={() => handleStatusChange(r.id, "Từ chối")} className={`${btn} bg-red-50 hover:bg-red-100 text-red-700`}>Từ chối</button>}
-                              {r.status === "Mượn" && <button onClick={() => handleStatusChange(r.id, "Trả")} className={`${btn} bg-[#1a3670] hover:bg-[#132d5e] text-white`}>Đã trả</button>}
+                              {r.status === "Mượn" && <button onClick={() => setReturning(r)} className={`${btn} bg-[#1a3670] hover:bg-[#132d5e] text-white`}>Đã trả</button>}
                               {r.status === "Trả" && <button onClick={() => handleStatusChange(r.id, "Mượn")} className={`${btn} bg-gray-100 hover:bg-gray-200 text-gray-700`}>Hoàn tác</button>}
                               <button onClick={() => handleDelete(r.id)} className={`${btn} text-gray-400 hover:text-red-600 hover:bg-red-50`} aria-label="Xóa phiếu" title="Xóa phiếu">Xóa</button>
                             </div>
@@ -853,6 +873,14 @@ function AdminPage() {
             )}
           </div>
         )}
+
+        {tab === "inventory" && <InventoryTab subjects={SUBJECTS} />}
+        {tab === "purchases" && <PurchasesTab subjects={SUBJECTS} />}
+        {tab === "points" && <PointsTab />}
+        {tab === "audit" && <AuditTab subjects={SUBJECTS} />}
+        {tab === "maintenance" && <MaintenanceTab subjects={SUBJECTS} />}
+        {tab === "reports" && <ReportsTab />}
+        {returning && <ReturnDialog record={returning} subjects={SUBJECTS} onClose={() => setReturning(null)} onDone={() => { setReturning(null); loadData(); loadNotifs() }} />}
 
         {tab === "notifications" && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -947,6 +975,7 @@ function MyRecordsPage({ setPage }: { setPage: (p: Page) => void }) {
           <h1 className="text-2xl font-extrabold text-[#1a3670]">Phiếu của tôi</h1>
           <p className="text-gray-500 text-sm mt-1">Theo dõi các yêu cầu mượn thiết bị bạn đã gửi.</p>
         </div>
+        <MyPointsCard />
         {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm mb-4">{error}</div>}
         {overdue.length > 0 && (
           <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl px-4 py-3 text-sm mb-4">
@@ -982,6 +1011,13 @@ function MyRecordsPage({ setPage }: { setPage: (p: Page) => void }) {
                     {r.periodPPCT && <span>PPCT: {r.periodPPCT}</span>}
                   </div>
                   {r.status === "Từ chối" && r.adminNote && <p className="mt-2 text-sm text-red-700">Lý do từ chối: {r.adminNote}</p>}
+                  {r.returnReport && (r.returnReport.items.length > 0 || r.returnReport.lateDays > 0) && (
+                    <p className="mt-2 text-sm text-rose-700">
+                      Biên bản trả ngày {r.returnReport.returnedOn}: {[r.returnReport.lateDays > 0 && `trễ ${r.returnReport.lateDays} ngày`, ...r.returnReport.items.map((x) => [x.damaged && `hỏng ${x.damaged} ${x.name}`, x.lost && `mất ${x.lost} ${x.name}`].filter(Boolean).join(", "))].filter(Boolean).join("; ")}
+                      {r.returnReport.pointsDeducted < 0 && ` · trừ ${-r.returnReport.pointsDeducted} điểm`}
+                      {r.returnReport.compensation > 0 && ` · bồi thường ${r.returnReport.compensation.toLocaleString("vi-VN")} đ`}
+                    </p>
+                  )}
                   {r.status === "Chờ duyệt" && (
                     <div className="mt-3">
                       <button onClick={() => cancel(r)} className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 text-gray-700 hover:border-red-300 hover:text-red-700">Hủy yêu cầu</button>
@@ -1001,11 +1037,12 @@ function MyRecordsPage({ setPage }: { setPage: (p: Page) => void }) {
 const PAGES = new Set<string>(["home", "noiquy", "admin", "mine", ...SUBJECTS.map((s) => s.id)])
 function readHash(): Page {
   const h = decodeURIComponent(window.location.hash.replace(/^#\/?/, ""))
+  if (/^thiet-bi\/[\w.-]+$/.test(h)) return h // trang chi tiết thiết bị (mở từ mã QR)
   return PAGES.has(h) ? h : "home"
 }
 
 function AppContent() {
-  const { loading } = useAuth()
+  const { loading, user, login } = useAuth()
   // Trang hiện tại lưu trên URL (#vat-li, #admin...) để tải lại trang không bị mất,
   // nút Back của trình duyệt hoạt động và có thể gửi link cho người khác.
   const [page, setPageState] = useState<Page>(readHash)
@@ -1019,7 +1056,7 @@ function AppContent() {
     window.location.hash = p === "home" ? "" : p
   }, [])
   useEffect(() => {
-    const name = page === "home" ? "" : page === "noiquy" ? "Nội quy" : page === "admin" ? "Quản trị" : page === "mine" ? "Phiếu của tôi" : SUBJECTS.find((s) => s.id === page)?.name
+    const name = page === "home" ? "" : page === "noiquy" ? "Nội quy" : page === "admin" ? "Quản trị" : page === "mine" ? "Phiếu của tôi" : page.startsWith("thiet-bi/") ? "Thiết bị" : SUBJECTS.find((s) => s.id === page)?.name
     document.title = (name ? `${name} – ` : "") + "Quản lý thiết bị THCS Lê Độ"
   }, [page])
   // Bản nháp từ chatbot chờ được điền vào form (key để điền lại được nhiều lần)
@@ -1051,6 +1088,7 @@ function AppContent() {
       {page === "noiquy" && <NoiQuyPage />}
       {page === "admin" && <AdminPage />}
       {page === "mine" && <MyRecordsPage setPage={setPage} />}
+      {page.startsWith("thiet-bi/") && <EquipmentPage key={page} id={page.slice(9)} isAdmin={!!user?.isAdmin} loggedIn={!!user} login={login} onBorrow={fillFormFromChat} goHome={() => setPage("home")} />}
       {SUBJECTS.some((s) => s.id === page) && (
         <SubjectPage
           key={page}
