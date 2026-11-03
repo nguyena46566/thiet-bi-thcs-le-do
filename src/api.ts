@@ -39,9 +39,16 @@ export interface BorrowRecord {
   returnedAt?: string;
   /** Lý do admin ghi khi từ chối */
   adminNote?: string;
+  code?: string;
+  group?: string;
+  lessonName?: string;
+  usageType?: string;
+  periods?: string[];
+  roomId?: string;
+  roomName?: string;
   /** Biên bản trả: hỏng / mất / trễ hạn */
   returnReport?: {
-    items: { equipmentId: string; name: string; damaged: number; lost: number; unitPrice: number }[];
+    items: { equipmentId: string; name: string; damaged: number; lost: number; unitPrice: number; lostStatus?: string }[];
     note: string; lateDays: number; returnedOn: string; pointsDeducted: number; compensation: number;
   } | null;
 }
@@ -110,7 +117,7 @@ export async function fetchMyRecords(): Promise<BorrowRecord[]> {
 export type NewRecordInput = Pick<
   BorrowRecord,
   "subjectId" | "teacherName" | "className" | "equipment" | "borrowDate" | "returnDate" | "notes"
-> & { subjectName?: string; period?: string; periodPPCT?: string; items?: BorrowItem[] };
+> & { subjectName?: string; period?: string; periods?: string[]; periodPPCT?: string; items?: BorrowItem[]; lessonName?: string; usageType?: string; roomId?: string };
 
 export async function createRecord(data: NewRecordInput): Promise<BorrowRecord> {
   const res = await fetch(`${API_BASE}/api/records`, {
@@ -257,6 +264,7 @@ export interface Equipment {
   qtyLost: number;
   qtyRepair: number;
   qtyDisposed?: number;
+  qtyLostPending?: number;
   unit?: string;
   origin?: string;
   fundSource?: string;
@@ -327,3 +335,30 @@ export const fetchEquipmentDetail = (id: string) => call<{ equipment: Equipment;
 export interface Disposal { id: string; equipmentId: string; name: string; subjectId: string; quantity: number; source: "good" | "broken" | "lost"; reason: string; decisionNo: string; note: string; date: string; unitPrice: number; value: number; createdBy: string; createdAt: string }
 export const fetchDisposals = () => call<Disposal[]>("GET", "/api/disposals");
 export const createDisposal = (b: { equipmentId: string; quantity: number; source: string; reason: string; decisionNo: string; note: string; date: string }) => call<Disposal>("POST", "/api/disposals", b);
+
+// ============ THIẾT BỊ CÒN TRỐNG (form đăng ký), BÁO MẤT ============
+export interface AvailableItem { id: string; name: string; grades: number[]; unit: string; location: string; good: number; available: number }
+export const fetchAvailable = (subjectId: string, from: string, to: string, periods: string[] = []) =>
+  call<AvailableItem[]>("GET", `/api/inventory/available?subjectId=${encodeURIComponent(subjectId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&periods=${periods.join(",")}`);
+export interface LossReport { id: string; status: string; createdAt: string; equipmentId: string; name: string; quantity: number; unitPrice: number; source: "return" | "audit"; recordId?: string; teacherName?: string; auditTitle?: string; note?: string; reportedBy: string; decidedBy?: string; decidedAt?: string; decisionNote?: string }
+export const fetchLossReports = () => call<{ reports: LossReport[]; canConfirm: boolean; principalConfigured: boolean }>("GET", "/api/loss-reports");
+export const confirmLoss = (id: string, note: string) => call<LossReport>("POST", `/api/loss-reports/${encodeURIComponent(id)}/confirm`, { note });
+export const rejectLoss = (id: string, note: string) => call<LossReport>("POST", `/api/loss-reports/${encodeURIComponent(id)}/reject`, { note });
+
+// ============ PHÒNG BỘ MÔN, ĐỀ XUẤT MUA SẮM ============
+export interface Room { id: string; name: string; kind: string; subjectIds: string[]; note: string; busy?: boolean; busyBy?: string }
+export const fetchRooms = () => call<Room[]>("GET", "/api/rooms");
+export const fetchRoomsAvailability = (from: string, to: string, periods: string[]) =>
+  call<Room[]>("GET", `/api/rooms/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&periods=${periods.join(",")}`);
+export const createRoom = (r: Partial<Room>) => call<Room>("POST", "/api/rooms", r);
+export const updateRoom = (id: string, r: Partial<Room>) => call<Room>("PATCH", `/api/rooms/${encodeURIComponent(id)}`, r);
+export const deleteRoom = (id: string) => call<boolean>("DELETE", `/api/rooms/${encodeURIComponent(id)}`);
+export interface RoomLogEntry { date: string; period: string; className: string; teacherName: string; subject: string; lessonName: string; equipment: string; status: string; condition: string }
+export const fetchRoomLog = (id: string, from: string, to: string) => call<{ room: Room; entries: RoomLogEntry[] }>("GET", `/api/rooms/${encodeURIComponent(id)}/log?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+
+export interface ProposalItem { name: string; subjectId: string; equipmentId?: string | null; quantity: number; estPrice: number; reason: string }
+export interface Proposal { id: string; status: "Chờ duyệt" | "Đã duyệt" | "Từ chối" | "Đã mua"; items: ProposalItem[]; total: number; purpose: string; userId: string; userName: string; createdAt: string; decisionNote?: string; decidedBy?: string; purchaseNote?: string }
+export const fetchProposals = (mine = false) => call<{ proposals: Proposal[]; canDecide: boolean }>("GET", `/api/proposals${mine ? "?mine=1" : ""}`);
+export const createProposal = (b: { purpose: string; items: ProposalItem[] }) => call<Proposal>("POST", "/api/proposals", b);
+export const decideProposal = (id: string, approve: boolean, note: string) => call<Proposal>("POST", `/api/proposals/${encodeURIComponent(id)}/decide`, { approve, note });
+export const markProposalPurchased = (id: string, note: string) => call<Proposal>("POST", `/api/proposals/${encodeURIComponent(id)}/purchased`, { note });

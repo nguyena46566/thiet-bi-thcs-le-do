@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   fetchAudits, startAudit, fetchAudit, saveAudit, finishAudit, cancelAudit,
   fetchInventory, fetchMaintenance, createMaintenance, completeMaintenance, fetchReport, fetchEquipmentDetail,
-  fetchDisposals, createDisposal, fetchRecords, fetchNotifications,
-  type Audit, type AuditItem, type Equipment, type Maintenance, type Report, type BorrowDraft, type Disposal, type BorrowRecord, type Notification,
+  fetchDisposals, createDisposal, fetchRecords, fetchNotifications, fetchLossReports, confirmLoss, rejectLoss, fetchRooms, fetchRoomLog,
+  type Audit, type AuditItem, type Equipment, type Maintenance, type Report, type BorrowDraft, type Disposal, type BorrowRecord, type Notification, type LossReport, type Room,
 } from "@/api"
 import type { Subject } from "./Inventory"
 
@@ -339,6 +339,7 @@ export function ReportsTab() {
     { name: "Theo môn", rows: r.bySubject.map((s: Report) => ({ "Môn": s.name, "Số phiếu": s.count, "Tổng số lượng": s.quantity, "Bị từ chối": s.rejected })) },
     { name: "Theo thiết bị", rows: r.byEquipment.map((e: Report, i: number) => ({ "Hạng": i + 1, "Thiết bị": e.name, "Số lượt mượn": e.times, "Tổng số lượng": e.quantity })) },
     { name: "Chưa được mượn", rows: r.unusedEquipment.map((e: Report) => ({ "Thiết bị": e.name, "Môn": e.subject })) },
+    { name: "Tiết thực hành – biểu diễn", rows: r.usageBySubject.map((u: Report) => ({ "Tổ bộ môn": u.group, "Môn": u.name, "Số tiết thực hành": u.practice, "Số tiết biểu diễn": u.demo, "Tổng": u.practice + u.demo })) },
     { name: "Theo giáo viên", rows: r.byTeacher.map((t: Report) => ({ "Giáo viên": t.teacherName, "Số phiếu": t.count, "Trả trễ": t.late, "Làm hỏng": t.damaged, "Làm mất": t.lost })) },
     { name: "Danh sách phiếu", rows: r.records.map((x: Report) => ({ "Ngày mượn": x.borrowDate, "Ngày trả": x.returnDate, "Giáo viên": x.teacherName, "Lớp": x.className, "Môn": x.subject, "Tiết": x.period, "Thiết bị": x.equipment, "Số lượng": x.quantity, "Trạng thái": x.status, "Trễ (ngày)": x.lateDays, "Hỏng": x.damaged, "Mất": x.lost })) },
     { name: "Kho hiện tại", rows: r.inventory.map((e: Report) => ({ "Thiết bị": e.name, "Môn": e.subject, "Tốt": e.good, "Hỏng": e.broken, "Đang sửa": e.repair, "Mất": e.lost, "Đã thanh lý": e.disposed, "Đơn giá (đ)": e.unitPrice, "Thành tiền (đ)": (e.good + e.broken + e.repair) * e.unitPrice, "Vị trí": e.location })) },
@@ -390,6 +391,13 @@ export function ReportsTab() {
               )}
               <p className="text-xs text-gray-500 mt-3">{r.unusedEquipment.length} loại thiết bị chưa được mượn lần nào trong kỳ (xem trong file Excel).</p>
             </div>
+          </div>
+          <div className={`${card} overflow-hidden`}>
+            <div className="px-5 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">Số tiết sử dụng thiết bị: thực hành và biểu diễn</h3></div>
+            <div className="overflow-x-auto"><table className="w-full text-sm">
+              <thead><tr className="bg-gray-50">{["Tổ bộ môn", "Môn", "Thực hành", "Biểu diễn", "Tổng"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-gray-50">{(r.usageBySubject || []).map((u: Report) => <tr key={u.subjectId}><td className="px-3 py-2 text-xs text-gray-500">{u.group}</td><td className="px-3 py-2">{u.name}</td><td className="px-3 py-2 font-semibold">{u.practice}</td><td className="px-3 py-2">{u.demo}</td><td className="px-3 py-2 font-semibold">{u.practice + u.demo}</td></tr>)}</tbody>
+            </table></div>
           </div>
           <div className="grid lg:grid-cols-2 gap-4">
             <div className={`${card} overflow-hidden`}>
@@ -491,6 +499,7 @@ export function Dashboard({ go }: { go: (section: string) => void }) {
   const [inv, setInv] = useState<Equipment[]>([])
   const [notifs, setNotifs] = useState<Notification[]>([])
   const [running, setRunning] = useState(0)
+  const [lossPending, setLossPending] = useState(0)
   useEffect(() => {
     const p = presets()[3]
     fetchReport(isoToVn(p.from), isoToVn(p.to)).then(setRep).catch(() => {})
@@ -498,6 +507,7 @@ export function Dashboard({ go }: { go: (section: string) => void }) {
     fetchInventory().then(setInv).catch(() => {})
     fetchNotifications({ limit: 8 }).then(setNotifs).catch(() => {})
     fetchMaintenance().then((l) => setRunning(l.filter((m) => m.status === "Đang thực hiện").length)).catch(() => {})
+    fetchLossReports().then((r) => setLossPending(r.reports.filter((x) => x.status === "Chờ xác nhận").reduce((a, x) => a + x.quantity, 0))).catch(() => {})
   }, [])
   const t0 = new Date(); t0.setHours(0, 0, 0, 0)
   const pending = records.filter((r) => r.status === "Chờ duyệt").sort((a, b) => (parseVnDate(a.borrowDate)?.getTime() || 0) - (parseVnDate(b.borrowDate)?.getTime() || 0))
@@ -511,6 +521,7 @@ export function Dashboard({ go }: { go: (section: string) => void }) {
     ["Đang cho mượn", records.filter((r) => r.status === "Mượn").length, "bg-blue-50 border-blue-200 text-blue-800", "muon-tra"],
     ["Thiết bị hỏng chờ xử lý", broken, "bg-orange-50 border-orange-200 text-orange-800", "bao-tri"],
     ["Đang bảo trì", running, "bg-violet-50 border-violet-200 text-violet-800", "bao-tri"],
+    ["Báo mất chờ xác nhận", lossPending, "bg-red-50 border-red-200 text-red-800", "xac-nhan-mat"],
     ["Giá trị tài sản", money(value), "bg-emerald-50 border-emerald-200 text-emerald-800", "danh-muc"],
   ]
   const months = rep?.byMonth || []
@@ -523,7 +534,7 @@ export function Dashboard({ go }: { go: (section: string) => void }) {
   )
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
         {kpis.map(([l, v, c, s]) => (
           <button key={l} onClick={() => go(s)} className={`text-left border rounded-xl px-4 py-3 hover:shadow-md transition-shadow ${c}`}>
             <div className="text-2xl font-bold truncate">{v}</div><div className="text-xs opacity-80">{l}</div>
@@ -645,7 +656,7 @@ export function DisposalTab({ subjects }: { subjects: Subject[] }) {
 // ===================================================================
 const escH = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!)
 
-function printDoc(title: string, subtitle: string, head: string[], rows: (string | number)[][], landscape = true) {
+function printDoc(title: string, subtitle: string, head: string[], rows: (string | number)[][], landscape = true, opts: { cover?: boolean; comments?: boolean; groupCol?: number } = {}) {
   const w = window.open("", "_blank")
   if (!w) { alert("Trình duyệt chặn cửa sổ mới. Hãy cho phép pop-up để in."); return }
   const today = new Date()
@@ -656,13 +667,21 @@ function printDoc(title: string, subtitle: string, head: string[], rows: (string
     h1{text-align:center;font-size:16px;margin:12px 0 2px}.sub{text-align:center;font-style:italic;margin-bottom:10px}
     table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:3px 4px;vertical-align:top}th{background:#eee}
     td.c{text-align:center}.sign{display:flex;justify-content:space-around;margin-top:18px;text-align:center}.sign div{width:30%}.sign i{display:block}
-    .bar{margin:8px 0}@media print{.bar{display:none}}</style></head><body>
+    .bar{margin:8px 0}@media print{.bar{display:none}}.pb{page-break-after:always}
+    .cover{height:170mm;display:flex;flex-direction:column;justify-content:space-between;text-align:center;border:3px double #000;padding:12mm}
+    .cover h1{font-size:26px;margin:30mm 0 8mm}.lines div{border-bottom:1px dotted #000;height:9mm}tr.g td{background:#f3f3f3;font-weight:bold}</style></head><body>
     <div class="bar"><button onclick="window.print()">In</button></div>
+    ${opts.cover ? `<div class="cover pb"><div>PHÒNG GIÁO DỤC VÀ ĐÀO TẠO<br><b>TRƯỜNG THCS LÊ ĐỘ</b></div><div><h1>${escH(title)}</h1><div class="sub">${escH(subtitle)}</div></div><div>Năm học ${today.getMonth() >= 8 ? today.getFullYear() : today.getFullYear() - 1}–${today.getMonth() >= 8 ? today.getFullYear() + 1 : today.getFullYear()}</div></div>` : ""}
     <div class="hd"><div>PHÒNG GIÁO DỤC VÀ ĐÀO TẠO<b>TRƯỜNG THCS LÊ ĐỘ</b></div><div><b>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</b><b>Độc lập – Tự do – Hạnh phúc</b></div></div>
     <h1>${escH(title)}</h1><div class="sub">${escH(subtitle)}</div>
-    <table><thead><tr>${head.map((h) => `<th>${escH(h)}</th>`).join("")}</tr></thead><tbody>
-    ${rows.length ? rows.map((r) => `<tr>${r.map((c, i) => `<td${i === 0 || typeof c === "number" ? ' class="c"' : ""}>${escH(c)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${head.length}" class="c">Không có dữ liệu</td></tr>`}
+    <table><thead><tr>${head.filter((_, i) => i !== opts.groupCol).map((h) => `<th>${escH(h)}</th>`).join("")}</tr></thead><tbody>
+    ${rows.length ? rows.map((r, k) => {
+      const gc = opts.groupCol
+      const g = gc !== undefined && (k === 0 || rows[k - 1][gc] !== r[gc]) ? `<tr class="g"><td colspan="${head.length - 1}">${escH(r[gc])}</td></tr>` : ""
+      return g + `<tr>${r.filter((_, i) => i !== gc).map((c, i) => `<td${i === 0 || typeof c === "number" ? ' class="c"' : ""}>${escH(c)}</td>`).join("")}</tr>`
+    }).join("") : `<tr><td colspan="${head.length}" class="c">Không có dữ liệu</td></tr>`}
     </tbody></table>
+    ${opts.comments ? `<div class="pb"></div><h1>NHẬN XÉT, Ý KIẾN CỦA HIỆU TRƯỞNG</h1><div class="sub">về việc sử dụng thiết bị dạy học của giáo viên</div><div class="lines">${"<div></div>".repeat(14)}</div>` : ""}
     <div class="sign"><div><b>Người lập</b><i>(Ký, ghi rõ họ tên)</i></div><div><b>Tổ trưởng chuyên môn</b><i>(Ký, ghi rõ họ tên)</i></div><div><i>Ngày ${today.getDate()} tháng ${today.getMonth() + 1} năm ${today.getFullYear()}</i><b>Hiệu trưởng</b><i>(Ký, đóng dấu)</i></div></div>
     </body></html>`)
   w.document.close()
@@ -674,6 +693,12 @@ export function BooksTab({ subjects }: { subjects: Subject[] }) {
   const [to, setTo] = useState(ps[3].to)
   const [subjectId, setSubjectId] = useState("")
   const [error, setError] = useState("")
+  const [printBy, setPrintBy] = useState("teacher")
+  const [usage, setUsage] = useState("")
+  const [withCover, setWithCover] = useState(true)
+  const [rooms, setRooms] = useState<Room[]>([])
+  const [roomId, setRoomId] = useState("")
+  useEffect(() => { fetchRooms().then((l) => { setRooms(l); if (l[0]) setRoomId(l[0].id) }).catch(() => {}) }, [])
   const sName = (id: string) => subjects.find((s) => s.id === id)?.name || ""
   const scope = subjectId ? ` – môn ${sName(subjectId)}` : ""
 
@@ -681,13 +706,31 @@ export function BooksTab({ subjects }: { subjects: Subject[] }) {
     setError("")
     try {
       const r = await fetchReport(isoToVn(from), isoToVn(to))
-      // Sổ ghi theo thứ tự thời gian: phiếu mượn sớm nhất ở trên
-      const list = (r.records as Report[]).filter((x) => !subjectId || x.subject === sName(subjectId))
-        .sort((a, b) => (parseVnDate(a.borrowDate)?.getTime() || 0) - (parseVnDate(b.borrowDate)?.getTime() || 0))
-      const head = ["STT", "Ngày mượn", "Họ tên giáo viên", "Lớp", "Môn", "Tiết", "Tên thiết bị", "Số lượng", "Ngày trả", "Tình trạng khi trả", "Trạng thái"]
-      const rows = list.map((x, i) => [i + 1, x.borrowDate, x.teacherName, x.className, x.subject, x.period || "", x.equipment, x.quantity, x.status === "Trả" ? x.returnDate : "", [x.lateDays ? `trễ ${x.lateDays} ngày` : "", x.damaged ? `hỏng ${x.damaged}` : "", x.lost ? `mất ${x.lost}` : ""].filter(Boolean).join(", ") || (x.status === "Trả" ? "Đầy đủ" : ""), x.status])
-      if (excel) await exportExcel(`So-theo-doi-muon-tra_${r.from.replace(/\//g, "-")}_${r.to.replace(/\//g, "-")}.xlsx`, [{ name: "Sổ mượn trả", rows: rows.map((row) => Object.fromEntries(head.map((h, i) => [h, row[i]]))) }])
-      else printDoc("SỔ THEO DÕI MƯỢN – TRẢ THIẾT BỊ DẠY HỌC", `Từ ngày ${r.from} đến ngày ${r.to}${scope}`, head, rows)
+      const byKey = (x: Report) => (printBy === "teacher" ? x.teacherName : printBy === "group" ? x.group || "(chưa có tổ)" : x.subject)
+      // Sổ theo kiểu phần mềm quản lý thiết bị: nhóm theo giáo viên / môn / tổ, trong nhóm xếp theo ngày mượn
+      const list = (r.records as Report[])
+        .filter((x) => x.status !== "Từ chối" && x.status !== "Chờ duyệt")
+        .filter((x) => !subjectId || x.subject === sName(subjectId))
+        .filter((x) => !usage || x.usageType === usage)
+        .sort((a, b) => String(byKey(a)).localeCompare(String(byKey(b)), "vi") || (parseVnDate(a.borrowDate)?.getTime() || 0) - (parseVnDate(b.borrowDate)?.getTime() || 0))
+      const head = ["Nhóm", "STT", "Họ tên giáo viên", "Tổ bộ môn", "Ngày mượn", "Ngày trả", "Số phiếu", "Ngày lập", "Thiết bị mượn sử dụng", "SL", "Tiết dạy", "Tên bài dạy", "Lớp", "Loại tiết", "Tình trạng khi trả", "Ký mượn", "Ký trả"]
+      const rows = list.map((x, i) => [byKey(x), i + 1, x.teacherName, x.group, x.borrowDate, x.status === "Trả" ? x.returnDate : "", x.code, x.createdOn, x.equipment, x.quantity, x.period || "", x.lessonName, x.className, x.usageType,
+        x.status === "Trả" ? ([x.damaged ? `Hỏng ${x.damaged}` : "", x.lost ? `Mất ${x.lost}` : ""].filter(Boolean).join(", ") || "BT") : "Đang mượn", "", ""])
+      const title = "SỔ MƯỢN TRẢ THIẾT BỊ DẠY HỌC"
+      const sub = `Từ ngày ${r.from} đến ngày ${r.to}${scope}${usage ? ` – tiết ${usage.toLowerCase()}` : ""}`
+      if (excel) await exportExcel(`So-muon-tra-thiet-bi_${r.from.replace(/\//g, "-")}_${r.to.replace(/\//g, "-")}.xlsx`, [{ name: "Sổ mượn trả", rows: rows.map((row) => Object.fromEntries(head.map((h, i) => [h, row[i]]))) }])
+      else printDoc(title, sub, head, rows, true, { cover: withCover, comments: withCover, groupCol: 0 })
+    } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
+  }
+  const roomBook = async (excel: boolean) => {
+    setError("")
+    if (!roomId) { setError("Chọn phòng bộ môn để in sổ nhật ký"); return }
+    try {
+      const r = await fetchRoomLog(roomId, isoToVn(from), isoToVn(to))
+      const head = ["STT", "Ngày", "Tiết", "Lớp", "Giáo viên", "Môn", "Tên bài dạy", "Thiết bị sử dụng", "Tình trạng phòng/thiết bị sau tiết", "Ký"]
+      const rows = r.entries.map((x, i) => [i + 1, x.date, x.period, x.className, x.teacherName, x.subject, x.lessonName, x.equipment, x.condition || (x.status === "Mượn" ? "Đang sử dụng" : ""), ""])
+      if (excel) await exportExcel(`So-nhat-ky-${r.room.name.replace(/\s+/g, "-")}.xlsx`, [{ name: "Nhật ký phòng", rows: rows.map((row) => Object.fromEntries(head.map((h, i) => [h, row[i]]))) }])
+      else printDoc(`SỔ NHẬT KÝ SỬ DỤNG ${r.room.name.toUpperCase()}`, `Từ ngày ${isoToVn(from)} đến ngày ${isoToVn(to)}`, head, rows, true, { cover: withCover })
     } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
   }
   const assetBook = async (excel: boolean) => {
@@ -715,7 +758,8 @@ export function BooksTab({ subjects }: { subjects: Subject[] }) {
     } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
   }
   const books: [string, string, (excel: boolean) => void][] = [
-    ["Sổ theo dõi mượn – trả thiết bị", "Ghi theo từng lượt mượn: ngày, giáo viên, lớp, tiết, thiết bị, ngày trả, tình trạng khi trả.", borrowBook],
+    ["Sổ mượn trả thiết bị", "Nhóm theo giáo viên / môn / tổ: ngày mượn – trả, số phiếu, ngày lập phiếu, thiết bị, tiết dạy, tên bài dạy, lớp, loại tiết, tình trạng khi trả (BT/Hỏng/Mất), cột ký. Có trang bìa và trang nhận xét của Hiệu trưởng.", borrowBook],
+    ["Sổ nhật ký sử dụng phòng bộ môn", "Theo từng phòng: ngày, tiết, lớp, giáo viên, bài dạy, thiết bị sử dụng, tình trạng sau tiết.", roomBook],
     ["Sổ quản lý thiết bị", "Danh mục toàn bộ thiết bị: mã, đơn vị tính, nước sản xuất, năm sử dụng, nguồn kinh phí, số lượng theo tình trạng, giá trị.", assetBook],
     ["Sổ theo dõi sửa chữa, thanh lý", "Các lần bảo trì, sửa chữa và chứng từ ghi giảm trong kỳ, kèm chi phí.", damageBook],
   ]
@@ -726,9 +770,13 @@ export function BooksTab({ subjects }: { subjects: Subject[] }) {
         <div><label className={label} htmlFor="b-from">Từ ngày</label><input id="b-from" type="date" className={fieldBase} value={from} onChange={(e) => setFrom(e.target.value)} /></div>
         <div><label className={label} htmlFor="b-to">Đến ngày</label><input id="b-to" type="date" className={fieldBase} value={to} onChange={(e) => setTo(e.target.value)} /></div>
         <div><label className={label} htmlFor="b-sub">Môn</label><select id="b-sub" className={fieldBase} value={subjectId} onChange={(e) => setSubjectId(e.target.value)}><option value="">Tất cả</option>{subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+        <div><label className={label} htmlFor="b-by">In theo</label><select id="b-by" className={fieldBase} value={printBy} onChange={(e) => setPrintBy(e.target.value)}><option value="teacher">Giáo viên</option><option value="subject">Môn học</option><option value="group">Tổ bộ môn</option></select></div>
+        <div><label className={label} htmlFor="b-use">Loại tiết</label><select id="b-use" className={fieldBase} value={usage} onChange={(e) => setUsage(e.target.value)}><option value="">Tất cả</option><option>Thực hành</option><option>Biểu diễn</option></select></div>
+        {rooms.length > 0 && <div><label className={label} htmlFor="b-room">Phòng (sổ nhật ký)</label><select id="b-room" className={fieldBase} value={roomId} onChange={(e) => setRoomId(e.target.value)}>{rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>}
+        <label className="flex items-center gap-1.5 text-sm text-gray-600 pb-2"><input type="checkbox" checked={withCover} onChange={(e) => setWithCover(e.target.checked)} />In trang bìa + trang nhận xét</label>
       </div>
       <Err msg={error} />
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
         {books.map(([t, d, fn]) => (
           <div key={t} className={`${card} p-5 flex flex-col`}>
             <h3 className="font-bold text-gray-900 mb-1">{t}</h3>
@@ -738,6 +786,69 @@ export function BooksTab({ subjects }: { subjects: Subject[] }) {
         ))}
       </div>
       <p className="text-xs text-gray-500">Biên bản kiểm kê được xuất trong mục Kiểm kê. Mẫu sổ in ra theo bố cục chung (quốc hiệu, tên trường, chữ ký); nếu trường có mẫu riêng theo quy định của Phòng/Sở, cần đối chiếu và điều chỉnh cột cho khớp.</p>
+    </div>
+  )
+}
+
+// ===================================================================
+// XÁC NHẬN THIẾT BỊ BỊ MẤT (Ban giám hiệu)
+// ===================================================================
+export function LossTab() {
+  const [d, setD] = useState<{ reports: LossReport[]; canConfirm: boolean; principalConfigured: boolean } | null>(null)
+  const [error, setError] = useState("")
+  const [busy, setBusy] = useState("")
+  const load = useCallback(() => { fetchLossReports().then(setD).catch((e) => setError(e.message)) }, [])
+  useEffect(() => { load() }, [load])
+  const act = async (r: LossReport, ok: boolean) => {
+    const note = prompt(ok ? `Xác nhận MẤT ${r.quantity} “${r.name}”? Ghi chú (có thể để trống):` : `Xác nhận KHÔNG mất (đã tìm thấy) ${r.quantity} “${r.name}”? Ghi chú:`, "")
+    if (note === null) return
+    setBusy(r.id); setError("")
+    try { await (ok ? confirmLoss : rejectLoss)(r.id, note); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } finally { setBusy("") }
+  }
+  if (!d) return <p className="text-sm text-gray-400">{error || "Đang tải…"}</p>
+  const pending = d.reports.filter((r) => r.status === "Chờ xác nhận")
+  const done = d.reports.filter((r) => r.status !== "Chờ xác nhận")
+  const src = (r: LossReport) => (r.source === "audit" ? `Kiểm kê: ${r.auditTitle || ""}` : `Phiếu mượn của ${r.teacherName || ""}`)
+  return (
+    <div className="space-y-4">
+      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-900">
+        Thiết bị báo mất (khi trả hoặc khi kiểm kê thiếu) được giữ ở trạng thái <strong>chờ xác nhận</strong>, không cho mượn nhưng chưa tính là mất.
+        Chỉ <strong>Ban giám hiệu</strong> xác nhận mới ghi vào sổ “mất” và trừ điểm thi đua giáo viên (−10 điểm/thiết bị, bồi thường theo đơn giá).
+        {!d.principalConfigured && <span className="block mt-1 text-amber-800">Chưa khai báo tài khoản Ban giám hiệu (biến PRINCIPAL_EMAILS trên máy chủ) nên tạm thời quản trị viên được xác nhận.</span>}
+        {d.principalConfigured && !d.canConfirm && <span className="block mt-1">Tài khoản của bạn chỉ xem được; việc xác nhận do Ban giám hiệu thực hiện.</span>}
+      </div>
+      <Err msg={error} />
+      <div className={`${card} overflow-hidden`}>
+        <div className="px-5 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">Chờ xác nhận ({pending.length})</h3></div>
+        {pending.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">Không có báo mất nào đang chờ</p> : (
+          <ul className="divide-y divide-gray-50">{pending.map((r) => (
+            <li key={r.id} className="px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium text-gray-900">{r.name} × {r.quantity}<span className="ml-2 text-xs text-gray-500">({money(r.quantity * (r.unitPrice || 0))})</span></div>
+                <div className="text-xs text-gray-500">{src(r)} · người báo: {r.reportedBy} · {fmtTime(r.createdAt)}{r.note ? ` · ${r.note}` : ""}</div>
+              </div>
+              {d.canConfirm ? (
+                <div className="flex gap-2">
+                  <button disabled={busy === r.id} onClick={() => act(r, false)} className={btnGhost}>Không mất (tìm thấy)</button>
+                  <button disabled={busy === r.id} onClick={() => act(r, true)} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50">Xác nhận mất</button>
+                </div>
+              ) : <span className="text-xs font-semibold text-amber-700 bg-amber-50 rounded-full px-3 py-1">Chờ Ban giám hiệu</span>}
+            </li>
+          ))}</ul>
+        )}
+      </div>
+      <div className={`${card} overflow-hidden`}>
+        <div className="px-5 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">Đã xử lý</h3></div>
+        {done.length === 0 ? <p className="p-6 text-center text-sm text-gray-400">Chưa có</p> : (
+          <div className="overflow-x-auto"><table className="w-full text-sm">
+            <thead><tr className="bg-gray-50">{["Thiết bị", "SL", "Nguồn", "Kết quả", "Người xác nhận", "Thời gian"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-gray-50">{done.map((r) => (
+              <tr key={r.id}><td className="px-3 py-2">{r.name}{r.decisionNote && <div className="text-[11px] text-gray-400">{r.decisionNote}</div>}</td><td className="px-3 py-2">{r.quantity}</td><td className="px-3 py-2 text-xs">{src(r)}</td>
+                <td className={`px-3 py-2 text-xs font-semibold ${r.status === "Đã xác nhận mất" ? "text-red-600" : "text-green-700"}`}>{r.status}</td><td className="px-3 py-2 text-xs">{r.decidedBy}</td><td className="px-3 py-2 text-xs whitespace-nowrap">{fmtTime(r.decidedAt)}</td></tr>
+            ))}</tbody>
+          </table></div>
+        )}
+      </div>
     </div>
   )
 }

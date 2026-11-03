@@ -95,13 +95,56 @@ export function formatDate(date) {
 export const MIN_NOTICE_HOURS = 24;
 
 // Giờ bắt đầu từng tiết (giờ Việt Nam). ĐÂY LÀ GIẢ ĐỊNH, hãy sửa theo thời khóa biểu thật của trường.
+// ---------- Tiết học ----------
+// Mã tiết: S1..S5 (buổi sáng), C1..C5 (buổi chiều). Giờ bắt đầu theo lịch thông dụng, trường có thể sửa.
+export const SLOT_START = {
+  S1: "07:00", S2: "07:50", S3: "08:55", S4: "09:45", S5: "10:35",
+  C1: "13:30", C2: "14:20", C3: "15:15", C4: "16:05", C5: "16:55",
+};
+export const ALL_SLOTS = Object.keys(SLOT_START);
+// Phiếu cũ ghi "Tiết 1".."Tiết 5" = buổi sáng
 export const PERIOD_START = { "Tiết 1": "07:00", "Tiết 2": "07:50", "Tiết 3": "08:55", "Tiết 4": "09:45", "Tiết 5": "10:35" };
+const legacySlot = (p) => { const m = /^Tiết (\d)$/.exec(p || ""); return m ? `S${m[1]}` : null; };
 
-/** Số giờ từ `now` đến lúc bắt đầu tiết mượn. Ngày sai định dạng -> null. */
+/** Chuẩn hóa danh sách tiết; bỏ mã sai, sắp theo thứ tự trong ngày */
+export function normalizeSlots(periods) {
+  const set = new Set((Array.isArray(periods) ? periods : []).map((p) => legacySlot(p) || String(p)).filter((p) => p in SLOT_START));
+  return ALL_SLOTS.filter((x) => set.has(x));
+}
+/** "Sáng: 1, 2 · Chiều: 3" */
+export function slotLabel(slots) {
+  const s = normalizeSlots(slots);
+  const part = (k, name) => { const n = s.filter((x) => x[0] === k).map((x) => x.slice(1)); return n.length ? `${name}: ${n.join(", ")}` : ""; };
+  return [part("S", "Sáng"), part("C", "Chiều")].filter(Boolean).join(" · ");
+}
+/** Các tiết một phiếu chiếm; mảng rỗng = cả ngày */
+export function recordSlots(r) {
+  if (Array.isArray(r.periods) && r.periods.length) return normalizeSlots(r.periods);
+  const l = legacySlot(r.period);
+  return l ? [l] : [];
+}
+/** Phiếu có dùng (ngày, tiết) này không. Phiếu mượn nhiều ngày giữ thiết bị suốt các ngày đó. */
+export function recordCovers(r, day, slot) {
+  const bd = parseDate(r.borrowDate), rd = parseDate(r.returnDate);
+  if (!bd || !rd || day < bd || day > rd) return false;
+  if (bd.getTime() !== rd.getTime()) return true;
+  const sl = recordSlots(r);
+  return !sl.length || sl.includes(slot);
+}
+const daysBetween = (from, to) => { const out = []; for (let t = from.getTime(); t <= to.getTime() && out.length < 400; t += 864e5) out.push(new Date(t)); return out; };
+/** Các (ngày, tiết) mà một yêu cầu mượn cần: một ngày + có tiết -> đúng các tiết đó; còn lại -> mọi tiết */
+export function requestCells(from, to, slots) {
+  const days = daysBetween(from, to);
+  const sl = from.getTime() === to.getTime() && normalizeSlots(slots).length ? normalizeSlots(slots) : ALL_SLOTS;
+  return days.flatMap((d) => sl.map((s) => [d, s]));
+}
+
+/** Số giờ từ `now` đến lúc bắt đầu tiết sớm nhất. `period` là "Tiết n" hoặc mảng mã tiết. */
 export function hoursUntilBorrow(borrowDate, period, now = new Date()) {
   const d = parseDate(borrowDate);
   if (!d) return null;
-  const start = new Date(`${d.toISOString().slice(0, 10)}T${PERIOD_START[period] || "07:00"}:00+07:00`);
+  const slots = Array.isArray(period) ? normalizeSlots(period) : normalizeSlots([period]);
+  const start = new Date(`${d.toISOString().slice(0, 10)}T${SLOT_START[slots[0]] || "07:00"}:00+07:00`);
   return (start - now) / 3_600_000;
 }
 
@@ -131,32 +174,36 @@ export const getEquipment = (id) => {
 
 const ACTIVE_STATUS = new Set(["Chờ duyệt", "Mượn"]);
 
+/** Số lượng thiết bị một phiếu giữ (theo mã nếu có, không thì đoán theo tên) */
+function qtyInRecord(eq, r, nameNorm) {
+  if (Array.isArray(r.items) && r.items.length) return r.items.reduce((a, it) => a + (it.equipmentId === eq.id ? Number(it.quantity) || 1 : 0), 0);
+  const text = ` ${normalize(r.equipment)} `;
+  const i = text.indexOf(` ${nameNorm} `);
+  if (i === -1) return 0;
+  const qty = text.slice(i + nameNorm.length + 2).match(/^x(\d+)\b/);
+  return qty ? Number(qty[1]) : 1;
+}
+
 /**
- * Số lượng đang bị giữ trong khoảng [from, to] (tính theo ngày).
- *   - Phiếu có `items` ([{ equipmentId, quantity }], do chatbot soạn) -> đếm chính xác theo mã.
- *   - Phiếu nhập tay (chỉ có chữ) -> khớp theo tên thiết bị, đọc số lượng dạng "(x2)" nếu có.
- * `records` là danh sách phiếu đang hoạt động (db.records.findActive()).
+ * Số lượng bị giữ cao nhất tại một (ngày, tiết) trong yêu cầu, kèm các phiếu gây ra mức đó.
+ * Tính theo từng tiết như phần mềm quản lý thiết bị: hai lớp dùng cùng thiết bị ở hai tiết khác nhau không trùng nhau.
  */
-export function bookedQuantity(eq, from, to, records) {
+export function bookedQuantity(eq, from, to, records, slots = null, exceptId = null) {
   const nameNorm = normalize(eq.name);
-  let booked = 0;
+  const using = [];
   for (const r of records) {
-    if (!ACTIVE_STATUS.has(r.status)) continue;
-    const bd = parseDate(r.borrowDate);
-    const rd = parseDate(r.returnDate);
-    if (!bd || !rd) continue;
-    if (bd > to || rd < from) continue; // không giao nhau
-    if (Array.isArray(r.items) && r.items.length) {
-      for (const it of r.items) if (it.equipmentId === eq.id) booked += Number(it.quantity) || 1;
-      continue;
-    }
-    const text = ` ${normalize(r.equipment)} `;
-    const i = text.indexOf(` ${nameNorm} `);
-    if (i === -1) continue;
-    const qty = text.slice(i + nameNorm.length + 2).match(/^x(\d+)\b/);
-    booked += qty ? Number(qty[1]) : 1;
+    if (!ACTIVE_STATUS.has(r.status) || r.id === exceptId) continue;
+    const q = qtyInRecord(eq, r, nameNorm);
+    if (q) using.push([r, q]);
   }
-  return booked;
+  let best = { booked: 0, day: null, slot: null, conflicts: [] };
+  if (!using.length) return best;
+  for (const [day, slot] of requestCells(from, to, slots)) {
+    let sum = 0; const who = [];
+    for (const [r, q] of using) if (recordCovers(r, day, slot)) { sum += q; who.push({ teacherName: r.teacherName, className: r.className, period: r.period || "", quantity: q, borrowDate: r.borrowDate }); }
+    if (sum > best.booked) best = { booked: sum, day, slot, conflicts: who };
+  }
+  return best;
 }
 
 function usableStock(eq) {
@@ -165,10 +212,11 @@ function usableStock(eq) {
   return /hỏng|đang sửa|thanh lý/i.test(eq.condition || "") ? 0 : Number(eq.stock) || 0;
 }
 
-export function availabilityOf(eq, from, to, records) {
+export function availabilityOf(eq, from, to, records, slots = null, exceptId = null) {
   const stock = usableStock(eq);
-  const booked = bookedQuantity(eq, from, to, records);
-  return { stock, booked, available: Math.max(0, stock - booked) };
+  const b = bookedQuantity(eq, from, to, records, slots, exceptId);
+  return { stock, booked: b.booked, available: Math.max(0, stock - b.booked), conflicts: b.conflicts,
+    at: b.day ? `${formatDate(b.day)} ${slotLabel([b.slot])}` : "" };
 }
 
 export async function checkAvailability({ equipmentIds = [], borrowDate, returnDate }) {

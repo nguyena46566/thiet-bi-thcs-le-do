@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import logoImg from "@/imports/Logo.jpg"
 import { AuthProvider, useAuth } from "@/AuthContext"
 import { InventoryTab, PurchasesTab, PointsTab, ReturnDialog, MyPointsCard } from "./Inventory"
-import { AuditTab, MaintenanceTab, ReportsTab, EquipmentPage, Dashboard, DisposalTab, BooksTab } from "./Operations"
+import { AuditTab, MaintenanceTab, ReportsTab, EquipmentPage, Dashboard, DisposalTab, BooksTab, LossTab } from "./Operations"
+import { RoomsTab, ProposalsTab, MyProposals } from "./School"
 import ChatWidget from "@/ChatWidget"
 import {
   fetchRecords,
@@ -23,6 +24,10 @@ import {
   type Stats,
   type Notification,
   sendRemindersNow,
+  fetchAvailable,
+  fetchRoomsAvailability,
+  type AvailableItem,
+  type Room,
 } from "@/api"
 
 type Page = "home" | "admin" | "noiquy" | "mine" | string
@@ -439,7 +444,17 @@ function BorrowForm({ subjectId, subjectName, onCreated, prefill, onPrefillUsed 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   // Danh sách mã thiết bị do chatbot chọn (để server kiểm tra tồn kho chính xác)
-  const [chatItems, setChatItems] = useState<{ items: BorrowItem[]; equipment: string } | null>(null)
+  // Thiết bị chọn từ danh mục của môn (máy chủ kiểm tra tồn kho theo mã) + đồ dùng khác ghi tay
+  const [picked, setPicked] = useState<BorrowItem[]>([])
+  const [otherEquip, setOtherEquip] = useState("")
+  const [available, setAvailable] = useState<AvailableItem[] | null>(null)
+  const [eqQuery, setEqQuery] = useState("")
+  // Tiết sử dụng (S1..S5 sáng, C1..C5 chiều), bài dạy, loại tiết, phòng bộ môn
+  const [slots, setSlots] = useState<string[]>([])
+  const [lessonName, setLessonName] = useState("")
+  const [usageType, setUsageType] = useState("Biểu diễn")
+  const [roomId, setRoomId] = useState("")
+  const [rooms, setRooms] = useState<Room[]>([])
   const formRef = useRef<HTMLFormElement>(null)
   const [fromChat, setFromChat] = useState(false)
 
@@ -457,7 +472,9 @@ function BorrowForm({ subjectId, subjectName, onCreated, prefill, onPrefillUsed 
       returnDate: vnToIso(d.returnDate || d.borrowDate || ""),
       notes: d.notes || "",
     })
-    setChatItems(d.items?.length ? { items: d.items, equipment: d.equipment } : null)
+    setPicked(d.items?.length ? d.items.map((it) => ({ equipmentId: it.equipmentId, quantity: it.quantity })) : [])
+    setSlots(d.period ? [`S${d.period.replace(/\D/g, "")}`] : [])
+    setOtherEquip(d.items?.length ? "" : d.equipment || "")
     setFromChat(true)
     setSubmitted(false)
     setError("")
@@ -465,6 +482,19 @@ function BorrowForm({ subjectId, subjectName, onCreated, prefill, onPrefillUsed 
     // Chờ form hiện ra rồi cuộn tới
     requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }))
   }, [prefill?.key])
+
+  // Số thiết bị còn trống theo ngày mượn – trả đang chọn
+  useEffect(() => {
+    if (!user) return
+    let stop = false
+    const from = form.borrowDate ? isoToVn(form.borrowDate) : ""
+    const to = form.returnDate ? isoToVn(form.returnDate) : from
+    const t = setTimeout(() => {
+      fetchAvailable(subjectId, from, to, slots).then((l) => { if (!stop) setAvailable(l) }).catch(() => { if (!stop) setAvailable([]) })
+      fetchRoomsAvailability(from, to, slots).then((l) => { if (!stop) setRooms(l) }).catch(() => {})
+    }, 250)
+    return () => { stop = true; clearTimeout(t) }
+  }, [subjectId, form.borrowDate, form.returnDate, slots.join(","), user])
 
   // Chưa đăng nhập
   if (!user) {
@@ -486,14 +516,23 @@ function BorrowForm({ subjectId, subjectName, onCreated, prefill, onPrefillUsed 
     e.preventDefault()
     setError("")
 
+    if (!slots.length) { setError("Chọn ít nhất một tiết dạy"); return }
+    if (!picked.length && !otherEquip.trim()) { setError("Chọn ít nhất một thiết bị trong danh sách hoặc ghi đồ dùng khác"); return }
+    if (roomId && rooms.find((r) => r.id === roomId)?.busy) { setError("Phòng đã chọn đang bận ở tiết này, hãy chọn phòng hoặc tiết khác"); return }
+    const nameOf = (id: string) => available?.find((a) => a.id === id)?.name || id
+    const over = picked.find((p) => { const a = available?.find((x) => x.id === p.equipmentId); return a && p.quantity > a.available })
+    if (over) { setError(`“${nameOf(over.equipmentId)}” chỉ còn ${available?.find((x) => x.id === over.equipmentId)?.available} trong những ngày này`); return }
+    const equipment = [...picked.map((p) => `${nameOf(p.equipmentId)} (x${p.quantity})`), otherEquip.trim()].filter(Boolean).join(", ")
+
     setLoading(true)
     try {
-      // Chỉ gửi kèm mã thiết bị nếu giáo viên không sửa ô "Đồ dùng" so với bản nháp
-      const items = chatItems && chatItems.equipment === form.equipment ? chatItems.items : undefined
       // Ô chọn ngày dùng YYYY-MM-DD, máy chủ nhận DD/MM/YYYY
-      await createRecord({ subjectId, subjectName, ...form, borrowDate: isoToVn(form.borrowDate), returnDate: isoToVn(form.returnDate), items })
+      await createRecord({ subjectId, subjectName, ...form, equipment, periods: slots, lessonName, usageType, roomId: roomId || undefined,
+        borrowDate: isoToVn(form.borrowDate), returnDate: isoToVn(form.returnDate), items: picked.length ? picked : undefined })
       setSubmitted(true)
-      setChatItems(null)
+      setPicked([])
+      setOtherEquip("")
+      setSlots([]); setLessonName(""); setRoomId("")
       setFromChat(false)
       onCreated?.()
       setTimeout(() => { setSubmitted(false); setForm(blankForm()) }, 3500)
@@ -525,11 +564,8 @@ function BorrowForm({ subjectId, subjectName, onCreated, prefill, onPrefillUsed 
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-800 flex items-start justify-between gap-3">
           <span>
             Thông tin đã được điền sẵn từ Trợ lý thiết bị. Kiểm tra lại, sửa nếu cần rồi bấm "Gửi yêu cầu mượn".
-            {chatItems && chatItems.equipment !== form.equipment && (
-              <span className="block mt-1 text-xs text-emerald-700">Bạn đã sửa ô "Đồ dùng", hệ thống sẽ không tự kiểm tra tồn kho cho phiếu này.</span>
-            )}
           </span>
-          <button type="button" onClick={() => { setFromChat(false); setChatItems(null); setForm(blankForm()) }} className="shrink-0 text-xs font-semibold text-emerald-700 hover:underline">
+          <button type="button" onClick={() => { setFromChat(false); setPicked([]); setOtherEquip(""); setForm(blankForm()) }} className="shrink-0 text-xs font-semibold text-emerald-700 hover:underline">
             Xóa
           </button>
         </div>
@@ -564,18 +600,83 @@ function BorrowForm({ subjectId, subjectName, onCreated, prefill, onPrefillUsed 
       </div>
       <p className="-mt-3 text-xs text-gray-500">Theo nội quy, cần đăng ký trước giờ dạy ít nhất 24 giờ.</p>
       <div>
-        <label className={labelCls}>Tiết dạy trong ngày <span className="text-red-500">*</span></label>
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-1">
-          {["Tiết 1", "Tiết 2", "Tiết 3", "Tiết 4", "Tiết 5"].map((t) => (
-            <label key={t} className={`flex items-center gap-2 cursor-pointer px-3 py-2.5 rounded-xl border-2 text-sm font-medium transition-all select-none ${form.period === t ? "bg-[#1a3670] border-[#1a3670] text-white" : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"}`}>
-              <input type="radio" name="period" value={t} checked={form.period === t} onChange={() => setForm({ ...form, period: t })} className="sr-only" required />
-              {t}
-            </label>
+        <span className={labelCls}>Tiết sử dụng thiết bị <span className="text-red-500">*</span> <span className="font-normal text-gray-500 text-xs">(chọn một hoặc nhiều tiết)</span></span>
+        <div className="space-y-2">
+          {([["S", "Sáng"], ["C", "Chiều"]] as const).map(([k, name]) => (
+            <div key={k} className="flex items-center gap-2">
+              <span className="w-12 text-xs font-semibold text-gray-500">{name}</span>
+              <div className="grid grid-cols-5 gap-1.5 flex-1">
+                {[1, 2, 3, 4, 5].map((n) => {
+                  const code = `${k}${n}`, on = slots.includes(code)
+                  return (
+                    <button type="button" key={code} aria-pressed={on} onClick={() => setSlots((prev) => (prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code]))}
+                      className={`py-2 rounded-lg border-2 text-sm font-medium transition-all ${on ? "bg-[#1a3670] border-[#1a3670] text-white" : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"}`}>
+                      Tiết {n}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           ))}
         </div>
+        {form.borrowDate && form.returnDate && form.borrowDate !== form.returnDate && <p className="text-xs text-amber-700 mt-1">Mượn nhiều ngày: thiết bị được giữ cả ngày trong suốt thời gian mượn.</p>}
       </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div><label className={labelCls} htmlFor="lessonName">Tên bài dạy</label><input id="lessonName" className={fieldCls} placeholder="VD: Bài 8 – Áp suất chất lỏng" value={lessonName} onChange={(e) => setLessonName(e.target.value)} /></div>
+        <div>
+          <span className={labelCls}>Loại tiết</span>
+          <div className="flex gap-2">
+            {["Biểu diễn", "Thực hành"].map((t) => (
+              <button type="button" key={t} aria-pressed={usageType === t} onClick={() => setUsageType(t)} className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-medium ${usageType === t ? "bg-[#1a3670] border-[#1a3670] text-white" : "bg-white border-gray-200 text-gray-600"}`}>{t}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+      {rooms.length > 0 && (
+        <div>
+          <label className={labelCls} htmlFor="roomId">Phòng bộ môn (nếu cần)</label>
+          <select id="roomId" className={fieldCls} value={roomId} onChange={(e) => setRoomId(e.target.value)}>
+            <option value="">Không mượn phòng (dạy tại lớp)</option>
+            {rooms.map((r) => <option key={r.id} value={r.id} disabled={r.busy}>{r.name}{r.busy ? ` – đang bận: ${r.busyBy}` : ""}</option>)}
+          </select>
+        </div>
+      )}
       <div><label className={labelCls}>Tiết theo PPCT <span className="text-red-500">*</span></label><input required className={fieldCls} placeholder="VD: Tiết 25 - Bài 12" value={form.periodPPCT} onChange={(e) => setForm({ ...form, periodPPCT: e.target.value })} /></div>
-      <div><label className={labelCls}>Đồ dùng cần mượn <span className="text-red-500">*</span></label><textarea required rows={2} className={fieldCls} placeholder="Ống nghiệm, kính hiển vi, mô hình..." value={form.equipment} onChange={(e) => setForm({ ...form, equipment: e.target.value })} /></div>
+      <div>
+        <div className="flex items-end justify-between gap-3 mb-1.5">
+          <span className={labelCls + " mb-0"}>Đồ dùng cần mượn <span className="text-red-500">*</span></span>
+          <span className="text-xs text-gray-500">{form.borrowDate ? "Số còn trống tính theo ngày đã chọn" : "Chọn ngày mượn để xem số còn trống chính xác"}</span>
+        </div>
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          {available && available.length > 8 && (
+            <div className="p-2 border-b border-gray-100 bg-gray-50"><input type="search" aria-label="Tìm thiết bị" className={fieldCls} placeholder="Tìm thiết bị…" value={eqQuery} onChange={(e) => setEqQuery(e.target.value)} /></div>
+          )}
+          <ul className="max-h-72 overflow-y-auto divide-y divide-gray-50">
+            {available === null && <li className="px-4 py-3 text-sm text-gray-400">Đang tải danh mục…</li>}
+            {available?.length === 0 && <li className="px-4 py-3 text-sm text-gray-400">Môn này chưa có thiết bị trong danh mục. Ghi đồ dùng ở ô bên dưới.</li>}
+            {available?.filter((a) => !eqQuery || a.name.toLowerCase().includes(eqQuery.toLowerCase())).map((a) => {
+              const qty = picked.find((p) => p.equipmentId === a.id)?.quantity || 0
+              const setQty = (n: number) => setPicked((prev) => (n <= 0 ? prev.filter((p) => p.equipmentId !== a.id) : prev.some((p) => p.equipmentId === a.id) ? prev.map((p) => (p.equipmentId === a.id ? { ...p, quantity: n } : p)) : [...prev, { equipmentId: a.id, quantity: n }]))
+              return (
+                <li key={a.id} className={`px-4 py-2.5 flex items-center gap-3 ${qty ? "bg-blue-50/60" : ""}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-900">{a.name}</div>
+                    <div className="text-[11px] text-gray-500">{a.grades.length ? `Lớp ${a.grades.join(", ")} · ` : ""}{a.location}</div>
+                  </div>
+                  <span className={`text-xs font-semibold whitespace-nowrap ${a.available === 0 ? "text-rose-600" : "text-green-700"}`}>{a.available === 0 ? "Hết" : `Còn ${a.available}${a.unit ? " " + a.unit.toLowerCase() : ""}`}</span>
+                  <div className="flex items-center gap-1">
+                    <button type="button" aria-label={`Bớt ${a.name}`} disabled={!qty} onClick={() => setQty(qty - 1)} className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30 font-bold">−</button>
+                    <span className="w-6 text-center text-sm font-semibold" aria-live="polite">{qty}</span>
+                    <button type="button" aria-label={`Thêm ${a.name}`} disabled={qty >= a.available} onClick={() => setQty(qty + 1)} className="w-7 h-7 rounded-lg bg-[#1a3670] text-white hover:bg-[#132d5e] disabled:opacity-30 font-bold">+</button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+        {picked.length > 0 && <p className="text-xs text-[#1a3670] mt-1.5">Đã chọn: {picked.map((p) => `${available?.find((a) => a.id === p.equipmentId)?.name || p.equipmentId} ×${p.quantity}`).join(", ")}</p>}
+        <input className={fieldCls + " mt-2"} placeholder="Đồ dùng khác không có trong danh sách (nếu có)…" value={otherEquip} onChange={(e) => setOtherEquip(e.target.value)} />
+      </div>
       <div><label className={labelCls}>Ghi chú</label><textarea rows={2} className={fieldCls} placeholder="Ghi chú thêm nếu có..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
       <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-700">
         <strong>Lưu ý:</strong> Yêu cầu mượn sẽ được gửi đến admin để duyệt. Bạn sẽ nhận email khi yêu cầu được duyệt hoặc từ chối, và có thể theo dõi tại mục “Phiếu của tôi”.
@@ -711,8 +812,10 @@ const ADMIN_MENU: { group: string; items: { id: string; label: string; tab: stri
     { id: "ghi-giam", label: "Ghi giảm (thanh lý, mất)", tab: "disposals" },
     { id: "kiem-ke", label: "Kiểm kê", tab: "audit" },
     { id: "bao-tri", label: "Bảo trì – sửa chữa", tab: "maintenance" },
+    { id: "xac-nhan-mat", label: "Xác nhận mất thiết bị", tab: "loss" },
+    { id: "de-xuat", label: "Đề xuất mua sắm", tab: "proposals" },
   ] },
-  { group: "Danh mục", items: [{ id: "danh-muc", label: "Danh mục thiết bị", tab: "inventory" }] },
+  { group: "Danh mục", items: [{ id: "danh-muc", label: "Danh mục thiết bị", tab: "inventory" }, { id: "phong", label: "Phòng bộ môn", tab: "rooms" }] },
   { group: "Giáo viên", items: [{ id: "thi-dua", label: "Điểm thi đua", tab: "points" }] },
   { group: "Báo cáo", items: [
     { id: "bao-cao", label: "Báo cáo tổng hợp", tab: "reports" },
@@ -839,6 +942,9 @@ function AdminPage({ section = "tong-quan", go }: { section?: string; go: (secti
         {tab === "dashboard" && <Dashboard go={go} />}
         {tab === "disposals" && <DisposalTab subjects={SUBJECTS} />}
         {tab === "books" && <BooksTab subjects={SUBJECTS} />}
+        {tab === "loss" && <LossTab />}
+        {tab === "rooms" && <RoomsTab subjects={SUBJECTS} />}
+        {tab === "proposals" && <ProposalsTab />}
         {tab === "records" && <AdminSummary onPick={(st) => { setFilterStatus(st); setFilterSubject(""); setSearch("") }} active={filterStatus} refreshKey={records} />}
         {tab === "records" && (
           <div className="flex justify-end -mt-2 mb-3">
@@ -881,7 +987,7 @@ function AdminPage({ section = "tong-quan", go }: { section?: string; go: (secti
                       const btn = "px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap"
                       return (
                         <tr key={r.id} className={isOverdue(r) ? "bg-rose-50/50" : "hover:bg-gray-50/60"}>
-                          <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">{r.teacherName}</td>
+                          <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">{r.teacherName}{(r.code || r.roomName) && <div className="text-[10px] text-gray-400 font-normal">{[r.code, r.roomName].filter(Boolean).join(" · ")}</div>}</td>
                           <td className="px-3 py-3 text-gray-600">{r.className}</td>
                           <td className="px-3 py-3"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white whitespace-nowrap" style={{ backgroundColor: sub?.color || "#888" }}>{r.subjectName}</span></td>
                           <td className="px-3 py-3 text-gray-600 text-xs whitespace-nowrap">{r.period || "-"}</td>
@@ -1058,7 +1164,7 @@ function MyRecordsPage({ setPage }: { setPage: (p: Page) => void }) {
                   {r.status === "Từ chối" && r.adminNote && <p className="mt-2 text-sm text-red-700">Lý do từ chối: {r.adminNote}</p>}
                   {r.returnReport && (r.returnReport.items.length > 0 || r.returnReport.lateDays > 0) && (
                     <p className="mt-2 text-sm text-rose-700">
-                      Biên bản trả ngày {r.returnReport.returnedOn}: {[r.returnReport.lateDays > 0 && `trễ ${r.returnReport.lateDays} ngày`, ...r.returnReport.items.map((x) => [x.damaged && `hỏng ${x.damaged} ${x.name}`, x.lost && `mất ${x.lost} ${x.name}`].filter(Boolean).join(", "))].filter(Boolean).join("; ")}
+                      Biên bản trả ngày {r.returnReport.returnedOn}: {[r.returnReport.lateDays > 0 && `trễ ${r.returnReport.lateDays} ngày`, ...r.returnReport.items.map((x) => [x.damaged && `hỏng ${x.damaged} ${x.name}`, x.lost && `báo mất ${x.lost} ${x.name} (${x.lostStatus || "đã ghi mất"})`].filter(Boolean).join(", "))].filter(Boolean).join("; ")}
                       {r.returnReport.pointsDeducted < 0 && ` · trừ ${-r.returnReport.pointsDeducted} điểm`}
                       {r.returnReport.compensation > 0 && ` · bồi thường ${r.returnReport.compensation.toLocaleString("vi-VN")} đ`}
                     </p>
@@ -1073,6 +1179,7 @@ function MyRecordsPage({ setPage }: { setPage: (p: Page) => void }) {
             })}
           </div>
         )}
+        <MyProposals subjects={SUBJECTS} />
       </div>
     </main>
   )

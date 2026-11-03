@@ -9,16 +9,17 @@ import {
 import db from "./database.js";
 
 // Khớp với SUBJECTS trong src/App.tsx
+// group = tổ bộ môn (mỗi trường có thể chia khác, sửa tại đây)
 export const SUBJECTS = [
-  { id: "hoa-hoc", name: "Hóa học" },
-  { id: "vat-li", name: "Vật lí" },
-  { id: "sinh-hoc", name: "Sinh học" },
-  { id: "cong-nghe", name: "Công nghệ" },
-  { id: "toan-hoc", name: "Toán học" },
-  { id: "lich-su-dia-li", name: "Lịch Sử - Địa lí" },
-  { id: "gdtc", name: "GDTC" },
-  { id: "ngu-van-gdcd", name: "Ngữ văn - GDCD" },
-  { id: "tieng-anh", name: "Tiếng Anh" },
+  { id: "hoa-hoc", name: "Hóa học", group: "Tổ Khoa học tự nhiên" },
+  { id: "vat-li", name: "Vật lí", group: "Tổ Khoa học tự nhiên" },
+  { id: "sinh-hoc", name: "Sinh học", group: "Tổ Khoa học tự nhiên" },
+  { id: "cong-nghe", name: "Công nghệ", group: "Tổ Khoa học tự nhiên" },
+  { id: "toan-hoc", name: "Toán học", group: "Tổ Toán – Tin" },
+  { id: "lich-su-dia-li", name: "Lịch Sử - Địa lí", group: "Tổ Khoa học xã hội" },
+  { id: "gdtc", name: "GDTC", group: "Tổ Nghệ thuật – Thể chất" },
+  { id: "ngu-van-gdcd", name: "Ngữ văn - GDCD", group: "Tổ Khoa học xã hội" },
+  { id: "tieng-anh", name: "Tiếng Anh", group: "Tổ Ngoại ngữ" },
 ];
 const SUBJECT_IDS = SUBJECTS.map((s) => s.id);
 const PERIODS = ["Tiết 1", "Tiết 2", "Tiết 3", "Tiết 4", "Tiết 5"]; // khớp form mượn
@@ -141,7 +142,7 @@ async function draftBorrowRequest(input, ctx) {
     if (!eq) return { ok: false, error: `Không có thiết bị mã "${it.equipmentId}" trong danh mục.` };
     const qty = Math.floor(Number(it.quantity));
     if (!qty || qty < 1) return { ok: false, error: `Số lượng của "${eq.name}" không hợp lệ.` };
-    const av = availabilityOf(eq, from, to, records);
+    const av = availabilityOf(eq, from, to, records, period ? [`S${period.replace(/\D/g, "")}`] : null);
     if (av.available < qty) conflicts.push({ name: eq.name, requested: qty, available: av.available });
     lines.push(`${eq.name} (x${qty})`);
     items.push({ equipmentId: eq.id, quantity: qty });
@@ -161,6 +162,7 @@ async function draftBorrowRequest(input, ctx) {
     borrowDate: formatDate(from),
     returnDate: formatDate(to),
     period,
+    periods: period ? [`S${period.replace(/\D/g, "")}`] : [],
     periodPPCT: String(input.periodPPCT || "").trim().slice(0, 120),
     notes: String(input.notes || "").trim().slice(0, 300),
   };

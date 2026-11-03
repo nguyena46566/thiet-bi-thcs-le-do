@@ -11,18 +11,19 @@ import {
   getGoogleProfile,
   verifyOAuthState,
   isAdmin,
+  isPrincipal,
   requireAuth,
   requireAdmin,
 } from "./auth.js";
 import notifications from "./notifications.js";
-import { initInventory, registerInventoryRoutes, processReturn, undoReturn, scoreOf, RULES } from "./inventory.js";
+import { initInventory, registerInventoryRoutes, processReturn, undoReturn, scoreOf, RULES, schoolYearOf } from "./inventory.js";
 import { registerOperationRoutes, startReminderScheduler } from "./operations.js";
 import { sendBorrowNotification, sendStatusEmail } from "./mailer.js";
 import { createChatRouter } from "./chat.js";
 import { SUBJECTS } from "./chatTools.js";
 import {
-  parseDate, formatDate, hoursUntilBorrow, MIN_NOTICE_HOURS, PERIOD_START,
-  getEquipment, availabilityOf,
+  parseDate, formatDate, hoursUntilBorrow, MIN_NOTICE_HOURS,
+  getEquipment, availabilityOf, normalizeSlots, slotLabel, requestCells, recordCovers,
 } from "./equipment.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -122,6 +123,7 @@ app.get("/api/auth/google/callback", async (req, res) => {
       name: profile.name || profile.email,
       avatar: profile.picture || null,
       isAdmin: isAdmin(profile.email),
+      isPrincipal: isPrincipal(profile.email),
     };
 
     // Tạo session mới sau khi đăng nhập (chống session fixation)
@@ -187,13 +189,17 @@ app.post("/api/records", requireAuth, wrap(async (req, res) => {
   const teacherName = str(b.teacherName, 80);
   const className = str(b.className, 20);
   const equipmentText = str(b.equipment, 500);
-  const period = str(b.period, 20);
+  // Tiết sử dụng: mảng mã tiết (S1..S5 sáng, C1..C5 chiều); phiếu cũ gửi "Tiết n"
+  const slots = normalizeSlots(Array.isArray(b.periods) && b.periods.length ? b.periods : [b.period]);
+  const period = slotLabel(slots);
   const periodPPCT = str(b.periodPPCT, 120);
+  const lessonName = str(b.lessonName, 150);
+  const usageType = b.usageType === "Thực hành" ? "Thực hành" : "Biểu diễn";
   const notes = str(b.notes, 500);
   if (!teacherName || !className || !equipmentText || !b.borrowDate || !b.returnDate) {
     return res.status(400).json({ error: "Điền đầy đủ thông tin" });
   }
-  if (period && !(period in PERIOD_START)) return res.status(400).json({ error: "Tiết dạy không hợp lệ" });
+  if (!slots.length) return res.status(400).json({ error: "Chọn ít nhất một tiết dạy" });
 
   const from = parseDate(b.borrowDate);
   const to = parseDate(b.returnDate);
@@ -202,7 +208,7 @@ app.post("/api/records", requireAuth, wrap(async (req, res) => {
 
   // Nội quy: đăng ký trước ít nhất 24 giờ (admin được phép đăng ký gấp)
   if (!user.isAdmin) {
-    const hours = hoursUntilBorrow(b.borrowDate, period);
+    const hours = hoursUntilBorrow(b.borrowDate, slots);
     if (hours < MIN_NOTICE_HOURS) {
       return res.status(400).json({ error: `Theo nội quy, phải đăng ký trước ít nhất ${MIN_NOTICE_HOURS} giờ so với giờ dạy.` });
     }
@@ -217,17 +223,39 @@ app.post("/api/records", requireAuth, wrap(async (req, res) => {
       const eq = getEquipment(it?.equipmentId);
       const qty = Math.floor(Number(it?.quantity));
       if (!eq || !qty || qty < 1 || qty > 100) return res.status(400).json({ error: "Danh sách thiết bị không hợp lệ" });
-      const { available } = availabilityOf(eq, from, to, active);
-      if (available < qty) {
-        return res.status(409).json({ error: `"${eq.name}" chỉ còn ${available} trong khoảng ngày này (bạn cần ${qty}).` });
+      const av = availabilityOf(eq, from, to, active, slots);
+      if (av.available < qty) {
+        const who = av.conflicts.slice(0, 3).map((c) => `${c.teacherName} (lớp ${c.className}, ${c.quantity})`).join(", ");
+        return res.status(409).json({ error: `Trùng lịch: “${eq.name}” chỉ còn ${av.available}/${av.stock} lúc ${av.at} (bạn cần ${qty})${who ? `. Đã đăng ký trước: ${who}` : ""}.` });
       }
       items.push({ equipmentId: eq.id, quantity: qty });
     }
   }
 
+  // Phòng bộ môn (nếu chọn): không cho hai phiếu dùng cùng phòng ở cùng tiết
+  let room = null;
+  if (b.roomId) {
+    room = await db.collection("rooms").get(String(b.roomId));
+    if (!room) return res.status(400).json({ error: "Phòng không tồn tại" });
+    const active = await db.records.findActive();
+    const cells = requestCells(from, to, slots);
+    const clash = active.find((r) => r.roomId === room.id && cells.some(([d, sl]) => recordCovers(r, d, sl)));
+    if (clash) return res.status(409).json({ error: `Trùng lịch phòng: ${room.name} đã được ${clash.teacherName} (lớp ${clash.className}) đăng ký ${clash.borrowDate} ${clash.period}.` });
+  }
+
+  // Số phiếu: PM<năm học>-<số thứ tự trong năm học>
+  const year = schoolYearOf();
+  const seq = (await db.records.findAll()).filter((r) => r.code?.startsWith(`PM${year.slice(2, 4)}${year.slice(7, 9)}-`)).length + 1;
+
   // id luôn do server tạo, không nhận từ trình duyệt
   const newRecord = {
     id: newId(),
+    code: `PM${year.slice(2, 4)}${year.slice(7, 9)}-${String(seq).padStart(4, "0")}`,
+    group: subject.group || "",
+    lessonName,
+    usageType,
+    periods: slots,
+    ...(room && { roomId: room.id, roomName: room.name }),
     subjectId: subject.id,
     subjectName: subject.name,
     teacherName,
@@ -277,7 +305,8 @@ app.patch("/api/records/:id/status", requireAdmin, wrap(async (req, res) => {
   }
   if (existing.status === "Trả" && status !== "Trả") {
     // Hoàn tác trả: trả lại số lượng kho, xóa điểm đã trừ của phiếu này
-    await undoReturn(existing);
+    const u = await undoReturn(existing);
+    if (u.error) return res.status(u.status || 400).json({ error: u.error });
     changes.returnReport = null;
     changes.returnedAt = null;
   }
@@ -371,6 +400,14 @@ app.use((err, req, res, next) => {
 // Mở cổng TRƯỚC để Render nhận ra dịch vụ đang chạy (tránh lỗi "no open ports detected")
 app.listen(PORT, () => {
   console.log(`Server: http://localhost:${PORT} | Lưu trữ: ${db.kind}`);
+}).on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`\n❌ Cổng ${PORT} đang bị một chương trình khác chiếm (thường là một cửa sổ backend khác vẫn đang chạy).`);
+    console.error("   Cách xử lý: đóng terminal backend cũ, hoặc chạy trong PowerShell:");
+    console.error(`   Get-NetTCPConnection -LocalPort ${PORT} | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }\n`);
+    process.exit(1);
+  }
+  throw err;
 });
 
 // Kết nối CSDL ở nền; lỗi thì ghi log rõ ràng và thử lại (5s, 10s, ... tối đa 60s), không làm sập server

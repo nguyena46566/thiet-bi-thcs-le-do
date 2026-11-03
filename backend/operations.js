@@ -8,8 +8,10 @@
  */
 import db, { newId } from "./database.js";
 import { SUBJECTS } from "./chatTools.js";
-import { parseDate, formatDate, todayVN, getEquipment, availabilityOf } from "./equipment.js";
-import { serial, applyDelta, refreshCache, withDerived, equipmentCol, purchaseCol, penaltyCol, int, str, schoolYearOf } from "./inventory.js";
+import { parseDate, formatDate, todayVN, getEquipment, availabilityOf, normalizeSlots, slotLabel, requestCells, recordCovers, recordSlots } from "./equipment.js";
+import { serial, applyDelta, refreshCache, withDerived, equipmentCol, purchaseCol, penaltyCol, int, str, schoolYearOf, createLossReport, listLossReports, confirmLoss, rejectLoss } from "./inventory.js";
+import { principalConfigured } from "./auth.js";
+import notifications from "./notifications.js";
 import { sendReminderEmail } from "./mailer.js";
 
 const auditCol = () => db.collection("audits");
@@ -109,10 +111,16 @@ export function finishAudit(id, user) {
       row.diff = diff;
       row.out = lent;
       if (diff < 0) missing += -diff; else surplus += diff;
+      // Thiếu khi kiểm kê: ghi "chờ xác nhận mất", Ban giám hiệu xác nhận mới tính là mất
+      if (diff < 0) {
+        const lr = await createLossReport({ equipmentId: eq.id, name: eq.name, quantity: -diff, unitPrice: eq.unitPrice || 0,
+          source: "audit", auditId: a.id, auditTitle: a.title, note: row.note || "", reportedBy: user.name });
+        row.lossReportId = lr.id;
+      }
       await equipmentCol().update(eq.id, {
         qtyGood: row.countGood + lent,
         qtyBroken: countBroken,
-        qtyLost: (eq.qtyLost || 0) + Math.max(0, -diff),
+        qtyLostPending: (eq.qtyLostPending || 0) + Math.max(0, -diff),
         lastAuditAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
@@ -292,7 +300,14 @@ export async function buildReport(q) {
       disposedCount: disposals.reduce((s, d) => s + d.quantity, 0), disposedValue: disposals.reduce((s, d) => s + d.value, 0),
     },
     bySubject, byEquipment, unusedEquipment, manualRecords: manual, byTeacher, byMonth, invBySubject,
-    records: records.map((r) => ({ borrowDate: r.borrowDate, returnDate: r.returnDate, teacherName: r.teacherName, className: r.className, subject: r.subjectName, period: r.period,
+    usageBySubject: SUBJECTS.map((s) => {
+      const list = records.filter((r) => r.subjectId === s.id && r.status !== "Từ chối");
+      const n = (t) => list.filter((r) => (r.usageType || "Biểu diễn") === t).reduce((a, r) => a + Math.max(1, recordSlots(r).length), 0);
+      return { subjectId: s.id, name: s.name, group: s.group, practice: n("Thực hành"), demo: n("Biểu diễn") };
+    }),
+    records: records.map((r) => ({ code: r.code || "", createdOn: formatDate(parseDate(new Date(r.createdAt).toLocaleDateString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" }))),
+      group: r.group || SUBJECTS.find((s) => s.id === r.subjectId)?.group || "", lessonName: r.lessonName || r.periodPPCT || "", usageType: r.usageType || "", roomName: r.roomName || "",
+      borrowDate: r.borrowDate, returnDate: r.returnDate, teacherName: r.teacherName, className: r.className, subject: r.subjectName, period: r.period,
       equipment: r.equipment, quantity: r.quantity, status: r.status, lateDays: r.returnReport?.lateDays || 0,
       damaged: (r.returnReport?.items || []).reduce((a, x) => a + x.damaged, 0), lost: (r.returnReport?.items || []).reduce((a, x) => a + x.lost, 0) })),
     inventory: inventory.map((e) => ({ code: e.id, unit: e.unit || "", origin: e.origin || "", yearInUse: e.yearInUse || "", fundSource: e.fundSource || "", name: e.name, subject: subjectName(e.subjectId), good: e.qtyGood, broken: e.qtyBroken, repair: e.qtyRepair, lost: e.qtyLost, disposed: e.qtyDisposed || 0, unitPrice: e.unitPrice || 0, location: e.location })),
@@ -385,6 +400,109 @@ export function registerOperationRoutes(app, { requireAuth, requireAdmin, wrap }
   app.get("/api/maintenance", requireAdmin, wrap(async (req, res) => res.json(await listMaintenance())));
   app.post("/api/maintenance", requireAdmin, wrap(async (req, res) => send(res, await createMaintenance(req.body || {}, req.session.user), 201)));
   app.post("/api/maintenance/:id/complete", requireAdmin, wrap(async (req, res) => send(res, await completeMaintenance(req.params.id, req.body || {}, req.session.user))));
+
+  // Báo mất thiết bị: chỉ Ban giám hiệu (PRINCIPAL_EMAILS) xác nhận; chưa cấu hình thì quản trị viên xác nhận
+  const canConfirm = (u) => (principalConfigured() ? !!u?.isPrincipal : !!u?.isAdmin);
+  app.get("/api/loss-reports", requireAdmin, wrap(async (req, res) => res.json({ reports: await listLossReports(), canConfirm: canConfirm(req.session.user), principalConfigured: principalConfigured() })));
+  for (const [path, fn] of [["confirm", confirmLoss], ["reject", rejectLoss]]) {
+    app.post(`/api/loss-reports/:id/${path}`, requireAdmin, wrap(async (req, res) => {
+      if (!canConfirm(req.session.user)) return res.status(403).json({ error: "Chỉ Ban giám hiệu được xác nhận thiết bị bị mất" });
+      send(res, await fn(req.params.id, req.session.user, req.body?.note));
+    }));
+  }
+
+  // Danh sách thiết bị của một môn kèm số còn trống theo ngày (cho form đăng ký mượn)
+  app.get("/api/inventory/available", requireAuth, wrap(async (req, res) => {
+    const from = parseDate(req.query.from) || todayVN();
+    const to = parseDate(req.query.to) || from;
+    const active = await db.records.findActive();
+    const slots = normalizeSlots(String(req.query.periods || "").split(","));
+    const list = (await refreshCache()).filter((e) => !req.query.subjectId || e.subjectId === req.query.subjectId)
+      .map((e) => ({ id: e.id, name: e.name, grades: e.grades || [], unit: e.unit || "", location: e.location || "", good: e.qtyGood,
+        available: availabilityOf(e, from, to < from ? from : to, active, slots).available }));
+    res.json(list);
+  }));
+
+  // ---------- Phòng bộ môn ----------
+  const roomCol = () => db.collection("rooms");
+  const validRoom = (b) => {
+    const name = str(b?.name, 80);
+    if (!name) return { error: "Tên phòng không được để trống" };
+    return { value: { name, kind: str(b.kind, 60), subjectIds: (Array.isArray(b.subjectIds) ? b.subjectIds : []).filter((x) => SUBJECTS.some((s) => s.id === x)), note: str(b.note, 200) } };
+  };
+  app.get("/api/rooms", requireAuth, wrap(async (req, res) => res.json((await roomCol().all()).sort((a, b) => a.name.localeCompare(b.name, "vi")))));
+  app.post("/api/rooms", requireAdmin, wrap(async (req, res) => {
+    const v = validRoom(req.body); if (v.error) return res.status(400).json(v);
+    res.status(201).json(await roomCol().insert({ id: newId(), ...v.value, createdAt: new Date().toISOString() }));
+  }));
+  app.patch("/api/rooms/:id", requireAdmin, wrap(async (req, res) => {
+    if (!(await roomCol().get(req.params.id))) return res.status(404).json({ error: "Không tìm thấy phòng" });
+    const v = validRoom(req.body); if (v.error) return res.status(400).json(v);
+    res.json(await roomCol().update(req.params.id, v.value));
+  }));
+  app.delete("/api/rooms/:id", requireAdmin, wrap(async (req, res) => {
+    const active = await db.records.findActive();
+    if (active.some((r) => r.roomId === req.params.id)) return res.status(409).json({ error: "Phòng đang có lịch đăng ký, chưa xóa được" });
+    res.json(await roomCol().remove(req.params.id));
+  }));
+  // Phòng trống / bận theo ngày + tiết (cho form đăng ký)
+  app.get("/api/rooms/availability", requireAuth, wrap(async (req, res) => {
+    const from = parseDate(req.query.from) || todayVN();
+    const to = parseDate(req.query.to) || from;
+    const cells = requestCells(from, to < from ? from : to, String(req.query.periods || "").split(","));
+    const active = await db.records.findActive();
+    const rooms = await roomCol().all();
+    res.json(rooms.map((rm) => {
+      const clash = active.find((r) => r.roomId === rm.id && cells.some(([d, sl]) => recordCovers(r, d, sl)));
+      return { ...rm, busy: !!clash, busyBy: clash ? `${clash.teacherName} (${clash.className}, ${clash.period})` : "" };
+    }).sort((a, b) => a.name.localeCompare(b.name, "vi")));
+  }));
+  // Sổ nhật ký sử dụng phòng bộ môn
+  app.get("/api/rooms/:id/log", requireAdmin, wrap(async (req, res) => {
+    const rm = await roomCol().get(req.params.id);
+    if (!rm) return res.status(404).json({ error: "Không tìm thấy phòng" });
+    const from = parseDate(req.query.from), to = parseDate(req.query.to);
+    const list = (await db.records.findAll()).filter((r) => r.roomId === rm.id && r.status !== "Từ chối" && (!from || parseDate(r.borrowDate) >= from) && (!to || parseDate(r.borrowDate) <= to))
+      .sort((a, b) => parseDate(a.borrowDate) - parseDate(b.borrowDate));
+    res.json({ room: rm, entries: list.map((r) => ({ date: r.borrowDate, period: r.period, className: r.className, teacherName: r.teacherName, subject: r.subjectName,
+      lessonName: r.lessonName || r.periodPPCT || "", equipment: r.equipment, status: r.status,
+      condition: r.returnReport ? ((r.returnReport.items || []).map((x) => [x.damaged && `hỏng ${x.damaged}`, x.lost && `mất ${x.lost}`].filter(Boolean).join(", ")).filter(Boolean).join("; ") || "Bình thường") : "" })) });
+  }));
+
+  // ---------- Đề xuất mua sắm ----------
+  const propCol = () => db.collection("proposals");
+  app.get("/api/proposals", requireAuth, wrap(async (req, res) => {
+    const u = req.session.user;
+    const all = await propCol().all();
+    res.json({ proposals: u.isAdmin && req.query.mine !== "1" ? all : all.filter((p) => p.userId === u.id), canDecide: canConfirm(u) });
+  }));
+  app.post("/api/proposals", requireAuth, wrap(async (req, res) => {
+    const u = req.session.user;
+    const items = (Array.isArray(req.body?.items) ? req.body.items : []).slice(0, 30).map((it) => ({
+      name: str(it?.name, 150), subjectId: SUBJECTS.some((s) => s.id === it?.subjectId) ? it.subjectId : "",
+      equipmentId: getEquipment(it?.equipmentId) ? it.equipmentId : null,
+      quantity: int(it?.quantity, 1, 10000), estPrice: int(it?.estPrice ?? 0, 0, 1_000_000_000) ?? 0, reason: str(it?.reason, 300),
+    })).filter((it) => it.name);
+    if (!items.length || items.some((it) => !it.quantity)) return res.status(400).json({ error: "Cần ít nhất một thiết bị, số lượng từ 1 trở lên" });
+    const doc = { id: newId(), status: "Chờ duyệt", items, total: items.reduce((a, it) => a + it.quantity * it.estPrice, 0), purpose: str(req.body?.purpose, 300),
+      userId: u.id, userName: u.name, createdAt: new Date().toISOString() };
+    await propCol().insert(doc);
+    await notifications.createNotification({ type: "system", title: "Đề xuất mua sắm mới", message: `${u.name} đề xuất ${items.length} thiết bị (dự kiến ${doc.total.toLocaleString("vi-VN")} đ)`, userId: u.id, userName: u.name });
+    res.status(201).json(doc);
+  }));
+  app.post("/api/proposals/:id/decide", requireAdmin, wrap(async (req, res) => {
+    if (!canConfirm(req.session.user)) return res.status(403).json({ error: "Chỉ Ban giám hiệu được duyệt đề xuất mua sắm" });
+    const p = await propCol().get(req.params.id);
+    if (!p) return res.status(404).json({ error: "Không tìm thấy đề xuất" });
+    if (p.status !== "Chờ duyệt") return res.status(409).json({ error: "Đề xuất đã được xử lý" });
+    res.json(await propCol().update(p.id, { status: req.body?.approve ? "Đã duyệt" : "Từ chối", decisionNote: str(req.body?.note, 300), decidedBy: req.session.user.name, decidedAt: new Date().toISOString() }));
+  }));
+  app.post("/api/proposals/:id/purchased", requireAdmin, wrap(async (req, res) => {
+    const p = await propCol().get(req.params.id);
+    if (!p) return res.status(404).json({ error: "Không tìm thấy đề xuất" });
+    if (p.status !== "Đã duyệt") return res.status(409).json({ error: "Chỉ đề xuất đã duyệt mới đánh dấu đã mua" });
+    res.json(await propCol().update(p.id, { status: "Đã mua", purchaseNote: str(req.body?.note, 300), purchasedBy: req.session.user.name, purchasedAt: new Date().toISOString() }));
+  }));
 
   app.get("/api/disposals", requireAdmin, wrap(async (req, res) => res.json(await listDisposals())));
   app.post("/api/disposals", requireAdmin, wrap(async (req, res) => send(res, await createDisposal(req.body || {}, req.session.user), 201)));

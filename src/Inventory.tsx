@@ -124,7 +124,7 @@ export function ReturnDialog({ record, subjects, onClose, onDone }: { record: Bo
           <div className="font-semibold">Theo quy chế, khi lưu hệ thống sẽ:</div>
           {lateDays > 0 && <div>• Trả trễ {lateDays} ngày: nhắc nhở nếu là lần đầu trong năm học; từ lần 2 trừ {Math.min(rules.lateMaxPerRecord, lateDays * rules.latePerDay)} điểm.</div>}
           {damaged > 0 && <div>• Làm hỏng {damaged} thiết bị: trừ {damaged * rules.damagePerUnit} điểm.</div>}
-          {lost > 0 && <div>• Làm mất {lost} thiết bị: trừ {lost * rules.lossPerUnit} điểm.</div>}
+          {lost > 0 && <div>• Báo mất {lost} thiết bị: chuyển sang <strong>chờ Ban giám hiệu xác nhận</strong>; khi được xác nhận mới trừ {lost * rules.lossPerUnit} điểm.</div>}
           {comp > 0 && <div>• Giá trị bồi thường theo đơn giá: <strong>{money(comp)}</strong>.</div>}
         </div>
       )}
@@ -214,7 +214,7 @@ export function InventoryTab({ subjects }: { subjects: Subject[] }) {
 
   const shown = (list || []).filter((e) =>
     (!subject || e.subjectId === subject) &&
-    (!onlyIssue || e.qtyBroken > 0 || e.qtyLost > 0 || e.qtyRepair > 0) &&
+    (!onlyIssue || e.qtyBroken > 0 || e.qtyLost > 0 || e.qtyRepair > 0 || (e.qtyLostPending || 0) > 0) &&
     (!q || [e.name, e.location, e.id].some((v) => (v || "").toLowerCase().includes(q.toLowerCase()))))
   const pages = Math.max(1, Math.ceil(shown.length / PAGE))
   const pageItems = shown.slice((pageNo - 1) * PAGE, pageNo * PAGE)
@@ -273,7 +273,7 @@ export function InventoryTab({ subjects }: { subjects: Subject[] }) {
                       <td className="px-3 py-2.5 font-semibold text-green-700">{e.qtyGood}</td>
                       <td className={`px-3 py-2.5 ${e.qtyBroken ? "text-amber-700 font-semibold" : "text-gray-400"}`}>{e.qtyBroken}</td>
                       <td className={`px-3 py-2.5 ${e.qtyRepair ? "text-amber-700 font-semibold" : "text-gray-400"}`}>{e.qtyRepair}</td>
-                      <td className={`px-3 py-2.5 ${e.qtyLost ? "text-rose-700 font-semibold" : "text-gray-400"}`}>{e.qtyLost}</td>
+                      <td className={`px-3 py-2.5 ${e.qtyLost ? "text-rose-700 font-semibold" : "text-gray-400"}`}>{e.qtyLost}{e.qtyLostPending ? <span className="block text-[10px] text-amber-700 font-semibold whitespace-nowrap">+{e.qtyLostPending} chờ xác nhận</span> : null}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-gray-600">{e.unitPrice ? money(e.unitPrice) : <span className="text-gray-300">chưa có</span>}</td>
                       <td className="px-3 py-2.5 text-xs text-gray-500 min-w-[140px]">{e.location}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap">

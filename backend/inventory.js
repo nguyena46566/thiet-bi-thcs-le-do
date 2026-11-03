@@ -6,6 +6,7 @@
  *  - Điểm thi đua giáo viên theo quy chế (trừ điểm trả trễ, làm hỏng, làm mất; khóa khi dưới ngưỡng)
  */
 import db, { newId } from "./database.js";
+import notifications from "./notifications.js";
 import { SUBJECTS } from "./chatTools.js";
 import { setEquipmentCatalog, loadSeedEquipment, parseDate, todayVN, formatDate } from "./equipment.js";
 
@@ -22,6 +23,7 @@ export const RULES = {
 const equipmentCol = () => db.collection("equipment");
 const purchaseCol = () => db.collection("purchases");
 const penaltyCol = () => db.collection("penalties");
+const lossCol = () => db.collection("lossreports");
 
 // Các thao tác thay đổi số lượng chạy lần lượt, tránh hai yêu cầu cùng sửa một thiết bị
 let chain = Promise.resolve();
@@ -43,6 +45,7 @@ function withDerived(eq) {
   if (eq.qtyBroken) parts.push(`hỏng ${eq.qtyBroken}`);
   if (eq.qtyRepair) parts.push(`đang sửa ${eq.qtyRepair}`);
   if (eq.qtyLost) parts.push(`mất ${eq.qtyLost}`);
+  if (eq.qtyLostPending) parts.push(`chờ xác nhận mất ${eq.qtyLostPending}`);
   return { ...eq, stock: eq.qtyGood, condition: parts.join(", ") };
 }
 
@@ -312,20 +315,26 @@ export function processReturn(record, body, admin) {
       penalties.push(await addPenalty({ ...who, kind: "late", points: pts, lateDays,
         reason: priorLate === 0 ? `Trả trễ ${lateDays} ngày (nhắc nhở lần 1, không trừ điểm)` : `Trả trễ ${lateDays} ngày (lần ${priorLate + 1})` }));
     }
+    const lossReportIds = [];
     for (const it of items) {
-      await applyDelta(it.equipmentId, { qtyGood: -(it.damaged + it.lost), qtyBroken: it.damaged, qtyLost: it.lost });
+      // Thiết bị báo mất chưa tính là mất ngay: chờ Ban giám hiệu xác nhận
+      await applyDelta(it.equipmentId, { qtyGood: -(it.damaged + it.lost), qtyBroken: it.damaged, qtyLostPending: it.lost });
+      if (it.lost) {
+        it.lostStatus = "Chờ xác nhận";
+        const lr = await createLossReport({ equipmentId: it.equipmentId, name: it.name, quantity: it.lost, unitPrice: it.unitPrice,
+          source: "return", recordId: record.id, teacherKey: key, teacherName: record.teacherName, note, reportedBy: admin.name });
+        lossReportIds.push(lr.id);
+      }
       if (!key) continue;
       if (it.damaged) penalties.push(await addPenalty({ ...who, kind: "damage", quantity: it.damaged, points: -RULES.damagePerUnit * it.damaged,
         compensation: it.damaged * it.unitPrice, reason: `Làm hỏng ${it.damaged} ${it.name}` }));
-      if (it.lost) penalties.push(await addPenalty({ ...who, kind: "loss", quantity: it.lost, points: -RULES.lossPerUnit * it.lost,
-        compensation: it.lost * it.unitPrice, reason: `Làm mất ${it.lost} ${it.name}` }));
     }
     await refreshCache();
     return { value: {
       returnReport: { items, note, lateDays, returnedOn: formatDate(today),
         pointsDeducted: penalties.reduce((s, p) => s + p.points, 0),
         compensation: penalties.reduce((s, p) => s + (p.compensation || 0), 0),
-        penaltyIds: penalties.map((p) => p.id) },
+        penaltyIds: penalties.map((p) => p.id), lossReportIds },
     } };
   });
 }
@@ -335,15 +344,89 @@ export function undoReturn(record) {
   return serial(async () => {
     const rep = record.returnReport;
     if (!rep) return { value: null };
-    for (const it of rep.items || []) await applyDelta(it.equipmentId, { qtyGood: it.damaged + it.lost, qtyBroken: -it.damaged, qtyLost: -it.lost });
+    if (rep.lossReportIds) {
+      const reports = (await Promise.all(rep.lossReportIds.map((id) => lossCol().get(id)))).filter(Boolean);
+      if (reports.some((r) => r.status !== "Chờ xác nhận")) {
+        return { error: "Báo mất của phiếu này đã được Ban giám hiệu xử lý, không hoàn tác được", status: 409 };
+      }
+      for (const r of reports) await lossCol().remove(r.id);
+      for (const it of rep.items || []) await applyDelta(it.equipmentId, { qtyGood: it.damaged + it.lost, qtyBroken: -it.damaged, qtyLostPending: -it.lost });
+    } else {
+      // Phiếu trả trước khi có quy trình xác nhận mất
+      for (const it of rep.items || []) await applyDelta(it.equipmentId, { qtyGood: it.damaged + it.lost, qtyBroken: -it.damaged, qtyLost: -it.lost });
+    }
     for (const id of rep.penaltyIds || []) await penaltyCol().remove(id);
     await refreshCache();
     return { value: null };
   });
 }
 
+// ---------- Báo mất: chờ Ban giám hiệu xác nhận ----------
+
+async function createLossReport(data) {
+  const doc = { id: newId(), status: "Chờ xác nhận", createdAt: new Date().toISOString(), ...data };
+  await lossCol().insert(doc);
+  await notifications.createNotification({
+    type: "system", title: "Báo mất thiết bị – chờ Ban giám hiệu xác nhận",
+    message: `${data.quantity} ${data.name}${data.source === "audit" ? ` (kiểm kê: ${data.auditTitle || ""})` : ` (phiếu mượn của ${data.teacherName})`}`,
+    recordId: data.recordId || null, userName: data.reportedBy,
+  });
+  return doc;
+}
+
+export async function listLossReports() {
+  return lossCol().all();
+}
+
+/** Cập nhật trạng thái của dòng thiết bị tương ứng trong biên bản trả của phiếu mượn */
+async function markRecordLoss(lr, patch) {
+  if (lr.source !== "return" || !lr.recordId) return;
+  const rec = await db.records.findById(lr.recordId);
+  if (!rec?.returnReport) return;
+  const rep = { ...rec.returnReport, items: rec.returnReport.items.map((it) => (it.equipmentId === lr.equipmentId ? { ...it, ...patch.item } : it)) };
+  if (patch.penalty) {
+    rep.pointsDeducted = (rep.pointsDeducted || 0) + patch.penalty.points;
+    rep.compensation = (rep.compensation || 0) + (patch.penalty.compensation || 0);
+    rep.penaltyIds = [...(rep.penaltyIds || []), patch.penalty.id];
+  }
+  await db.records.update(rec.id, { returnReport: rep });
+}
+
+export function confirmLoss(id, user, note) {
+  return serial(async () => {
+    const lr = await lossCol().get(id);
+    if (!lr) return { error: "Không tìm thấy báo mất", status: 404 };
+    if (lr.status !== "Chờ xác nhận") return { error: "Báo mất này đã được xử lý", status: 409 };
+    await applyDelta(lr.equipmentId, { qtyLostPending: -lr.quantity, qtyLost: lr.quantity });
+    let penalty = null;
+    if (lr.source === "return" && lr.teacherKey) {
+      penalty = await addPenalty({ userId: lr.teacherKey, teacherName: lr.teacherName, recordId: lr.recordId, createdBy: user.name,
+        kind: "loss", quantity: lr.quantity, points: -RULES.lossPerUnit * lr.quantity, compensation: lr.quantity * (lr.unitPrice || 0),
+        reason: `Làm mất ${lr.quantity} ${lr.name} (Ban giám hiệu đã xác nhận)` });
+    }
+    const doc = await lossCol().update(id, { status: "Đã xác nhận mất", decidedBy: user.name, decidedAt: new Date().toISOString(), decisionNote: str(note, 300), penaltyId: penalty?.id || null });
+    await markRecordLoss(lr, { item: { lostStatus: "Đã xác nhận mất" }, penalty });
+    await refreshCache();
+    return { value: doc };
+  });
+}
+
+export function rejectLoss(id, user, note) {
+  return serial(async () => {
+    const lr = await lossCol().get(id);
+    if (!lr) return { error: "Không tìm thấy báo mất", status: 404 };
+    if (lr.status !== "Chờ xác nhận") return { error: "Báo mất này đã được xử lý", status: 409 };
+    // Không mất: thiết bị quay lại nhóm "tốt"
+    await applyDelta(lr.equipmentId, { qtyLostPending: -lr.quantity, qtyGood: lr.quantity });
+    const doc = await lossCol().update(id, { status: "Không mất (đã tìm thấy)", decidedBy: user.name, decidedAt: new Date().toISOString(), decisionNote: str(note, 300) });
+    await markRecordLoss(lr, { item: { lostStatus: "Đã tìm thấy" } });
+    await refreshCache();
+    return { value: doc };
+  });
+}
+
 // Dùng chung cho operations.js (kiểm kê, bảo trì, báo cáo)
-export { serial, applyDelta, refreshCache, withDerived, equipmentCol, purchaseCol, penaltyCol, int, str };
+export { serial, applyDelta, refreshCache, withDerived, equipmentCol, purchaseCol, penaltyCol, int, str, createLossReport };
 
 // ---------- Định tuyến ----------
 

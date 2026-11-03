@@ -33,3 +33,5 @@ services:
         sync: false
       - key: CRON_SECRET
         sync: false
+      - key: PRINCIPAL_EMAILS
+        sync: false

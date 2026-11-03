@@ -88,6 +88,14 @@ export function verifyOAuthState(req, state) {
 /**
  * Check if email is admin
  */
+const emailList = (v) => (v || "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+
+/** Ban giám hiệu (cấp cao nhất): xác nhận thiết bị bị mất. Cấu hình bằng PRINCIPAL_EMAILS. */
+export function isPrincipal(email) {
+  return !!email && emailList(process.env.PRINCIPAL_EMAILS).includes(email.toLowerCase());
+}
+export const principalConfigured = () => emailList(process.env.PRINCIPAL_EMAILS).length > 0;
+
 export function isAdmin(email) {
   if (!email) return false;
   const adminEmails = (process.env.ADMIN_EMAILS || "")
@@ -95,7 +103,8 @@ export function isAdmin(email) {
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
 
-  return adminEmails.includes(email.toLowerCase());
+  // Ban giám hiệu cũng có quyền vào trang quản trị
+  return adminEmails.includes(email.toLowerCase()) || isPrincipal(email);
 }
 
 /**
