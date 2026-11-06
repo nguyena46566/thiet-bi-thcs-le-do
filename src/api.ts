@@ -226,6 +226,8 @@ export interface BorrowDraft {
   borrowDate: string;
   returnDate: string;
   period: string;
+  /** Mã tiết S1..S5, C1..C5 (đăng ký nhanh) */
+  periods?: string[];
   periodPPCT: string;
   notes: string;
   /** Các mục bắt buộc còn thiếu - phải điền nốt trong form trước khi gửi */

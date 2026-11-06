@@ -453,7 +453,7 @@ export function EquipmentPage({ id, isAdmin, loggedIn, login, onBorrow, goHome }
   const [error, setError] = useState("")
   useEffect(() => { if (loggedIn) fetchEquipmentDetail(id).then(setD).catch((e) => setError(e.message)) }, [id, loggedIn])
 
-  const wrap = (children: React.ReactNode) => <main className="pt-24 pb-20 px-4"><div className="max-w-2xl mx-auto">{children}</div></main>
+  const wrap = (children: React.ReactNode) => <main className="pt-20 lg:pt-10 pb-24 px-4 lg:px-10"><div className="max-w-2xl mx-auto">{children}</div></main>
   if (!loggedIn) return wrap(<div className="text-center py-16"><h1 className="text-xl font-bold text-gray-900 mb-2">Đăng nhập để xem thông tin thiết bị</h1><button onClick={login} className={btnPrimary}>Đăng nhập bằng Google</button></div>)
   if (error) return wrap(<div className="text-center py-16"><p className="text-gray-600 mb-3">{error}</p><button onClick={goHome} className={btnGhost}>Về trang chủ</button></div>)
   if (!d) return wrap(<p className="text-sm text-gray-400">Đang tải…</p>)
@@ -534,7 +534,7 @@ export function Dashboard({ go }: { go: (section: string) => void }) {
   )
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-7 gap-3">
         {kpis.map(([l, v, c, s]) => (
           <button key={l} onClick={() => go(s)} className={`text-left border rounded-xl px-4 py-3 hover:shadow-md transition-shadow ${c}`}>
             <div className="text-2xl font-bold truncate">{v}</div><div className="text-xs opacity-80">{l}</div>

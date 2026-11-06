@@ -206,7 +206,7 @@ export default function ChatWidget({
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? "Đóng trợ lý thiết bị" : "Mở trợ lý thiết bị"}
         aria-expanded={open}
-        className="fixed bottom-5 left-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#1a3670] text-white shadow-lg hover:bg-[#15295a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1a3670]"
+        className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#1a3670] text-white shadow-lg hover:bg-[#15295a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1a3670]"
       >
         {open ? (
           <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -220,7 +220,7 @@ export default function ChatWidget({
           role="dialog"
           aria-label="Trợ lý thiết bị"
           onKeyDown={(e) => { if (e.key === "Escape") close() }}
-          className="fixed bottom-24 left-3 right-3 z-50 flex h-[min(34rem,calc(100dvh-8rem))] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl sm:left-5 sm:right-auto sm:w-[23.5rem]"
+          className="fixed bottom-24 left-3 right-3 z-50 flex h-[min(34rem,calc(100dvh-8rem))] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl sm:left-auto sm:right-5 sm:w-[23.5rem]"
         >
           <div className="bg-[#1a3670] px-4 py-3 text-white">
             <p className="text-sm font-bold">Trợ lý thiết bị</p>
