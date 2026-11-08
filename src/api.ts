@@ -73,7 +73,9 @@ export interface Notification {
 }
 // ============ AUTH ============
 export async function fetchCurrentUser(): Promise<User | null> {
-  const res = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
+  // Không chờ vô hạn: Render miễn phí có thể mất tới ~1 phút khi khởi động lại
+  const res = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include", signal: AbortSignal.timeout(25000) });
+  if (res.status === 503 || res.status >= 500) throw new Error("server-starting"); // máy chủ đang khởi động / đang kết nối CSDL
   if (!res.ok) return null;
   const data = await res.json();
   return data.user;

@@ -297,7 +297,8 @@ function HomePage({ setPage, onQuick }: { setPage: (p: Page) => void; onQuick: (
   const [records, setRecords] = useState<BorrowRecord[]>([])
   const [mine, setMine] = useState<BorrowRecord[] | null>(null)
   const [shown, setShown] = useState(8)
-  const [quick, setQuick] = useState({ subjectId: SUBJECTS[0].id, date: vnToIso(tomorrowVN()), slot: "S1" })
+  // Mặc định ngày kia: ngày mai tiết sớm thường không đủ 24 giờ theo nội quy
+  const [quick, setQuick] = useState(() => { const t = todayStart(); t.setDate(t.getDate() + 2); return { subjectId: SUBJECTS[0].id, date: t.toLocaleDateString("sv-SE"), slot: "S1" } })
 
   useEffect(() => { fetchRecords().then(setRecords).catch(console.error) }, [])
   useEffect(() => { if (user) fetchMyRecords().then(setMine).catch(() => setMine([])) }, [user])
@@ -665,7 +666,7 @@ function BorrowForm({ subjectId, subjectName, onCreated, prefill, onPrefillUsed 
                   </div>
                 ))}
               </div>
-              {form.borrowDate && form.returnDate && form.borrowDate !== form.returnDate && <p className="text-xs text-amber-700 mt-1.5">Mượn nhiều ngày: thiết bị được giữ cả ngày trong suốt thời gian mượn.</p>}
+              {form.borrowDate && form.returnDate && form.borrowDate !== form.returnDate && <p className="text-xs text-amber-700 mt-1.5">Mượn nhiều ngày: thiết bị được tính là đang ở chỗ thầy/cô từ tiết đầu của ngày mượn đến tiết cuối của ngày trả, nên lớp khác không mượn được trong khoảng đó. Nếu chỉ dùng trong một ngày, hãy chọn ngày trả bằng ngày mượn.</p>}
             </div>
           </div>
         )}
@@ -771,14 +772,23 @@ function WeekGrid({ records }: { records: BorrowRecord[] }) {
   const monday = todayStart(); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7) + offset * 7)
   const days = [0, 1, 2, 3, 4].map((i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d })
   const active = records.filter((r) => r.status !== "Từ chối")
-  const at = (d: Date, slot: string) => active.filter((r) => {
+  const ORDER = ["S1", "S2", "S3", "S4", "S5", "C1", "C2", "C3", "C4", "C5"]
+  /** "use" = tiết dạy đã chọn; "hold" = thiết bị đang ở chỗ giáo viên (mượn nhiều ngày) nhưng không phải tiết dạy */
+  const kind = (r: BorrowRecord, d: Date, slot: string): "use" | "hold" | null => {
     const bd = parseVN(r.borrowDate), rd = parseVN(r.returnDate)
-    if (!bd || !rd || d < bd || d > rd) return false
-    if (bd.getTime() !== rd.getTime()) return true
+    if (!bd || !rd || d < bd || d > rd) return null
     const sl = recSlots(r)
-    return !sl.length || sl.includes(slot)
-  })
-  const hasAfternoon = days.some((d) => [1, 2, 3, 4, 5].some((n) => at(d, `C${n}`).length))
+    if (!sl.length) return "use"
+    if (sl.includes(slot)) return "use"
+    if (bd.getTime() === rd.getTime()) return null
+    const i = ORDER.indexOf(slot)
+    if (d.getTime() === bd.getTime()) return i >= ORDER.indexOf(sl[0]) ? "hold" : null
+    if (d.getTime() === rd.getTime()) return i <= ORDER.indexOf(sl[sl.length - 1]) ? "hold" : null
+    return "hold"
+  }
+  const at = (d: Date, slot: string) => active.filter((r) => kind(r, d, slot) === "use")
+  const held = (d: Date, slot: string) => active.filter((r) => kind(r, d, slot) === "hold")
+  const hasAfternoon = days.some((d) => [1, 2, 3, 4, 5].some((n) => at(d, `C${n}`).length || held(d, `C${n}`).length))
   const [showPM, setShowPM] = useState(false)
   const rows = [1, 2, 3, 4, 5].map((n) => `S${n}`).concat(showPM || hasAfternoon ? [1, 2, 3, 4, 5].map((n) => `C${n}`) : [])
   const fmt = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`
@@ -792,7 +802,7 @@ function WeekGrid({ records }: { records: BorrowRecord[] }) {
           <p className="text-sm text-gray-500">Tuần {fmt(days[0])}–{fmt(days[4])}. Chọn ô có lớp để xem thiết bị.</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="hidden sm:flex items-center gap-3 text-xs text-gray-500 mr-2"><span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-[#1a3670]" />Đã có lớp</span><span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-300" />Chờ duyệt</span></span>
+          <span className="hidden sm:flex items-center gap-3 text-xs text-gray-500 mr-2"><span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-[#1a3670]" />Đã có lớp</span><span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-300" />Chờ duyệt</span><span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-[#1a3670]/15 border border-[#1a3670]/30" />Đang giữ (mượn nhiều ngày)</span></span>
           <button onClick={() => setOffset(offset - 1)} className="w-9 h-9 rounded-lg bg-gray-100 hover:bg-gray-200" aria-label="Tuần trước">‹</button>
           {offset !== 0 && <button onClick={() => setOffset(0)} className="px-3 h-9 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm">Tuần này</button>}
           <button onClick={() => setOffset(offset + 1)} className="w-9 h-9 rounded-lg bg-gray-100 hover:bg-gray-200" aria-label="Tuần sau">›</button>
@@ -810,6 +820,7 @@ function WeekGrid({ records }: { records: BorrowRecord[] }) {
                 <th className="text-left text-sm font-medium text-gray-600 pr-2 whitespace-nowrap">{slot[0] === "S" ? "" : "Chiều "}Tiết {slot.slice(1)}</th>
                 {days.map((d) => {
                   const list = at(d, slot)
+                  const holding = list.length ? [] : held(d, slot)
                   const key = `${d.getTime()}-${slot}`
                   const pending = list.length > 0 && list.every((r) => r.status === "Chờ duyệt")
                   return (
@@ -818,6 +829,12 @@ function WeekGrid({ records }: { records: BorrowRecord[] }) {
                         <button onClick={() => setPicked(picked?.key === key ? null : { key, list })} aria-expanded={picked?.key === key}
                           className={`w-full h-11 rounded-lg text-sm font-semibold truncate px-2 ${pending ? "bg-amber-100 text-amber-900 hover:bg-amber-200" : "bg-[#1a3670] text-white hover:bg-[#23468e]"} ${picked?.key === key ? "ring-2 ring-offset-1 ring-[#F5B841]" : ""}`}>
                           {[...new Set(list.map((r) => r.className))].join(", ")}
+                        </button>
+                      ) : holding.length ? (
+                        <button onClick={() => setPicked(picked?.key === key ? null : { key, list: holding })} aria-expanded={picked?.key === key}
+                          title="Thiết bị đang ở chỗ giáo viên (mượn nhiều ngày), không phải tiết dạy"
+                          className={`w-full h-11 rounded-lg text-xs font-medium truncate px-2 bg-[#1a3670]/10 text-[#1a3670] border border-dashed border-[#1a3670]/30 hover:bg-[#1a3670]/15 ${picked?.key === key ? "ring-2 ring-offset-1 ring-[#F5B841]" : ""}`}>
+                          đang giữ
                         </button>
                       ) : <div className={`h-11 rounded-lg ${isToday(d) ? "bg-[#1a3670]/[.06]" : "bg-[#F1F3F6]"}`} />}
                     </td>
@@ -1276,7 +1293,7 @@ function readHash(): Page {
 }
 
 function AppContent() {
-  const { loading, user, login } = useAuth()
+  const { loading, user, login, slow, offline } = useAuth()
   // Trang hiện tại lưu trên URL (#vat-li, #admin...) để tải lại trang không bị mất,
   // nút Back của trình duyệt hoạt động và có thể gửi link cho người khác.
   const [page, setPageState] = useState<Page>(readHash)
@@ -1308,6 +1325,7 @@ function AppContent() {
         <div className="text-center">
           <div className="w-10 h-10 border-4 border-[#1a3670] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-sm text-gray-500">Đang tải...</p>
+          {slow && <p className="text-sm text-gray-500 mt-3 max-w-xs mx-auto">Máy chủ đang khởi động lại sau thời gian không có người dùng. Lần mở đầu có thể mất đến 1 phút, trang sẽ tự hiện khi sẵn sàng.</p>}
         </div>
       </div>
     )
@@ -1318,6 +1336,12 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-[#F6F7F9] font-sans lg:pl-64">
       <Sidebar page={page} setPage={setPage} />
+      {offline && (
+        <div role="alert" className="fixed top-14 lg:top-0 inset-x-0 lg:left-64 z-30 bg-amber-50 border-b border-amber-200 text-amber-900 text-sm px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+          <span>Chưa kết nối được máy chủ (có thể đang khởi động hoặc cơ sở dữ liệu đang tạm dừng). Bạn đang xem ở chế độ khách.</span>
+          <button onClick={() => window.location.reload()} className="font-semibold underline">Tải lại</button>
+        </div>
+      )}
       {page === "home" && <HomePage setPage={setPage} onQuick={fillFormFromChat} />}
       {page === "noiquy" && <NoiQuyPage />}
       {page.startsWith("admin") && <AdminPage section={page.split("/")[1]} go={(sec) => setPage(`admin/${sec}`)} />}

@@ -812,9 +812,10 @@ export function LossTab() {
   return (
     <div className="space-y-4">
       <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-900">
-        Thiết bị báo mất (khi trả hoặc khi kiểm kê thiếu) được giữ ở trạng thái <strong>chờ xác nhận</strong>, không cho mượn nhưng chưa tính là mất.
-        Chỉ <strong>Ban giám hiệu</strong> xác nhận mới ghi vào sổ “mất” và trừ điểm thi đua giáo viên (−10 điểm/thiết bị, bồi thường theo đơn giá).
-        {!d.principalConfigured && <span className="block mt-1 text-amber-800">Chưa khai báo tài khoản Ban giám hiệu (biến PRINCIPAL_EMAILS trên máy chủ) nên tạm thời quản trị viên được xác nhận.</span>}
+        Thiết bị báo mất (khi trả hoặc khi kiểm kê thiếu) được giữ ở trạng thái <strong>chờ xác nhận</strong>, không cho mượn nhưng chưa tính là mất.{" "}
+        {d.principalConfigured
+          ? <>Chỉ <strong>Ban giám hiệu</strong> xác nhận mới ghi vào sổ “mất” và trừ điểm thi đua giáo viên (−10 điểm/thiết bị, bồi thường theo đơn giá). Ban giám hiệu nhận <strong>email</strong> mỗi khi có báo mất và có thể xác nhận ngay trong Gmail.</>
+          : <>Khi được xác nhận mới ghi vào sổ “mất” và trừ điểm thi đua giáo viên (−10 điểm/thiết bị, bồi thường theo đơn giá); nếu tìm thấy thì thiết bị quay về nhóm tốt.</>}
         {d.principalConfigured && !d.canConfirm && <span className="block mt-1">Tài khoản của bạn chỉ xem được; việc xác nhận do Ban giám hiệu thực hiện.</span>}
       </div>
       <Err msg={error} />

@@ -7,6 +7,7 @@
  */
 import db, { newId } from "./database.js";
 import notifications from "./notifications.js";
+import { emailLossReport, newEmailToken } from "./principalEmail.js";
 import { SUBJECTS } from "./chatTools.js";
 import { setEquipmentCatalog, loadSeedEquipment, parseDate, todayVN, formatDate } from "./equipment.js";
 
@@ -364,8 +365,10 @@ export function undoReturn(record) {
 // ---------- Báo mất: chờ Ban giám hiệu xác nhận ----------
 
 async function createLossReport(data) {
-  const doc = { id: newId(), status: "Chờ xác nhận", createdAt: new Date().toISOString(), ...data };
+  const doc = { id: newId(), status: "Chờ xác nhận", createdAt: new Date().toISOString(), ...data, ...newEmailToken() };
   await lossCol().insert(doc);
+  // Gửi email cho Ban giám hiệu để xác nhận ngay trong Gmail (không chờ gửi xong)
+  emailLossReport(doc).catch((e) => console.error("[Mailer] Lỗi email báo mất:", e.message));
   await notifications.createNotification({
     type: "system", title: "Báo mất thiết bị – chờ Ban giám hiệu xác nhận",
     message: `${data.quantity} ${data.name}${data.source === "audit" ? ` (kiểm kê: ${data.auditTitle || ""})` : ` (phiếu mượn của ${data.teacherName})`}`,
@@ -404,7 +407,7 @@ export function confirmLoss(id, user, note) {
         kind: "loss", quantity: lr.quantity, points: -RULES.lossPerUnit * lr.quantity, compensation: lr.quantity * (lr.unitPrice || 0),
         reason: `Làm mất ${lr.quantity} ${lr.name} (Ban giám hiệu đã xác nhận)` });
     }
-    const doc = await lossCol().update(id, { status: "Đã xác nhận mất", decidedBy: user.name, decidedAt: new Date().toISOString(), decisionNote: str(note, 300), penaltyId: penalty?.id || null });
+    const doc = await lossCol().update(id, { emailToken: null, status: "Đã xác nhận mất", decidedBy: user.name, decidedAt: new Date().toISOString(), decisionNote: str(note, 300), penaltyId: penalty?.id || null });
     await markRecordLoss(lr, { item: { lostStatus: "Đã xác nhận mất" }, penalty });
     await refreshCache();
     return { value: doc };
@@ -418,7 +421,7 @@ export function rejectLoss(id, user, note) {
     if (lr.status !== "Chờ xác nhận") return { error: "Báo mất này đã được xử lý", status: 409 };
     // Không mất: thiết bị quay lại nhóm "tốt"
     await applyDelta(lr.equipmentId, { qtyLostPending: -lr.quantity, qtyGood: lr.quantity });
-    const doc = await lossCol().update(id, { status: "Không mất (đã tìm thấy)", decidedBy: user.name, decidedAt: new Date().toISOString(), decisionNote: str(note, 300) });
+    const doc = await lossCol().update(id, { emailToken: null, status: "Không mất (đã tìm thấy)", decidedBy: user.name, decidedAt: new Date().toISOString(), decisionNote: str(note, 300) });
     await markRecordLoss(lr, { item: { lostStatus: "Đã tìm thấy" } });
     await refreshCache();
     return { value: doc };

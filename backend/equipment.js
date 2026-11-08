@@ -127,9 +127,15 @@ export function recordSlots(r) {
 export function recordCovers(r, day, slot) {
   const bd = parseDate(r.borrowDate), rd = parseDate(r.returnDate);
   if (!bd || !rd || day < bd || day > rd) return false;
-  if (bd.getTime() !== rd.getTime()) return true;
   const sl = recordSlots(r);
-  return !sl.length || sl.includes(slot);
+  if (!sl.length) return true; // không ghi tiết: giữ cả ngày
+  if (bd.getTime() === rd.getTime()) return sl.includes(slot);
+  // Mượn nhiều ngày: thiết bị ở ngoài phòng thiết bị từ tiết đầu của ngày mượn
+  // đến tiết cuối của ngày trả; các ngày ở giữa giữ cả ngày.
+  const i = ALL_SLOTS.indexOf(slot);
+  if (day.getTime() === bd.getTime()) return i >= ALL_SLOTS.indexOf(sl[0]);
+  if (day.getTime() === rd.getTime()) return i <= ALL_SLOTS.indexOf(sl[sl.length - 1]);
+  return true;
 }
 const daysBetween = (from, to) => { const out = []; for (let t = from.getTime(); t <= to.getTime() && out.length < 400; t += 864e5) out.push(new Date(t)); return out; };
 /** Các (ngày, tiết) mà một yêu cầu mượn cần: một ngày + có tiết -> đúng các tiết đó; còn lại -> mọi tiết */

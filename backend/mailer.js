@@ -168,4 +168,18 @@ export async function sendReminderEmail(record, kind, lateDays = 0) {
   }
 }
 
-export default { sendBorrowNotification, sendStatusEmail, sendReminderEmail };
+/** Gửi một email HTML bất kỳ (dùng cho email xác nhận của Ban giám hiệu) */
+export async function sendHtmlEmail(to, subject, html) {
+  const transport = getTransporter();
+  if (!transport || !to) return false;
+  try {
+    await transport.sendMail({ from: `"Hệ thống Thiết bị THCS Lê Độ" <${process.env.SMTP_USER}>`, to, subject: String(subject).replace(/[\r\n]+/g, " "), html });
+    console.log(`[Mailer] Đã gửi email đến ${to}`);
+    return true;
+  } catch (err) {
+    console.error("[Mailer] Lỗi gửi email:", err.message);
+    return false;
+  }
+}
+
+export default { sendBorrowNotification, sendStatusEmail, sendReminderEmail, sendHtmlEmail };

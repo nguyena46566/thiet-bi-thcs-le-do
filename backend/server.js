@@ -59,6 +59,8 @@ app.use(cors({ origin: FRONTEND_URL || true, credentials: true }));
 // Khi CSDL chưa sẵn sàng: API trả 503 thay vì treo; trang giao diện vẫn tải bình thường
 app.use("/api", (req, res, next) => {
   if (dbReady) return next();
+  // Bấm đăng nhập lúc máy chủ chưa sẵn sàng: quay về trang chủ thay vì hiện lỗi dạng JSON
+  if (req.path.startsWith("/auth/google")) return res.redirect("/?error=server_starting");
   res.status(503).json({ error: "Máy chủ đang kết nối cơ sở dữ liệu, vui lòng thử lại sau ít giây." });
 });
 app.use(express.json({ limit: "100kb" }));
