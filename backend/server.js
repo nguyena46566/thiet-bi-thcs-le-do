@@ -12,18 +12,22 @@ import {
   verifyOAuthState,
   isAdmin,
   isPrincipal,
+  principalConfigured,
   requireAuth,
   requireAdmin,
 } from "./auth.js";
 import notifications from "./notifications.js";
 import { initInventory, registerInventoryRoutes, processReturn, undoReturn, scoreOf, RULES, schoolYearOf } from "./inventory.js";
 import { registerOperationRoutes, startReminderScheduler } from "./operations.js";
+import { initMinlist, registerMinlistRoutes } from "./minlist.js";
+import { registerPlanningRoutes } from "./planning.js";
+import { listInventory } from "./inventory.js";
 import { sendBorrowNotification, sendStatusEmail } from "./mailer.js";
 import { createChatRouter } from "./chat.js";
 import { SUBJECTS } from "./chatTools.js";
 import {
   parseDate, formatDate, hoursUntilBorrow, MIN_NOTICE_HOURS,
-  getEquipment, availabilityOf, normalizeSlots, slotLabel, requestCells, recordCovers,
+  getEquipment, availabilityOf, normalizeSlots, slotLabel, requestCells, recordCovers, isExpired,
 } from "./equipment.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -225,6 +229,7 @@ app.post("/api/records", requireAuth, wrap(async (req, res) => {
       const eq = getEquipment(it?.equipmentId);
       const qty = Math.floor(Number(it?.quantity));
       if (!eq || !qty || qty < 1 || qty > 100) return res.status(400).json({ error: "Danh sách thiết bị không hợp lệ" });
+      if (isExpired(eq)) return res.status(409).json({ error: `“${eq.name}” đã hết hạn sử dụng (${eq.expiry}), không cho mượn.` });
       const av = availabilityOf(eq, from, to, active, slots);
       if (av.available < qty) {
         const who = av.conflicts.slice(0, 3).map((c) => `${c.teacherName} (lớp ${c.className}, ${c.quantity})`).join(", ");
@@ -245,6 +250,11 @@ app.post("/api/records", requireAuth, wrap(async (req, res) => {
     if (clash) return res.status(409).json({ error: `Trùng lịch phòng: ${room.name} đã được ${clash.teacherName} (lớp ${clash.className}) đăng ký ${clash.borrowDate} ${clash.period}.` });
   }
 
+  // R11: thiết bị giá trị cao mượn nhiều ngày cần duyệt đặc biệt
+  const HIGH_VALUE = Number(process.env.HIGH_VALUE_VND) || 5_000_000;
+  const multiDay = from.getTime() !== to.getTime();
+  const highItems = multiDay ? (items || []).map((it) => getEquipment(it.equipmentId)).filter((e) => e && (e.highValue || (e.unitPrice || 0) >= HIGH_VALUE)) : [];
+
   // Số phiếu: PM<năm học>-<số thứ tự trong năm học>
   const year = schoolYearOf();
   const seq = (await db.records.findAll()).filter((r) => r.code?.startsWith(`PM${year.slice(2, 4)}${year.slice(7, 9)}-`)).length + 1;
@@ -257,6 +267,7 @@ app.post("/api/records", requireAuth, wrap(async (req, res) => {
     lessonName,
     usageType,
     periods: slots,
+    ...(highItems.length && { needsSpecialApproval: true, specialReason: `Mượn nhiều ngày thiết bị giá trị cao: ${highItems.map((e) => e.name).join(", ")}` }),
     ...(room && { roomId: room.id, roomName: room.name }),
     subjectId: subject.id,
     subjectName: subject.name,
@@ -298,6 +309,15 @@ app.patch("/api/records/:id/status", requireAdmin, wrap(async (req, res) => {
 
   const changes = { status, updatedAt: new Date().toISOString() };
   if (status === "Từ chối") changes.adminNote = reason;
+  if (status === "Mượn" && existing.status === "Chờ duyệt") {
+    if (existing.needsSpecialApproval) {
+      if (principalConfigured() && !req.session.user.isPrincipal) return res.status(403).json({ error: "Phiếu mượn nhiều ngày thiết bị giá trị cao: chỉ Ban giám hiệu được duyệt" });
+      const note = str(req.body?.specialApprovalNote, 300);
+      if (!note) return res.status(409).json({ error: existing.specialReason + ". Cần ghi xác nhận đã được Ban giám hiệu đồng ý.", needsSpecialApproval: true });
+      changes.specialApproval = { note, by: req.session.user.name, at: changes.updatedAt };
+    }
+    changes.approvedAt = changes.updatedAt; changes.approvedBy = req.session.user.name;
+  }
   if (status === "Trả" && existing.status !== "Trả") {
     changes.returnedAt = changes.updatedAt;
     // Ghi nhận hỏng / mất, tính điểm trả trễ
@@ -377,6 +397,10 @@ app.use("/api/chat", createChatRouter({ requireAuth }));
 registerInventoryRoutes(app, { requireAuth, requireAdmin, wrap });
 // ============ KIỂM KÊ, BẢO TRÌ, BÁO CÁO, NHẮC HẠN TRẢ ============
 registerOperationRoutes(app, { requireAuth, requireAdmin, wrap });
+// ============ DANH MỤC THIẾT BỊ TỐI THIỂU (TT 38/2021) ============
+registerMinlistRoutes(app, { requireAdmin, wrap, getInventory: listInventory });
+// ============ KẾ HOẠCH NĂM HỌC, QUYẾT ĐỊNH THÀNH LẬP TỔ / HỘI ĐỒNG ============
+registerPlanningRoutes(app, { requireAdmin, wrap });
 
 app.use("/api", (req, res) => res.status(404).json({ error: "Không tìm thấy API" }));
 
@@ -421,6 +445,7 @@ async function connectDatabase(attempt = 1) {
       new Promise((_, reject) => setTimeout(() => reject(new Error(`quá ${DB_INIT_TIMEOUT_MS / 1000} giây không phản hồi`)), DB_INIT_TIMEOUT_MS)),
     ]);
     await initInventory(); // khởi tạo kho thiết bị (lần đầu chép từ catalog/equipment.json)
+    await initMinlist(); // nạp danh mục tối thiểu đã có (Ngữ văn, Toán, Ngoại ngữ)
     dbReady = true;
     dbError = "";
     console.log(`[DB] Kết nối ${db.kind} thành công${attempt > 1 ? ` sau ${attempt} lần thử` : ""}`);

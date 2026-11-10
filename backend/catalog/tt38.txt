@@ -1,0 +1,837 @@
+# Danh mục thiết bị dạy học tối thiểu cấp THCS – Thông tư 38/2021/TT-BGDĐT (chép từ văn bản)
+# Cú pháp: =Môn | #Nhóm | @Chủ đề | %lớp mặc định | dòng: STT|Tên thiết bị|Đối tượng (G/H/GH)|Đơn vị|Số lượng|Lớp|Ghi chú
+# (Ngữ văn, Toán, Ngoại ngữ lựa chọn 1 đã có sẵn trong minlist.js)
+
+=Ngoại ngữ
+#II. Hệ thống thiết bị dạy học ngoại ngữ chuyên dụng (lựa chọn 2)
+%
+II.1|Máy chiếu đa năng (hoặc Màn hình hiển thị)|G|Chiếc|01||Trang bị trong 01 phòng học bộ môn; trường chọn 1 trong 3 phương án
+II.2|Thiết bị âm thanh đa năng di động|G|Bộ|01||Lựa chọn 2
+II.3|Phụ kiện (hệ thống cáp điện, cáp tín hiệu)|GH|Bộ|01||Lựa chọn 2
+II.4|Bộ học liệu điện tử|G|Bộ|01/GV||Lựa chọn 2
+II.5|Thiết bị cho học sinh (khối điều khiển, tai nghe có micro)|H|Bộ|01/HS||Lựa chọn 2
+II.6.1|Bộ máy vi tính để bàn/hoặc máy tính xách tay|G|Bộ|01/GV||Lựa chọn 2
+II.6.2|Khối thiết bị điều khiển của giáo viên|G|Bộ|01/GV||Lựa chọn 2
+II.7|Bàn, ghế dùng cho giáo viên|G|Bộ|01/GV||Lựa chọn 2
+II.8|Bàn, ghế dùng cho học sinh|H|Bộ|01/HS||Lựa chọn 2; nơi chưa có điều kiện có thể dùng 01 bộ/02 HS
+#III. Hệ thống thiết bị dạy học ngoại ngữ chuyên dụng có máy tính của học sinh (lựa chọn 3)
+III.1|Thiết bị dạy cho giáo viên (máy tính, khối/phần mềm điều khiển, tai nghe có micro)|G|Bộ|01/GV||Lựa chọn 3
+III.2|Thiết bị cho học sinh (máy tính, khối/phần mềm điều khiển, tai nghe có micro)|H|Bộ|01/HS||Lựa chọn 3
+III.3|Máy chiếu đa năng hoặc Màn hình hiển thị|G|Chiếc|01||Lựa chọn 3
+III.4|Thiết bị âm thanh đa năng di động|G|Bộ|01||Lựa chọn 3
+III.5|Phụ kiện (cáp điện, cáp mạng)|GH|Bộ|01||Lựa chọn 3
+III.6|Bộ học liệu điện tử|G|Bộ|01/GV||Lựa chọn 3
+III.7|Bàn, ghế dùng cho giáo viên|G|Bộ|01/GV||Lựa chọn 3
+III.8|Bàn, ghế dùng cho học sinh|H|Bộ|01/HS||Lựa chọn 3; nơi chưa có điều kiện có thể dùng 01 bộ/02 HS
+
+=Giáo dục công dân
+#A. Tranh ảnh
+@Chủ đề 1: Yêu nước
+1.1|Bộ tranh về truyền thống gia đình, dòng họ (03 tờ)|G|Bộ|01/GV|6, 7
+1.2|Tranh về truyền thống quê hương|G|Tờ|01/GV|7
+1.3|Bộ tranh về truyền thống dân tộc Việt Nam (03 tờ)|G|Bộ|01/GV|8
+@Chủ đề 2: Nhân ái
+2.1|Bộ tranh về tình yêu thương con người (05 tờ)|G|Bộ|01/GV|6, 7
+@Chủ đề 3: Chăm chỉ
+3.1|Bộ tranh về sự siêng năng, kiên trì (02 tờ)|G|Bộ|01/GV|6
+3.2|Tranh về việc học tập tự giác tích cực của HS|G|Tờ|01/GV|7
+3.3|Tranh thể hiện lao động cần cù, sáng tạo|G|Tờ|01/GV|8
+@Chủ đề 4: Trách nhiệm
+4.1|Bộ tranh về bảo vệ môi trường và tài nguyên thiên nhiên (02 tờ)|G|Bộ|01/GV|8
+@Chủ đề 5: Kĩ năng nhận thức, quản lí bản thân
+5.1|Tranh về cách ứng phó với tình huống căng thẳng|G|Tờ|01/GV|7
+5.2|Bộ tranh về xác định mục tiêu cá nhân của HS (02 tờ)|G|Bộ|01/GV|8
+@Chủ đề 6: Kĩ năng tự bảo vệ
+6.1|Bộ tranh hướng dẫn phòng tránh và ứng phó với các tình huống nguy hiểm (03 tờ)|G|Bộ|01/GV|6
+6.2|Tranh về phòng chống bạo lực học đường|G|Tờ|01/GV|7
+6.3|Tranh về phòng chống bạo lực gia đình|G|Tờ|01/GV|8
+6.4|Tranh về thích ứng với những thay đổi|G|Tờ|01/GV|9
+@Chủ đề 7: Hoạt động tiêu dùng
+7.1|Bộ tranh về thực hiện lối sống tiết kiệm (02 tờ)|G|Bộ|01/GV|6
+7.2|Tranh thể hiện hoạt động quản lí tiền của HS|G|Tờ|01/GV|7
+@Chủ đề 8: Quyền và nghĩa vụ công dân
+8.1|Tranh mô phỏng mối quan hệ giữa nhà nước và công dân|G|Tờ|01/GV|6
+8.2|Bộ tranh thể hiện các nhóm quyền trẻ em (04 tờ)|G|Bộ|01/GV|6
+8.3|Tranh về tệ nạn xã hội (phòng chống ma túy)|G|Tờ|01/GV|7
+8.4|Tranh về phòng ngừa tai nạn vũ khí, cháy nổ và các chất độc hại|G|Tờ|01/GV|8
+#B. Video/clip
+@
+B.1|Video/clip về HS tham gia các hoạt động cộng đồng|G|Bộ|01/GV|9
+B.2|Video/clip về tôn trọng sự thật|G|Bộ|01/GV|6
+B.3|Video/clip về bảo vệ lẽ phải|G|Bộ|01/GV|8
+B.4|Video/clip về tình huống tự lập|G|Bộ|01/GV|6
+B.5|Video/clip về tình huống giữ chữ tín|G|Bộ|01/GV|6
+B.6|Video/clip về bảo tồn di sản văn hóa|G|Bộ|01/GV|7
+B.7|Video/clip về bảo vệ hòa bình|G|Bộ|01/GV|9
+B.8|Video/clip về tiết kiệm|G|Bộ|01/GV|6
+B.9|Video/clip về đăng kí khai sinh|G|Bộ|01/GV|6
+#C. Dụng cụ
+C.1|Bộ dụng cụ thực hành tự nhận thức bản thân (gương méo, gương lồi, bộ thẻ màu)|GH|Bộ|01/6HS|6
+C.2|Bộ dụng cụ cho HS thực hành ứng phó với các tình huống nguy hiểm|GH|Bộ|02/GV|6
+C.3|Bộ dụng cụ thực hành tiết kiệm (06 lọ nhựa chia nhu cầu chi tiêu)|GH|Bộ|01/6HS|6, 7, 8, 9
+
+=Lịch sử và Địa lí
+#A. Phân môn Lịch sử – Lớp 6
+%6
+@Tại sao cần học Lịch sử
+LS6.1|Phim tư liệu mô tả việc khai quật một di chỉ khảo cổ học|GH|Bộ|01/GV
+LS6.2|Tranh một tờ lịch bloc có đủ thông tin về thời gian theo Dương lịch và Âm lịch|GH|Tờ|08/GV
+@Thời nguyên thủy
+LS6.3|Lược đồ một số di chỉ khảo cổ học tiêu biểu ở Đông Nam Á và Việt Nam|GH|Bộ|01/GV
+LS6.4|Phim mô phỏng đời sống loài người thời nguyên thủy|GH|Bộ|01/GV
+@Xã hội cổ đại
+LS6.5|Lược đồ thế giới cổ đại|GH|Bộ|01/GV
+@Đông Nam Á từ khoảng thời gian giáp Công nguyên đến thế kỷ X
+LS6.6|Lược đồ Đông Nam Á và các vương quốc cổ ở Đông Nam Á|GH|Tờ|01/GV
+LS6.7|Phim tài liệu về một số thành tựu văn minh Đông Nam Á|GH|Bộ|01/GV
+@Việt Nam từ khoảng thế kỷ VII TCN đến thế kỷ X
+LS6.8|Phim thể hiện đời sống xã hội và phong tục của người Văn Lang, Âu Lạc|GH|Bộ|01/GV
+LS6.9|Lược đồ thể hiện Chiến thắng Bạch Đằng năm 938|GH|Tờ|01/GV
+LS6.10|Phim thể hiện một số cuộc khởi nghĩa tiêu biểu thời kỳ Bắc thuộc và Chiến thắng Bạch Đằng năm 938|GH|Bộ|01/GV
+LS6.11|Phim về đời sống cư dân, phong tục, văn hóa của các vương quốc cổ Champa và Phù Nam|GH|Bộ|01/GV
+#A. Phân môn Lịch sử – Lớp 7
+%7
+@Tây Âu từ thế kỷ V đến thế kỷ XVI
+LS7.1|Lược đồ thể hiện một số cuộc phát kiến địa lý, thế kỷ XV, XVI|GH|Tờ|01/GV
+LS7.2|Phim tư liệu về Văn hóa Phục hưng|GH|Bộ|01/GV
+@Trung Quốc từ thế kỷ VII đến giữa thế kỷ XIX
+LS7.3|Phim tài liệu về một số thành tựu văn hóa tiêu biểu của Trung Quốc từ thế kỷ VII đến giữa thế kỷ XIX|GH|Bộ|01/GV
+@Đông Nam Á từ nửa sau thế kỷ X đến nửa đầu thế kỷ XVI
+LS7.4|Lược đồ Đông Nam Á và quốc gia ở Đông Nam Á|GH|Tờ|01/GV
+LS7.5|Phim tài liệu giới thiệu về Luang Prabang và về vương quốc Lan Xang|GH|Bộ|01/GV
+@Việt Nam từ thế kỷ X đến giữa thế kỷ XVI
+LS7.6|Phim tài liệu một số cuộc kháng chiến chống ngoại xâm từ thế kỷ X đến giữa thế kỷ XVI (03 phim)|GH|Bộ|01/GV
+#A. Phân môn Lịch sử – Lớp 8
+%8
+@Châu Âu và Bắc Mỹ từ nửa sau thế kỉ XVI đến thế kỉ XVIII
+LS8.1|Lược đồ nước Anh thế kỉ XVII|GH|Tờ|01/GV
+LS8.2|Phim tư liệu một số sự kiện tiêu biểu của cách mạng tư sản Anh (thế kỉ XVII)|GH|Bộ|01/GV
+LS8.3|Lược đồ diễn biến cơ bản của chiến tranh giành độc lập ở Bắc Mỹ (thế kỉ XVIII)|GH|Tờ|01/GV
+LS8.4|Lược đồ diễn biến cơ bản của cách mạng tư sản Pháp (thế kỉ XVIII)|GH|Tờ|01/GV
+LS8.5|Phim tư liệu về cách mạng tư sản Pháp (thế kỉ XVIII)|GH|Bộ|01/GV
+LS8.6|Lược đồ thế giới thế kỉ XVIII|GH|Tờ|01/GV
+LS8.7|Phim tư liệu về cách mạng công nghiệp lần thứ I|GH|Bộ|01/GV
+@Đông Nam Á từ nửa sau thế kỉ XVI đến thế kỉ XIX
+LS8.8|Phim tài liệu về các cuộc kháng chiến chống thực dân phương Tây của nhân dân Đông Nam Á (03 phim)|GH|Bộ|01/GV
+LS8.9|Phim tài liệu về chuyển biến chính trị, kinh tế, xã hội, văn hóa Đông Nam Á thế kỉ XVI – XIX (03 phim)|GH|Bộ|01/GV
+LS8.10|Phim tài liệu về một số cuộc đấu tranh tiêu biểu chống thực dân phương Tây ở Đông Nam Á (02 phim)|GH|Bộ|01/GV
+@Việt Nam từ đầu thế kỉ XVI đến thế kỉ XVIII
+LS8.11|Lược đồ Việt Nam từ thế kỉ XVI đến thế kỉ XVIII|GH|Tờ|01/GV
+LS8.12|Lược đồ phong trào khởi nghĩa nông dân ở Đàng Ngoài, thế kỉ XVIII|GH|Tờ|01/GV
+LS8.13|Lược đồ cuộc khởi nghĩa của phong trào nông dân Tây Sơn thế kỉ XVIII|GH|Tờ|01/GV
+LS8.14|Phim tài liệu về cuộc đại phá quân Thanh xâm lược|GH|Bộ|01/GV
+@Châu Âu và Bắc Mỹ từ cuối thế kỉ XVIII đến đầu thế kỉ XX
+LS8.15|Lược đồ vị trí các nước đế quốc cuối thế kỉ XIX, đầu thế kỉ XX|GH|Tờ|01/GV
+LS8.16|Phim tài liệu về cuộc đời và sự nghiệp của Karl Marx và Friedrich Engels|GH|Bộ|01/GV
+LS8.17|Phim thể hiện diễn biến chính của Chiến tranh thế giới I|GH|Bộ|01/GV
+LS8.18|Lược đồ diễn biến chính của Cách mạng tháng Mười Nga năm 1917|GH|Tờ|01/GV
+LS8.19|Phim tài liệu một số sự kiện, diễn biến chính của Cách mạng tháng Mười Nga|GH|Bộ|01/GV
+@Sự phát triển của khoa học, kỹ thuật, văn học, nghệ thuật thế kỉ XVIII – XIX
+LS8.20|Phim tài liệu về khoa học, kỹ thuật, văn học và nghệ thuật thế kỉ XVIII – XIX|GH|Bộ|01/GV
+@Châu Á từ nửa sau thế kỉ XIX đến đầu thế kỉ XX
+LS8.21|Lược đồ Trung Quốc nửa cuối thế kỉ XIX, đầu thế kỉ XX|GH|Tờ|01/GV
+LS8.22|Lược đồ đế quốc Nhật Bản nửa cuối thế kỉ XIX, đầu thế kỉ XX|GH|Tờ|01/GV
+LS8.23|Phim tài liệu về cuộc Minh Trị duy tân ở Nhật Bản|GH|Bộ|01/GV
+LS8.24|Lược đồ khu vực Đông Nam Á nửa cuối thế kỉ XIX, đầu thế kỉ XX|GH|Tờ|01/GV
+@Việt Nam từ thế kỉ XIX đến đầu thế kỉ XX
+LS8.25|Lược đồ Việt Nam nửa đầu thế kỉ XIX|GH|Tờ|01/GV
+LS8.26|Lược đồ Việt Nam nửa sau thế kỉ XIX (02 tờ)|GH|Bộ|01/GV
+LS8.27|Phim tư liệu về một số nhân vật, sự kiện tiêu biểu lịch sử Việt Nam nửa sau thế kỉ XIX|GH|Bộ|01/GV
+LS8.28|Phim tư liệu về một số sự kiện tiêu biểu lịch sử Việt Nam đầu thế kỉ XX (03 phim)|GH|Bộ|01/GV
+@Chủ đề chung: Văn minh châu thổ sông Hồng và sông Cửu Long; Bảo vệ chủ quyền biển đảo
+LS8.29|Phim về quá trình tự nhiên, kinh tế, xã hội, văn hóa ở châu thổ sông Hồng và sông Cửu Long|GH|Bộ|01/GV|8, 9
+LS8.30|Lược đồ thể hiện phạm vi biển, đảo Việt Nam|GH|Tờ|01/GV|8, 9
+LS8.31|Lược đồ thể hiện lịch sử chủ quyền của Việt Nam đối với các khu vực biển, đảo|GH|Tờ|01/GV|8, 9
+LS8.32|Phim thể hiện lịch sử chủ quyền của Việt Nam đối với các khu vực biển, đảo|GH|Bộ|01/GV|8, 9
+#A. Phân môn Lịch sử – Lớp 9
+%9
+@Thế giới từ năm 1918 đến năm 1945
+LS9.1|Lược đồ thế giới từ 1918 đến 1945|GH|Tờ|01/GV
+LS9.2|Phim tư liệu về xây dựng CNXH và chiến tranh chống phát xít 1918 – 1945|GH|Bộ|01/GV
+LS9.3|Lược đồ thế giới 1939 – 1945 (02 tờ)|GH|Bộ|01/GV
+LS9.4|Phim tài liệu về một số sự kiện quan trọng của Chiến tranh thế giới II|GH|Bộ|01/GV
+@Việt Nam từ năm 1918 đến năm 1945
+LS9.5|Lược đồ Cách mạng tháng Tám năm 1945|GH|Tờ|01/GV
+LS9.6|Phim tài liệu nhân vật, sự kiện tiêu biểu của lịch sử cách mạng Việt Nam 1918 – 1945|GH|Bộ|01/GV
+@Thế giới từ năm 1945 đến năm 1991
+LS9.7|Lược đồ Liên Xô và các nước XHCN ở Đông Âu 1945 – 1991|GH|Tờ|01/GV
+LS9.8|Phim tài liệu về công nghiệp nguyên tử và chinh phục vũ trụ của Liên Xô|GH|Bộ|01/GV
+LS9.9|Lược đồ tình hình địa – chính trị thế giới, Mỹ và các nước Tây Âu 1945 – 1991|GH|Tờ|01/GV
+LS9.10|Phim tài liệu về lịch sử cuộc Cách mạng Cuba|GH|Bộ|01/GV
+LS9.11|Phim tài liệu một số sự kiện quan trọng lịch sử Đông Nam Á 1945 – 1991|GH|Bộ|01/GV
+@Việt Nam từ năm 1945 đến năm 1991
+LS9.12|Phim tài liệu sự kiện quan trọng lịch sử Việt Nam 9/1945 – 12/1946 (02 phim)|GH|Bộ|01/GV
+LS9.13|Lược đồ tình hình chính trị – quân sự Việt Nam 12/1946 – 7/1954 (03 tờ)|GH|Bộ|01/GV
+LS9.14|Phim tài liệu về Chiến dịch Điện Biên Phủ năm 1954|GH|Bộ|01/GV
+LS9.15|Lược đồ Việt Nam từ năm 1954 đến năm 1975 (03 tờ)|GH|Bộ|01/GV
+LS9.16|Phim tài liệu sự kiện quan trọng lịch sử Việt Nam 7/1954 – 5/1975 (05 phim)|GH|Bộ|01/GV
+LS9.17|Phim tài liệu sự kiện quan trọng lịch sử Việt Nam 1986 – 1991 (03 phim)|GH|Bộ|01/GV
+@Thế giới và Việt Nam từ năm 1991 đến nay
+LS9.18|Phim tài liệu một số sự kiện quan trọng lịch sử Đông Nam Á từ năm 1991 đến nay|GH|Bộ|01/GV
+LS9.19|Phim tài liệu sự kiện quan trọng lịch sử Việt Nam từ năm 1991 đến nay (03 phim)|GH|Bộ|01/GV
+@Học liệu điện tử
+LS.HL|Bộ học liệu điện tử hỗ trợ GV (phân môn Lịch sử)|GH|Bộ|01/GV|6, 7, 8, 9
+#B. Phân môn Địa lí – Thiết bị dùng chung
+%
+@
+DL.A1|Quả địa cầu hành chính (D tối thiểu 30 cm)|H|Quả|03/trường
+DL.A2|Quả địa cầu tự nhiên (D tối thiểu 30 cm)|H|Quả|03/trường
+DL.A3|La bàn|H|Chiếc|01/05 lớp
+DL.A4|Hộp quặng và khoáng sản chính ở Việt Nam|H|Hộp|01/GV
+DL.A5|Nhiệt – ẩm kế treo tường|H|Chiếc|01/GV
+#B. Phân môn Địa lí – Tranh ảnh
+%6
+DL.T1|Bản đồ địa hình, bản đồ hành chính, bản đồ giao thông, bản đồ du lịch (trích mảnh)|H|Tờ|04/GV
+DL.T2|Sơ đồ chuyển động của Trái Đất quanh Mặt Trời|G|Tờ|04/GV
+DL.T3|Cấu tạo bên trong Trái Đất|G|Tờ|01/GV
+DL.T4|Các dạng địa hình trên Trái Đất|G|Tờ|01/GV
+DL.T5|Lát cắt địa hình|H|Tờ|04/GV
+DL.T6|Hiện tượng tạo núi|H|Tờ|04/GV
+DL.T7|Sơ đồ các tầng khí quyển|G|Tờ|01/GV
+DL.T8|Sơ đồ vòng tuần hoàn lớn của nước|G|Tờ|01/GV
+DL.T9|Phẫu diện một số loại đất chính|H|Tờ|04/GV
+DL.T10|Hệ sinh thái rừng nhiệt đới|H|Tờ|04/GV
+DL.T11|Thảm thực vật ở dãy Andes|GH|Tờ|04/GV|7
+DL.T12|Sơ đồ lát cắt ngang các vùng biển Việt Nam|G|Tờ|01/GV|9
+#B. Phân môn Địa lí – Bản đồ, lược đồ
+%6
+DL.B1|Bản đồ các khu vực giờ trên Trái Đất|G|Tờ|01/GV
+DL.B2|Lược đồ các mảng kiến tạo, vành đai động đất, núi lửa trên Trái Đất|G|Tờ|01/GV
+DL.B3|Lược đồ phân bố lượng mưa trung bình năm trên Trái Đất|G|Tờ|01/GV
+DL.B4|Lược đồ phân bố nhiệt độ trung bình năm trên Trái Đất|G|Tờ|01/GV
+DL.B5|Bản đồ các đới khí hậu trên Trái Đất|G|Tờ|01/GV
+DL.B6|Bản đồ các dòng biển trên đại dương thế giới|G|Tờ|01/GV
+DL.B7|Bản đồ các loại đất chính trên Trái Đất|G|Tờ|01/GV
+DL.B8|Bản đồ các đới thiên nhiên trên Trái Đất|G|Tờ|01/GV
+DL.B9|Bản đồ phân bố dân cư và đô thị trên thế giới|G|Tờ|01/GV
+%7
+DL.B10|Bản đồ các nước châu Âu|G|Tờ|01/GV
+DL.B11|Bản đồ tự nhiên châu Âu|G|Tờ|01/GV
+DL.B12|Bản đồ các nước châu Á|G|Tờ|01/GV
+DL.B13|Bản đồ tự nhiên châu Á|G|Tờ|01/GV
+DL.B14|Bản đồ các nước châu Phi|G|Tờ|01/GV
+DL.B15|Bản đồ tự nhiên châu Phi|G|Tờ|01/GV
+DL.B16|Bản đồ các nước châu Mỹ|G|Tờ|01/GV
+DL.B17|Bản đồ tự nhiên châu Mỹ|G|Tờ|01/GV
+DL.B18|Bản đồ các nước châu Đại Dương|G|Tờ|01/GV
+DL.B19|Bản đồ tự nhiên châu Đại Dương|G|Tờ|01/GV
+DL.B20|Bản đồ tự nhiên châu Nam Cực|G|Tờ|01/GV
+%8
+DL.B21|Bản đồ hành chính Việt Nam|G|Tờ|01/GV
+DL.B22|Bản đồ địa hình và khoáng sản Việt Nam|G|Tờ|01/GV
+DL.B23|Bản đồ khí hậu Việt Nam|G|Tờ|01/GV
+DL.B24|Bản đồ các hệ thống sông lớn ở Việt Nam|G|Tờ|01/GV
+DL.B25|Bản đồ các nhóm đất chính ở Việt Nam|G|Tờ|01/GV
+DL.B26|Bản đồ vùng biển của Việt Nam trong Biển Đông|G|Tờ|01/GV
+%9
+DL.B27|Bản đồ dân số Việt Nam|G|Tờ|01/GV
+DL.B28|Bản đồ nông nghiệp Việt Nam|G|Tờ|01/GV
+DL.B29|Bản đồ công nghiệp Việt Nam|G|Tờ|01/GV
+DL.B30|Bản đồ giao thông Việt Nam|G|Tờ|01/GV
+DL.B31|Bản đồ tự nhiên vùng Trung du và miền núi Bắc Bộ|G|Tờ|01/GV
+DL.B32|Bản đồ kinh tế vùng Trung du và miền núi Bắc Bộ|G|Tờ|01/GV
+DL.B33|Bản đồ tự nhiên vùng Đồng bằng sông Hồng|G|Tờ|01/GV
+DL.B34|Bản đồ kinh tế vùng Đồng bằng sông Hồng|G|Tờ|01/GV
+DL.B35|Bản đồ tự nhiên vùng Bắc Trung Bộ|G|Tờ|01/GV
+DL.B36|Bản đồ kinh tế vùng Bắc Trung Bộ|G|Tờ|01/GV
+DL.B37|Bản đồ tự nhiên vùng Duyên hải Nam Trung Bộ|G|Tờ|01/GV
+DL.B38|Bản đồ kinh tế vùng Duyên hải Nam Trung Bộ|G|Tờ|01/GV
+DL.B39|Bản đồ tự nhiên vùng Tây Nguyên|G|Tờ|01/GV
+DL.B40|Bản đồ kinh tế vùng Tây Nguyên|G|Tờ|01/GV
+DL.B41|Bản đồ tự nhiên vùng Đông Nam Bộ|G|Tờ|01/GV
+DL.B42|Bản đồ kinh tế vùng Đông Nam Bộ|G|Tờ|01/GV
+DL.B43|Bản đồ tự nhiên vùng Đồng bằng sông Cửu Long|G|Tờ|01/GV
+DL.B44|Bản đồ kinh tế vùng Đồng bằng sông Cửu Long|G|Tờ|01/GV
+DL.B45|Bản đồ một số ngành kinh tế biển Việt Nam|G|Tờ|01/GV
+#B. Phân môn Địa lí – Video/clip/phần mềm
+%6
+DL.V1|Mô phỏng động về ngày đêm luân phiên và ngày đêm dài ngắn theo mùa|G|Bộ|01/GV
+DL.V2|Mô phỏng động về các địa mảng xô vào nhau|G|Bộ|01/GV
+DL.V3|Hoạt động phun trào của núi lửa; cảnh quan vùng núi lửa|G|Bộ|01/GV
+DL.V4|Sự nóng lên toàn cầu (Global warming)|G|Bộ|01/GV
+DL.V5|Tác động của nước biển dâng|G|Bộ|01/GV
+DL.V6|Thiên tai và ứng phó với thiên tai ở Việt Nam|G|Bộ|01/GV
+DL.V7|Sự đa dạng của thế giới sinh vật trên lục địa và đại dương|G|Bộ|01/GV
+DL.V8|Rừng Amazon|G|Bộ|01/GV|7
+DL.V9|Kịch bản tác động của biến đổi khí hậu tới thiên nhiên châu Nam Cực|G|Bộ|01/GV|7
+DL.V10|Bảo tồn đa dạng sinh học ở Việt Nam|G|Bộ|01/GV|8
+DL.V11|Bảo vệ môi trường biển đảo Việt Nam|G|Bộ|01/GV|8
+#B. Phân môn Địa lí – Học liệu điện tử
+DL.HL|Bộ học liệu điện tử hỗ trợ GV (phân môn Địa lí)|G|Bộ|01/GV|6, 7, 8, 9
+
+=Khoa học tự nhiên
+#I. Thiết bị dùng chung (tính cho 01 phòng học bộ môn)
+%
+@
+1|Biến áp nguồn|GH|Cái|07
+2|Bộ giá thí nghiệm|GH|Bộ|07
+3|Đồng hồ đo thời gian hiện số|GH|Cái|02
+4|Kính lúp|GH|Cái|07
+5|Bảng thép|GH|Cái|07
+6|Quả kim loại (12 quả 50 g, có hộp)|GH|Hộp|07
+7|Đồng hồ đo điện đa năng|GH|Cái|07
+8|Dây nối (bộ 20 dây)|GH|Bộ|07
+9|Dây điện trở|GH|Dây|07
+10|Giá quang học|GH|Cái|02
+11|Máy phát âm tần|GH|Cái|02
+12|Cổng quang|GH|Cái|04
+13|Bộ thu nhận số liệu|GH|Cái|01
+14|Cảm biến điện thế|GH|Cái|02
+15|Cảm biến dòng điện|GH|Cái|02
+16|Cảm biến nhiệt độ|GH|Cái|02
+17|Đồng hồ bấm giây|GH|Cái|02
+18|Bộ lực kế (hoặc cảm biến lực)|GH|Bộ|07
+19|Cốc đốt|GH|Cái|07
+20|Bộ thanh nam châm|GH|Cái|07
+21|Biến trở con chạy|GH|Cái|07
+22|Ampe kế một chiều|GH|Cái|07
+23|Vôn kế một chiều|GH|Cái|07
+24|Nguồn sáng|GH|Bộ|07
+25|Bút thử điện thông mạch|GH|Cái|07
+26|Nhiệt kế (lỏng)|GH|Cái|07
+27|Thấu kính hội tụ|GH|Cái|07
+28|Thấu kính phân kì|GH|Cái|07
+29|Giá để ống nghiệm|H|Cái|07
+30|Đèn cồn|H|Cái|07
+31|Lưới thép tản nhiệt|H|Cái|07
+32|Găng tay cao su|H|Đôi|45
+33|Áo choàng|H|Cái|45
+34|Kính bảo hộ|H|Cái|45
+35|Chổi rửa ống nghiệm|H|Cái|07
+36|Khay mang dụng cụ và hóa chất|H|Cái|07
+37|Bình chia độ|GH|Cái|07
+38|Cốc thủy tinh loại 250 ml|GH|Cái|07
+39|Cốc thủy tinh 100 ml|GH|Cái|07
+40|Chậu thủy tinh|GH|Cái|07
+41|Ống nghiệm|GH|Cái|50
+42|Ống đong hình trụ 100 ml|GH|Cái|07
+43|Bình tam giác 250 ml|H|Cái|07
+44|Bình tam giác 100 ml|H|Cái|07
+45|Bộ ống dẫn thủy tinh các loại|GH|Bộ|07
+46|Bộ nút cao su có lỗ và không có lỗ các loại|GH|Bộ|07
+47|Bát sứ|GH|Cái|07
+48|Lọ thủy tinh miệng hẹp kèm ống hút nhỏ giọt|G|Bộ|07
+49|Thìa xúc hóa chất|GH|Cái|07
+50|Đũa thủy tinh|GH|Cái|07
+51|Pipet (ống hút nhỏ giọt)|H|Cái|07
+52|Cân điện tử|H|Cái|02
+53|Giấy lọc|GH|Hộp|07
+54|Nhiệt kế y tế|H|Cái|07
+55|Kính hiển vi|H|Cái|07
+56|Kẹp ống nghiệm|GH|Cái|14
+57|Bộ học liệu điện tử, mô phỏng hỗ trợ dạy học môn Khoa học tự nhiên|G|Bộ|01/GV
+#I.58. Hóa chất dùng chung
+58.1|Bột lưu huỳnh (S)|GH|gam|100|||Hóa chất
+58.2|Iodine (I2)|GH|gam|05|||Hóa chất
+58.3|Dung dịch nước bromine (Br2)|GH|ml|50|||Hóa chất – đóng gói, bảo quản riêng
+58.4|Đồng phoi bào (Cu)|GH|gam|100|||Hóa chất
+58.5|Bột sắt|GH|gam|100|||Hóa chất
+58.6|Đinh sắt (Fe)|GH|gam|100|||Hóa chất
+58.7|Zn (viên)|GH|gam|100|||Hóa chất
+58.8|Sodium (Na)|GH|gam|50|||Hóa chất
+58.9|Magnesium (Mg) dạng mảnh|GH|gam|50|||Hóa chất
+58.10|Copper (II) oxide (CuO)|GH|gam|50|||Hóa chất
+58.11|Đá vôi cục|GH|gam|50|||Hóa chất
+58.12|Manganese (IV) oxide (MnO2)|GH|gam|10|||Hóa chất
+58.13|Sodium hydroxide (NaOH)|GH|gam|100|||Hóa chất
+58.14|Copper sulfate (CuSO4)|GH|gam|50|||Hóa chất
+58.15|Hydrochloric acid (HCl) 37%|GH|lít|0,5|||Hóa chất – acid đậm đặc, bảo quản riêng
+58.16|Sulfuric acid 98% (H2SO4)|GH|lít|0,2|||Hóa chất – acid đậm đặc, bảo quản riêng
+58.17|Dung dịch ammonia (NH3) đặc|GH|lít|0,2|||Hóa chất
+58.18|Magnesium sulfate (MgSO4) rắn|GH|gam|10|||Hóa chất
+58.19|Barium chloride (BaCl2) rắn|GH|gam|10|||Hóa chất
+58.20|Sodium chloride (NaCl)|GH|gam|100|||Hóa chất
+58.21|Sodium sulfate (Na2SO4) dung dịch|GH|lít|0,2|||Hóa chất
+58.22|Silver nitrate (AgNO3)|GH|lít|0,2|||Hóa chất
+58.23|Ethylic alcohol 96° (C2H5OH)|GH|lít|0,2|||Hóa chất
+58.24|Glucozơ kết tinh (C6H12O6)|GH|gam|100|||Hóa chất
+58.25|Nến (Parafin) rắn|GH|gam|100|||Hóa chất
+58.26|Giấy phenolphthalein|GH|hộp|02|||Hóa chất
+58.27|Dung dịch phenolphthalein|GH|lít|0,2|||Hóa chất
+58.28|Nước oxi già y tế (3%)|GH|lít|0,2|||Hóa chất
+58.29|Cồn đốt|GH|lít|2,0|||Hóa chất
+58.30|Nước cất|GH|lít|1,0|||Hóa chất
+58.31|Al (bột)|GH|gam|100|||Hóa chất
+58.32|Potassium permanganate (KMnO4)|GH|gam|50|||Hóa chất
+58.33|Potassium chlorate (KClO3)|GH|gam|50|||Hóa chất
+58.34|Calcium oxide (CaO)|GH|gam|100|||Hóa chất
+#II. Tranh/ảnh
+%6
+II.1|Sự đa dạng của chất|GH|Tờ|01/GV
+II.2|So sánh tế bào thực vật, động vật|GH|Tờ|01/GV
+II.3|So sánh tế bào nhân thực và nhân sơ|GH|Tờ|01/GV
+II.4|Thực vật có mạch, có hạt (Hạt trần)|GH|Tờ|01/GV
+II.5|Thực vật có mạch, có hạt, có hoa (Hạt kín)|GH|Tờ|01/GV
+II.6|Đa dạng động vật không xương sống|GH|Tờ|01/GV
+II.7|Đa dạng động vật có xương sống|GH|Tờ|01/GV
+II.8|Sự tương tác của bề mặt hai vật|GH|Tờ|01/GV
+II.9|Sự mọc lặn của Mặt Trời|GH|Tờ|01/GV
+II.10|Một số hình dạng nhìn thấy của Mặt Trăng|GH|Tờ|01/GV
+II.11|Hệ Mặt Trời|GH|Tờ|01/GV
+II.12|Ngân Hà|GH|Tờ|01/GV
+%7
+II.13|Bảng tuần hoàn các nguyên tố hóa học|GH|Tờ|01/GV
+II.14|Thiết bị “bắn tốc độ”|GH|Tờ|01/GV
+II.15|Tranh mô tả ảnh hưởng của tốc độ trong an toàn giao thông|GH|Tờ|01/GV
+II.16|Từ trường của Trái Đất|GH|Tờ|01/GV
+II.17|Trao đổi chất ở động vật|GH|Tờ|01/GV
+II.18|Vận chuyển các chất ở người|GH|Tờ|01/GV
+II.19|Vòng đời của động vật|GH|Tờ|01/GV
+II.20|Các hình thức sinh sản vô tính ở động vật|GH|Tờ|01/GV
+II.21|Sinh sản hữu tính ở thực vật|GH|Tờ|01/GV
+%8
+II.22|Quy tắc an toàn trong phòng thí nghiệm|GH|Tờ|01/GV
+II.23|Bảng tính tan trong nước của các acid – base – muối|GH|Tờ|01/GV
+II.24|Cấu tạo tai người|GH|Tờ|01/GV
+II.25|Cấu tạo sơ lược các cơ quan của hệ vận động|GH|Tờ|01/GV
+II.26|Hướng dẫn thao tác sơ cứu băng bó cho người gãy xương|GH|Tờ|01/GV
+II.27|Hệ tiêu hoá ở người|GH|Tờ|01/GV
+II.28|Hướng dẫn thao tác cấp cứu người bị chảy máu, tai biến, đột quỵ|GH|Tờ|01/GV
+II.29|Hướng dẫn thao tác hô hấp nhân tạo, cấp cứu người đuối nước|GH|Tờ|01/GV
+II.30|Hệ sinh thái và vòng tuần hoàn của các chất trong hệ sinh thái|GH|Tờ|01/GV
+%9
+II.31|Vòng năng lượng trên Trái Đất|G|Tờ|01/GV
+II.32|Sơ đồ quá trình tái bản DNA|GH|Tờ|01/GV
+II.33|Sơ đồ quá trình phiên mã|GH|Tờ|01/GV
+II.34|Sơ đồ quá trình dịch mã|GH|Tờ|01/GV
+II.35|Sơ đồ quá trình nguyên phân|GH|Tờ|01/GV
+II.36|Sơ đồ quá trình giảm phân|GH|Tờ|01/GV
+#III. Thiết bị, dụng cụ, hóa chất theo chủ đề (tính cho 01 phòng học bộ môn)
+%6
+III.1|Bộ thí nghiệm nóng chảy và đông đặc|GH|Bộ|07
+III.2|Bộ dụng cụ và hóa chất điều chế oxygen|GH|Bộ|07
+III.3|Bộ dụng cụ xác định thành phần phần trăm thể tích oxygen trong không khí|GH|Bộ|07
+III.4|Bộ dụng cụ và hóa chất thí nghiệm phân biệt dung dịch, dung môi|GH|Bộ|07
+III.5|Bộ dụng cụ và hóa chất thí nghiệm tách chất (lọc, chiết, cô cạn)|GH|Bộ|07
+III.6|Bộ dụng cụ quan sát tế bào (kèm tiêu bản tế bào thực vật, động vật)|GH|Bộ|07
+III.7|Bộ dụng cụ làm tiêu bản tế bào|GH|Bộ|07
+III.8|Bộ dụng cụ quan sát sinh vật đơn bào|GH|Bộ|07
+III.9|Bộ dụng cụ quan sát nguyên sinh vật|GH|Bộ|07
+III.10|Bộ dụng cụ quan sát nấm|GH|Bộ|07
+III.11|Bộ dụng cụ thu thập và quan sát sinh vật ngoài thiên nhiên|GH|Bộ|07
+III.12|Bộ dụng cụ đo chiều dài, thời gian, khối lượng, nhiệt độ|GH|Bộ|07
+III.13|Bộ dụng cụ minh họa lực không tiếp xúc|GH|Bộ|07
+III.14|Bộ thiết bị chứng minh lực cản của nước|GH|Bộ|07
+III.15|Bộ thiết bị thí nghiệm độ giãn lò xo|GH|Bộ|07
+%7
+III.16|Thiết bị đo tốc độ (đồng hồ bấm giây và cổng quang điện)|GH|Bộ|07
+III.17|Bộ dụng cụ thí nghiệm tạo âm thanh|GH|Bộ|07
+III.18|Bộ dụng cụ thí nghiệm về sóng âm|GH|Bộ|07
+III.19|Bộ dụng cụ thí nghiệm thu năng lượng ánh sáng|GH|Bộ|07
+III.20|Bộ dụng cụ thí nghiệm về ánh sáng (định luật phản xạ)|GH|Bộ|07
+III.21|Bộ dụng cụ thí nghiệm về nam châm vĩnh cửu|GH|Bộ|07
+III.22|Bộ dụng cụ chế tạo nam châm|GH|Bộ|07||Kèm 01 kg dây đồng emay
+III.23|Bộ thí nghiệm từ phổ|GH|Bộ|07
+III.24|Bộ dụng cụ thí nghiệm quang hợp|GH|Bộ|07
+III.25|Bộ dụng cụ thí nghiệm hô hấp tế bào|GH|Bộ|07
+III.26|Bộ dụng cụ chứng minh thân vận chuyển nước|GH|Bộ|07
+III.27|Bộ thí nghiệm chứng minh lá thoát hơi nước|GH|Bộ|07
+%8
+III.28|Bộ dụng cụ và hóa chất thí nghiệm tìm hiểu về hiện tượng chất biến đổi|GH|Bộ|07
+III.29|Bộ dụng cụ và hóa chất thí nghiệm về phản ứng hóa học|GH|Bộ|07
+III.30|Bộ thí nghiệm chứng minh định luật bảo toàn khối lượng|GH|Bộ|07
+III.31|Bộ dụng cụ và hóa chất thí nghiệm pha chế một dung dịch|GH|Bộ|07
+III.32|Bộ dụng cụ thí nghiệm so sánh tốc độ của một phản ứng hóa học|GH|Bộ|07
+III.33|Bộ dụng cụ thí nghiệm về tốc độ của phản ứng hóa học|GH|Bộ|07
+III.34|Bộ dụng cụ thí nghiệm về ảnh hưởng của chất xúc tác|GH|Bộ|07
+III.35|Bộ dụng cụ và hóa chất thí nghiệm của hydrochloric acid|GH|Bộ|07
+III.36|Bộ dụng cụ và hóa chất thí nghiệm của base|GH|Bộ|07
+III.37|Bộ dụng cụ và thí nghiệm đo pH|GH|Bộ|07
+III.38|Bộ dụng cụ và hóa chất thí nghiệm của oxide|GH|Bộ|07
+III.39|Bộ dụng cụ và hóa chất thí nghiệm của muối|GH|Bộ|07
+III.40|Bộ dụng cụ đo khối lượng riêng|GH|Bộ|07
+III.41|Bộ dụng cụ thí nghiệm áp suất chất lỏng|GH|Bộ|07
+III.42|Bộ dụng cụ thí nghiệm áp lực|GH|Bộ|07
+III.43|Bộ dụng cụ thí nghiệm áp suất khí quyển|GH|Bộ|07
+III.44|Bộ dụng cụ thí nghiệm tác dụng làm quay của lực|GH|Bộ|07
+III.45|Bộ dụng cụ thí nghiệm dẫn điện|GH|Bộ|07
+III.46|Bộ dụng cụ thí nghiệm tác dụng của dòng điện|GH|Bộ|07
+III.47|Bộ dụng cụ đo năng lượng nhiệt|GH|Bộ|07
+III.48|Bộ dụng cụ thí nghiệm nở vì nhiệt|GH|Bộ|07
+III.49|Bộ băng bó cho người gãy xương tay, xương chân|GH|Bộ|07
+III.50|Dụng cụ đo huyết áp|GH|Bộ|02
+III.51|Dụng cụ đo thân nhiệt|GH|Cái|07
+III.52|Dụng cụ điều tra thành phần quần xã sinh vật (ống nhòm)|GH|Bộ|07
+%9
+III.53|Bộ dụng cụ thí nghiệm phân tích ánh sáng trắng bằng lăng kính|GH|Bộ|07
+III.54|Bộ dụng cụ thí nghiệm khúc xạ ánh sáng|GH|Bộ|07
+III.55|Bộ dụng cụ thí nghiệm khúc xạ, phản xạ toàn phần|GH|Bộ|07
+III.56|Bộ dụng cụ thí nghiệm đo tiêu cự thấu kính|GH|Bộ|07
+III.57|Dụng cụ thực hành kính lúp|GH|Bộ|07
+III.58|Bộ dụng cụ thí nghiệm tác dụng của điện trở|GH|Bộ|07
+III.59|Bộ dụng cụ thí nghiệm định luật Ohm|GH|Bộ|07
+III.60|Bộ dụng cụ thí nghiệm cảm ứng điện từ|GH|Bộ|07
+III.61|Bộ thí nghiệm về dòng điện xoay chiều|GH|Bộ|07
+III.62|Bộ dụng cụ và hóa chất thí nghiệm dãy hoạt động của kim loại|H|Bộ|07
+III.63|Bộ dụng cụ và hóa chất thí nghiệm về ethylic alcohol|GH|Bộ|07
+III.64|Bộ dụng cụ thí nghiệm acetic acid|GH|Bộ|07
+III.65|Bộ dụng cụ thí nghiệm phản ứng tráng bạc|GH|Bộ|07
+III.66|Bộ dụng cụ thí nghiệm cellulose|GH|Bộ|07
+III.67|Bộ dụng cụ thí nghiệm tinh bột có phản ứng màu với iodine|GH|Bộ|07
+III.68|Bộ thiết bị quan sát nhiễm sắc thể|GH|Bộ|07
+#IV. Băng đĩa, phần mềm
+%6
+IV.1|Video mô tả đa dạng thực vật|G|Bộ|01/GV
+IV.2|Video mô tả đa dạng cá|G|Bộ|01/GV
+IV.3|Video mô tả đa dạng lưỡng cư|G|Bộ|01/GV
+IV.4|Video mô tả đa dạng bò sát|G|Bộ|01/GV
+IV.5|Video mô tả đa dạng chim|G|Bộ|01/GV
+IV.6|Video mô tả đa dạng thú|G|Bộ|01/GV
+IV.7|Video mô tả đa dạng sinh học|G|Bộ|01/GV
+IV.8|Video mô tả các nguyên nhân làm suy giảm đa dạng sinh học|G|Bộ|01/GV
+%7
+IV.9|Phần mềm mô phỏng 3D mô hình nguyên tử của Rutherford – Bohr|G|Bộ|01/GV
+IV.10|Phần mềm mô phỏng 3D mô hình một số mẫu đơn chất và hợp chất|G|Bộ|01/GV
+IV.11|Video mô tả ảnh hưởng của tốc độ trong an toàn giao thông|G|Bộ|01/GV
+IV.12|Video mô tả độ cao và tần số âm thanh|G|Bộ|01/GV
+IV.13|Phần mềm 3D mô phỏng âm thanh truyền đi trong các môi trường khác nhau|G|Bộ|01/GV
+IV.14|Phần mềm 3D mô phỏng sự phản xạ|G|Bộ|01/GV
+IV.15|Phần mềm 3D mô phỏng từ trường Trái Đất|G|Bộ|01/GV
+IV.16|Phần mềm 3D từ phổ, đường sức từ của nam châm|G|Bộ|01/GV
+IV.17|Phần mềm 3D mô phỏng con đường trao đổi nước ở thực vật|G|Bộ|01/GV
+IV.18|Video về cảm ứng ở thực vật|G|Bộ|01/GV
+IV.19|Video về tập tính ở động vật|G|Bộ|01/GV
+IV.20|Video về sự sinh trưởng và phát triển ở thực vật|G|Bộ|01/GV
+IV.21|Video về các vòng đời của động vật|G|Bộ|01/GV
+IV.22|Video về giâm, chiết, ghép cây|G|Bộ|01/GV
+%8
+IV.23|Phần mềm mô phỏng 3D cấu tạo tai người|G|Bộ|01/GV
+IV.24|Video hiệu ứng nhà kính|G|Bộ|01/GV
+IV.25|Video thao tác mẫu sơ cứu băng bó cho người gãy xương|G|Bộ|01/GV
+IV.26|Phần mềm mô phỏng 3D hệ tiêu hóa ở người|G|Bộ|01/GV
+IV.27|Phần mềm 3D mô phỏng hệ tuần hoàn ở người|G|Bộ|01/GV
+IV.28|Video thao tác mẫu băng bó cầm máu khi chảy máu|G|Bộ|01/GV
+IV.29|Phần mềm 3D mô phỏng hệ hô hấp ở người|G|Bộ|01/GV
+IV.30|Video thao tác mẫu hô hấp nhân tạo|G|Bộ|01/GV
+IV.31|Phần mềm 3D mô phỏng hệ thần kinh ở người|G|Bộ|01/GV
+%9
+IV.32|Phần mềm 3D mô phỏng sự phản xạ ánh sáng|G|Bộ|01/GV
+IV.33|Phần mềm 3D mô phỏng sự khúc xạ ánh sáng|G|Bộ|01/GV
+IV.34|Phần mềm 3D mô phỏng sự tán sắc|G|Bộ|01/GV
+IV.35|Mô phỏng 3D quá trình sản xuất xi măng|G|Bộ|01/GV
+IV.36|Phần mềm mô phỏng 3D cấu trúc một số phân tử chất hữu cơ|G|Bộ|01/GV
+IV.37|Phần mềm mô phỏng 3D lò luyện gang|G|Bộ|01/GV
+IV.38|Video về cấu trúc DNA|G|Bộ|01/GV
+IV.39|Video về quá trình tái bản DNA|G|Bộ|01/GV
+IV.40|Video về quá trình phiên mã|G|Bộ|01/GV
+IV.41|Video về quá trình giải mã|G|Bộ|01/GV
+#V. Mẫu vật, mô hình
+%8
+V.1|Mẫu động vật ngâm trong lọ (sứa, bạch tuộc, ếch)|GH|Lọ|02
+V.2|Mô hình cấu tạo cơ thể người (bán thân)|GH|Bộ|01
+%9
+V.3|Bộ mô hình phân tử dạng đặc|GH|Bộ|07
+V.4|Mô hình phân tử dạng rỗng|GH|Bộ|07
+V.5|Mô hình mô tả cấu trúc của DNA có thể tháo lắp|GH|Bộ|02
+
+=Công nghệ
+#A. Thiết bị dùng chung
+%6, 7, 8, 9
+@I. Vật liệu, dụng cụ cơ khí
+A.I.1|Bộ vật liệu cơ khí|GH|Bộ|04/PHBM
+A.I.2|Bộ dụng cụ cơ khí|GH|Bộ|04/PHBM
+A.I.3|Bộ thiết bị cơ khí cỡ nhỏ (máy in 3D cỡ nhỏ, khoan điện cầm tay)|GH|Bộ|01/PHBM
+@II. Vật liệu, dụng cụ điện, điện tử
+A.II.1|Bộ vật liệu điện|GH|Bộ|04/PHBM
+A.II.2|Bộ dụng cụ điện|GH|Bộ|04/PHBM
+A.II.3|Dụng cụ đo các đại lượng không điện (bộ thu thập dữ liệu và các cảm biến)|GH|Bộ|01/PHBM
+A.II.4|Bộ công cụ phát triển ứng dụng dựa trên vi điều khiển|GH|Bộ|02/PHBM||
+@III. Thiết bị cơ bản
+A.III.1|Máy tính (để bàn hoặc xách tay)|GH|Bộ|01/PHBM
+A.III.2|Biến áp nguồn|GH|Bộ|04/PHBM
+A.III.3|Máy chiếu (hoặc Màn hình hiển thị)|GH|Bộ|01/PHBM
+@IV. Thiết bị bảo hộ
+A.IV.1|Găng tay bảo hộ lao động|G|Cái|01/HS/PHBM
+A.IV.2|Kính bảo hộ|G|Cái|01/HS/PHBM
+#B. I. Tranh ảnh
+%
+@Nhà ở
+B.I.1.1|Vai trò và đặc điểm chung của nhà ở|G|Tờ|01/GV|6
+B.I.1.2|Kiến trúc nhà ở Việt Nam|G|Tờ|01/GV|6
+B.I.1.3|Xây dựng nhà ở|G|Tờ|01/GV|6
+B.I.1.4|Ngôi nhà thông minh|G|Tờ|01/GV|6, 9
+@Bảo quản và chế biến thực phẩm
+B.I.2.1|Thực phẩm trong gia đình|G|Tờ|01/GV|6, 9
+B.I.2.2|Phương pháp bảo quản thực phẩm|G|Tờ|01/GV|6, 9
+B.I.2.3|Phương pháp chế biến thực phẩm|G|Tờ|01/GV|6, 9
+@Trang phục và thời trang
+B.I.3.1|Trang phục và đời sống|G|Tờ|01/GV|6, 9
+B.I.3.2|Thời trang trong cuộc sống|G|Tờ|01/GV|6, 9
+B.I.3.3|Lựa chọn và sử dụng trang phục|G|Tờ|01/GV|6, 9
+@Đồ dùng điện trong gia đình
+B.I.4.1|Nồi cơm điện|G|Tờ|01/GV|6
+B.I.4.2|Bếp điện|G|Tờ|01/GV|6
+B.I.4.3|Đèn điện|G|Tờ|01/GV|6, 9
+@Trồng trọt, chăn nuôi, thủy sản
+B.I.5.1|Mô hình trồng trọt công nghệ cao|G|Tờ|01/GV|7
+B.I.6.1|Quy trình trồng trọt|G|Tờ|01/GV|7
+B.I.7.1|Một số vật nuôi đặc trưng theo vùng miền|G|Tờ|01/GV|7
+B.I.8.1|Một số loài thủy sản có giá trị kinh tế cao|G|Tờ|01/GV|7
+@Vẽ kĩ thuật, an toàn điện, kĩ thuật điện
+B.I.9.1|Hình chiếu vuông góc|G|Tờ|01/GV|8
+B.I.9.2|Bản vẽ xây dựng|G|Tờ|01/GV|8
+B.I.10.1|Tình huống mất an toàn điện|G|Tờ|01/GV|8
+B.I.10.2|Sơ cứu người bị điện giật|G|Tờ|01/GV|8
+B.I.11.1|Cấu trúc chung của mạch điện|G|Tờ|01/GV|8
+B.I.11.2|Mạch điện điều khiển đơn giản|G|Tờ|01/GV|8
+@Định hướng nghề nghiệp
+B.I.12.1|Hệ thống giáo dục tại Việt Nam|G|Tờ|01/GV|9
+#B. II. Mô hình, mẫu vật
+@
+B.II.1.1|Hộp mẫu các loại vải|GH|Hộp|01/PHBM|6, 9
+B.II.2.1|Nồi cơm điện (đơn chức năng, loại cơ)|GH|Cái|04/PHBM|6
+B.II.2.2|Bếp điện (loại đơn)|GH|Cái|04/PHBM|6
+B.II.2.3|Bóng đèn các loại (sợi đốt, compact, huỳnh quang, LED)|GH|Bộ|04/PHBM|6, 9
+B.II.2.4|Quạt điện|GH|Cái|04/PHBM|6
+B.II.3.1|Khối hình học cơ bản|G|Bộ|01/GV|8
+B.II.4.1|Mẫu vật liệu cơ khí|GH|Bộ|02/PHBM|8
+B.II.4.2|Cơ cấu truyền và biến đổi chuyển động|GH|Bộ|04/PHBM|8
+#B. III. Dụng cụ
+B.III.1.1|Bộ dụng cụ chế biến món ăn không sử dụng nhiệt|GH|Bộ|04/PHBM|6, 9
+B.III.1.2|Bộ dụng cụ tỉa hoa, trang trí món ăn|GH|Bộ|04/PHBM|6, 9
+B.III.2.1|Bộ dụng cụ giâm cành|GH|Bộ|04/PHBM|7, 9
+B.III.3.1|Thiết bị đo nhiệt độ nước|GH|Cái|04/PHBM|7
+B.III.3.2|Đĩa đo độ trong của nước (đĩa Secchi)|GH|Cái|04/PHBM|7
+B.III.3.3|Thùng nhựa đựng nước|GH|Cái|02/PHBM|7
+B.III.4.1|Bộ dụng cụ vẽ kĩ thuật|G|Bộ|02/PHBM|8
+B.III.5.1|Dụng cụ thực hành cơ khí|H|Bộ|04/PHBM|8
+B.III.6.1|Dụng cụ bảo vệ, an toàn điện|GH|Bộ|04/PHBM|8
+#B. IV. Băng/đĩa/phần mềm
+B.IV.1.1|Ngôi nhà thông minh|GH|Tệp|01/trường|6
+B.IV.2.1|Vệ sinh an toàn thực phẩm trong gia đình|GH|Tệp|01/trường|6
+B.IV.3.1|Trang phục và thời trang|GH|Tệp|01/trường|6
+B.IV.4.1|An toàn điện trong gia đình|GH|Tệp|01/trường|6
+B.IV.4.2|Sử dụng năng lượng tiết kiệm, hiệu quả|GH|Tệp|01/trường|6
+B.IV.5.1|An toàn điện|GH|Tệp|01/trường|8
+#C. I. Mô đun công nghiệp (lớp 9, tự chọn)
+%9
+C.I.1.1|Công tơ điện 1 pha|GH|Cái|04/PHBM||Mô đun 1: Lắp đặt mạng điện trong nhà
+C.I.1.2|Bộ thiết bị lắp mạng điện trong nhà|GH|Bộ|04/PHBM||Mô đun 1
+C.I.2.1|Bộ thiết bị lắp đặt mạch chuông điện|GH|Bộ|04/PHBM||Mô đun 2: Mạch điện trang trí, báo hiệu
+C.I.2.2|Bộ thiết bị lắp đặt mạch điện báo cháy tự động|GH|Bộ|04/PHBM||Mô đun 2
+C.I.2.3|Bộ thiết bị lắp đặt mạch điện trang trí|GH|Bộ|04/PHBM||Mô đun 2
+C.I.3.1|Bộ thiết bị lắp đặt mạch điều khiển đèn điện cảm biến ánh sáng và chuyển động|GH|Bộ|04/PHBM||Mô đun 3: Chiếu sáng ngôi nhà thông minh
+C.I.4.1|Bộ thiết bị lắp đặt mạch điện giám sát sử dụng camera hồng ngoại|GH|Bộ|04/PHBM||Mô đun 4: An ninh, bảo vệ
+C.I.5.1|Bộ kít vi điều khiển thông dụng|GH|Bộ|04/PHBM||Mô đun 5; dùng bộ công cụ vi điều khiển (TBDC)
+C.I.5.2|Bộ thiết bị lắp đặt mạch điện điều khiển thiết bị điện dựa trên vi điều khiển|GH|Bộ|04/PHBM||Mô đun 5
+#C. II. Mô đun nông nghiệp, lâm nghiệp, thủy sản (lớp 9, tự chọn)
+C.II.1|Bộ dụng cụ giâm, chiết, ghép cây|GH|Bộ|04/PHBM|7, 9|Dùng chung các mô đun
+C.II.2|Bộ dụng cụ trồng và chăm sóc cây|GH|Bộ|04/PHBM||Dùng chung các mô đun
+C.II.3|Tranh: Một số loại sâu hại cây ăn quả|GH|Tờ|01/GV||Mô đun 1: Trồng cây ăn quả
+C.II.4|Tranh: Một số loại bệnh hại cây ăn quả|GH|Tờ|01/GV||Mô đun 1
+C.II.5|Video hướng dẫn thực hành nhân giống vô tính cây trồng|G|Tệp|01/trường||Mô đun 1, 3
+C.II.6|Tranh: Một số bệnh thường gặp trên gà|G|Tờ|01/GV||Mô đun 2: Nuôi gà lấy thịt theo VietGAP
+C.II.7|Video nuôi gà thả vườn theo tiêu chuẩn VietGAP|G|Tệp|01/trường||Mô đun 2
+C.II.8|Tranh: Các bước trồng rừng bằng cây con|GH|Tờ|01/GV||Mô đun 3: Trồng cây rừng
+C.II.9|Bộ cảm biến dùng trong trồng trọt công nghệ cao|GH|Bộ|04/PHBM||Mô đun 4: Nông nghiệp 4.0
+#C. III. Mô đun dịch vụ (lớp 9, tự chọn)
+C.III.1|Bộ thiết bị may (máy may mini)|GH|Bộ|02/PHBM||Mô đun 1: Cắt may
+C.III.2|Thước dây|GH|Cái|04/PHBM||Mô đun 1
+C.III.3|Thước cây|GH|Cây|04/PHBM||Mô đun 1
+C.III.4|Bộ bếp đun|GH|Bộ|04/PHBM||Mô đun 2: Chế biến thực phẩm
+C.III.5|Bộ nồi, chảo|GH|Bộ|04/PHBM||Mô đun 2
+C.III.6|Bộ dao, thớt|GH|Bộ|04/PHBM||Mô đun 2
+C.III.7|Kìm cắt mỏ dài|GH|Cái|04/PHBM||Mô đun 3: Làm hoa giấy, hoa vải
+C.III.8|Bộ khuôn làm hoa vải|GH|Bộ|04/PHBM||Mô đun 3
+C.III.9|Bộ kẽm làm hoa|GH|Bộ|04/PHBM||Mô đun 3
+C.III.10|Bộ bình cắm hoa|GH|Bộ|04/PHBM||Mô đun 4: Cắm hoa nghệ thuật
+C.III.11|Kéo cắt, tỉa cành hoa|GH|Cây|04/PHBM||Mô đun 4
+
+=Tin học
+#I. Phòng thực hành tin học (tính cho 01 phòng học bộ môn)
+%6, 7, 8, 9
+@
+I.1|Máy chủ|G|Bộ|01
+I.2|Máy tính để bàn hoặc máy tính xách tay|H|Bộ|01/2 HS||01 bộ/2 HS là tối thiểu; nơi có điều kiện 01 bộ/1 HS
+I.3|Thiết bị kết nối mạng và đường truyền Internet|GH|Bộ|01
+I.4|Bàn để máy tính, ghế ngồi|GH|Bộ|01/2 HS||Số lượng phù hợp với HS và máy tính được trang bị
+I.5|Hệ thống điện|GH|Hệ thống|01
+I.6|Tủ lưu trữ|G|Cái|01
+I.7|Máy in Laser|GH|Chiếc|01
+I.8|Máy chiếu (hoặc Màn hình hiển thị)|GH|Chiếc|01
+I.9|Điều hòa nhiệt độ hoặc Quạt điện|GH|Bộ|01||Đủ công suất cho 01 phòng thực hành
+I.10|Thiết bị lưu trữ ngoài|G|Cái|01
+I.11|Bộ dụng cụ sửa chữa, bảo dưỡng máy tính cơ bản|GH|Bộ|01
+I.12|Máy hút bụi|GH|Cái|01
+I.13|Bộ lưu điện (cho máy chủ)|G|Bộ|01
+#II. Phần mềm (không vi phạm bản quyền)
+II.1|Hệ điều hành|GH|Bộ|01
+II.2|Phần mềm tin học văn phòng|GH|Bộ|01
+II.3|Phần mềm duyệt web|GH|Bộ|01
+II.4|Phần mềm diệt virus|GH|Bộ|01
+II.5|Các loại phần mềm ứng dụng khác|GH|Bộ|01
+II.6|Phần mềm tạo sơ đồ tư duy|GH|Bộ|01|6, 9
+II.7|Phần mềm chỉnh sửa ảnh|GH|Bộ|01|8
+II.8|Phần mềm mô phỏng|GH|Bộ|01|9
+II.9|Phần mềm thiết kế video|GH|Bộ|01|9
+II.10|Phần mềm lập trình trực quan|GH|Bộ|01|8, 9
+II.11|Phần mềm tìm kiếm thông tin|GH|Bộ|01
+II.12|Phần mềm tạo thư điện tử|GH|Bộ|01|6
+#III. Dụng cụ (chủ đề Mạng máy tính và Internet)
+%6
+III.1|Switch/Hub|GH|Chiếc|01
+III.2|Wireless Router/Access Point|GH|Chiếc|01
+III.3|Cáp mạng UTP (cat 5e, cat 6)|GH|Mét|100
+III.4|Đầu bấm mạng RJ45|GH|Cái|100
+
+=Giáo dục thể chất
+#I. Thiết bị dùng chung
+%6, 7, 8, 9
+@
+I.1|Đồng hồ bấm giây|G|Chiếc|01/GV
+I.2|Còi|G|Chiếc|03/GV
+I.3|Thước dây (tối thiểu 10 m)|G|Chiếc|01/GV
+I.4|Cờ lệnh thể thao|GH|Chiếc|04/GV
+I.5|Biển lật số|GH|Bộ|01/GV
+I.6|Nấm thể thao|GH|Chiếc|20/GV
+I.7|Bơm|GH|Chiếc|02/trường
+I.8|Dây nhảy cá nhân|GH|Chiếc|20/GV
+I.9|Dây nhảy tập thể|GH|Chiếc|01/GV
+I.10|Bóng nhồi|GH|Quả|02/GV
+I.11|Dây kéo co|GH|Cuộn|02/trường
+I.12|Xà đơn|GH|Bộ|01/trường
+I.13|Xà kép|GH|Bộ|01/trường
+#II. Thiết bị theo chủ đề
+@Ném bóng
+II.1.1|Quả bóng (cao su đặc 150 g)|GH|Quả|10/GV|6
+II.1.2|Lưới chắn bóng|H|Cái|02/trường|6
+@Chạy cự li ngắn
+II.2.1|Bàn đạp xuất phát|GH|Bộ|03/GV
+II.2.2|Dây đích|H|Chiếc|01/GV
+@Nhảy xa
+II.3.1|Ván dậm nhảy|GH|Chiếc|01/1 hố cát|7|01 chiếc cho mỗi hố cát
+II.3.2|Dụng cụ xới cát|H|Chiếc|02/1 hố cát|7|02 chiếc cho mỗi hố cát
+II.3.3|Bàn trang san cát|H|Chiếc|02/1 hố cát|7|02 chiếc cho mỗi hố cát
+@Nhảy cao
+II.4.1|Cột nhảy cao|GH|Bộ|01/GV|8, 9
+II.4.2|Xà nhảy cao|GH|Chiếc|01/GV|8, 9
+II.4.3|Đệm nhảy cao (2 tấm)|GH|Bộ|02/trường|8, 9
+#III. Thiết bị theo chủ đề tự chọn (chỉ trang bị môn nhà trường lựa chọn)
+@Bóng đá
+III.1.1|Quả bóng đá (size số 5)|GH|Quả|20/GV
+III.1.2|Cầu môn bóng đá 7 người (kèm lưới)|H|Bộ|01/trường
+@Bóng rổ
+III.2.1|Quả bóng rổ (size 7 nam, size 6 nữ)|GH|Quả|15/GV
+III.2.2|Cột, bảng bóng rổ|H|Bộ|02/trường
+@Bóng chuyền
+III.3.1|Quả bóng chuyền da|GH|Quả|20/GV
+III.3.2|Cột và lưới bóng chuyền|GH|Bộ|02/trường
+@Bóng bàn
+III.4.1|Quả bóng bàn|GH|Quả|30/GV
+III.4.2|Vợt bóng bàn|GH|Chiếc|15/GV
+III.4.3|Bàn, lưới bóng bàn|GH|Bộ|03/trường
+@Cầu lông
+III.5.1|Quả cầu lông|G|Quả|50/GV
+III.5.2|Vợt cầu lông|G|Chiếc|20/GV
+III.5.3|Cột, lưới cầu lông|GH|Bộ|03/trường
+@Đá cầu
+III.6.1|Quả cầu đá|G|Quả|30/GV
+III.6.2|Cột, lưới đá cầu|GH|Bộ|03/trường
+@Võ
+III.7.1|Đích đấm, đá (cầm tay)|GH|Chiếc|10/GV
+III.7.2|Thiết bị bảo hộ (mũ, giáp, găng, lót ống quyển…)|GH|Bộ|02/GV
+III.7.3|Thảm xốp (1000×1000 mm)|GH|Tấm|60/trường
+@Đẩy gậy, kéo co
+III.8.1|Gậy (dài 2000 mm)|H|Chiếc|10/GV
+III.9.1|Dây kéo co|H|Cuộn|02/trường
+@Cờ vua
+III.10.1|Bàn cờ, quân cờ|H|Bộ|20/GV
+III.10.2|Bàn và quân cờ treo tường|G|Bộ|01/GV
+@Bơi
+III.11.1|Phao bơi|H|Chiếc|20/trường
+III.11.2|Sào cứu hộ|H|Chiếc|02/trường
+III.11.3|Phao cứu sinh|GH|Chiếc|06/trường
+@Thể dục Aerobic
+III.12.1|Thảm xốp (Aerobic)|GH|Tấm|60/trường||Thiết bị âm thanh đa năng dùng chung
+
+=Âm nhạc
+#I. Nhạc cụ thể hiện tiết tấu
+%
+@
+I.1|Trống nhỏ (kèm dùi gõ)|GH|Bộ|05/GV|6, 7
+I.2|Song loan|GH|Cái|10/GV|6, 7, 8, 9
+I.3|Thanh phách|GH|Cặp|20/GV|6, 7
+I.4|Triangle|GH|Bộ|05/GV|6, 7, 8, 9
+I.5|Tambourine|GH|Cái|05/GV|6, 7, 8, 9
+I.6|Bells Instrument|GH|Cái|05/GV|7, 8, 9
+I.7|Maracas|GH|Cặp|05/GV|7, 8, 9
+I.8|Woodblock|GH|Cái|03/GV|7, 8, 9
+#II. Nhạc cụ thể hiện giai điệu, hoà âm
+II.1|Kèn phím (32 phím)|GH|Cái|10/GV|6, 7, 8, 9
+II.2|Recorder (soprano recorder)|GH|Cái|25/GV|6, 7, 8, 9
+II.3|Xylophone|GH|Cái|03/GV|6, 7, 8, 9
+II.4|Ukulele (concert)|GH|Cây|05/GV|7, 8, 9
+II.5|Electric keyboard (đàn phím điện tử, tối thiểu 61 phím)|G|Cây|01/GV|6, 7, 8, 9
+#III. Thiết bị dùng chung
+III.1|Thiết bị âm thanh đa năng di động|GH|Bộ|01/GV|6, 7, 8, 9|Có thể dùng thiết bị dùng chung
+
+=Mĩ thuật
+#I. Thiết bị dùng chung (trang bị cho một phòng học bộ môn)
+%6, 7, 8, 9
+@
+I.1|Máy tính (để bàn hoặc xách tay)|GH|Bộ|01
+I.2|Máy chiếu (hoặc Màn hình hiển thị)|G|Bộ|01
+I.3|Đèn chiếu sáng mẫu vẽ|H|Bộ|02
+I.4|Giá để mẫu vẽ và dụng cụ học tập|GH|Cái|02
+I.5|Bàn, ghế học mĩ thuật|H|Bộ|01/2HS
+I.6|Bục, bệ đặt mẫu|H|Bộ|01
+I.7|Tủ/giá bảo quản sản phẩm|GH|Cái|03
+I.8|Mẫu vẽ (bộ 6 khối cơ bản và biến thể)|H|Bộ|01
+I.9|Giá vẽ (3 chân hoặc chữ A)|H|Cái|01/HS
+I.10|Bảng vẽ|H|Cái|01/HS
+I.11|Bút lông (bộ 6 cái)|H|Bộ|01/HS
+I.12|Bảng pha màu|H|Cái|01/HS
+I.13|Ống rửa bút|H|Cái|01/HS
+I.14|Lô đồ họa (tranh in)|H|Cái|05/HS
+I.15|Màu Goát (Gouache colour, 12 màu)|H|Hộp|01/HS
+I.16|Đất nặn (12 màu)|H|Hộp|01/HS
+#II. Tranh ảnh phục vụ kiến thức cơ bản
+%
+II.1|Bảng yếu tố và nguyên lý tạo hình|GH|Tờ|01/HS|6, 7, 8, 9
+II.2|Bộ tranh/ảnh về di sản văn hóa nghệ thuật Việt Nam thời kì Tiền sử và Cổ đại|GH|Bộ|01/GV|6
+II.3|Bộ tranh/ảnh về di sản văn hóa nghệ thuật thế giới thời kì Tiền sử và Cổ đại|GH|Bộ|01/GV|6
+II.4|Bộ tranh/ảnh về mĩ thuật Việt Nam thời kì trung đại|GH|Bộ|01/GV|7
+II.5|Bộ tranh/ảnh về mĩ thuật Việt Nam thời kì hiện đại|GH|Bộ|01/GV|8, 9
+II.6|Bộ tranh/ảnh về mĩ thuật thế giới thời kì trung đại|GH|Bộ|01/GV|7
+II.7|Bộ tranh/ảnh về mĩ thuật thế giới thời kì hiện đại|GH|Bộ|01/GV|8, 9
+
+=Hoạt động trải nghiệm, hướng nghiệp
+#A. Thiết bị dùng chung
+%
+@
+A.1|Bộ học liệu điện tử hỗ trợ giáo viên|G|Bộ|01/GV|6, 7, 8, 9
+#B. I. Tranh ảnh
+B.I.1|Bộ thẻ về thiên tai, biến đổi khí hậu (16 thẻ)|GH|Bộ|08/GV|6, 7, 8, 9
+B.I.2|Bộ tranh về các hoạt động thiện nguyện, nhân đạo (6 tranh)|GH|Bộ|08/GV|6, 7, 8
+B.I.3|Bộ tranh về ô nhiễm môi trường (3 tranh)|GH|Bộ|08/GV|9
+B.I.4|Bộ thẻ nghề truyền thống (20 thẻ)|GH|Bộ|08/GV|6, 7, 9
+#B. II. Video/clip
+B.II.1|Video về một số tình huống nguy hiểm|G|Bộ|01/GV|7
+B.II.2|Video về giao tiếp ứng xử|G|Bộ|01/GV|6, 7, 8, 9
+B.II.3|Video về hành vi giao tiếp ứng xử có văn hóa khi tham gia hoạt động cộng đồng|G|Bộ|01/GV|7, 8
+B.II.4|Video về bắt nạt học đường|G|Bộ|01/GV|8, 9
+B.II.5|Video về một số áp lực trong cuộc sống|G|Bộ|01/GV|9
+B.II.6|Video về cảnh quan thiên nhiên Việt Nam|G|Bộ|01/GV|6, 7, 8, 9
+B.II.7|Video về thiên tai và thiệt hại do thiên tai gây ra|G|Bộ|01/GV|8
+B.II.8|Video về một số nghề truyền thống điển hình ở một vài địa phương|G|Bộ|01/GV|6, 7
+#B. III. Dụng cụ
+B.III.1|Bộ dụng cụ lao động sân trường (chăm sóc hoa, cây trồng)|H|Bộ|05/trường|6, 7, 8, 9|Bộ dụng cụ vệ sinh trường, lớp: 02/lớp
+B.III.2|Bộ dụng cụ làm vệ sinh lớp học|H|Bộ|02/lớp|6, 7, 8, 9
+B.III.3|Bộ lều trại (20 – 25 HS/trại)|H|Bộ|02/lớp|6, 7, 8, 9
+
+=Thiết bị dùng chung
+#Thiết bị dùng chung toàn trường
+%
+@
+1|Bảng nhóm|H|Chiếc|06/5 lớp
+2|Tủ đựng thiết bị|GH|Chiếc|03/trường
+3|Giá để thiết bị|G|Chiếc|03/trường
+4|Nam châm gắn bảng|GH|Chiếc|20/lớp
+5|Nẹp treo tranh|G|Chiếc|20/trường
+6|Giá treo tranh|G|Chiếc|03/trường
+7|Thiết bị thu phát âm thanh (đài đĩa, loa cầm tay, thiết bị âm thanh đa năng di động)|G|Bộ|01/5 lớp||Căn cứ điều kiện thực tế để lựa chọn
+8|Thiết bị trình chiếu (máy tính, máy chiếu/màn hình, đầu DVD, máy chiếu vật thể)|G|Bộ|01/5 lớp||Căn cứ điều kiện thực tế để lựa chọn
+9|Máy in (laze, tối thiểu 16 tờ A4/phút)|G|Chiếc|01/trường
+10|Máy ảnh (hoặc Máy quay)|GH|Chiếc|01/trường
+11|Cân bàn điện tử (đo khối lượng cơ thể HS)|GH|Chiếc|02/trường
+12|Nhiệt kế điện tử|H|Cái|02/trường

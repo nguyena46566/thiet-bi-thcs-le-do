@@ -212,7 +212,16 @@ export function bookedQuantity(eq, from, to, records, slots = null, exceptId = n
   return best;
 }
 
+/** Hóa chất đã quá hạn sử dụng (R10) */
+export function isExpired(eq) {
+  if (eq.kind !== "Hóa chất" || !eq.expiry) return false;
+  const d = parseDate(eq.expiry);
+  return !!d && d < todayVN();
+}
+
 function usableStock(eq) {
+  // Hóa chất hết hạn: không cho mượn
+  if (isExpired(eq)) return 0;
   // Có dữ liệu kho: chỉ tính số thiết bị còn tốt
   if (eq.qtyGood !== undefined) return Math.max(0, Number(eq.qtyGood) || 0);
   return /hỏng|đang sửa|thanh lý/i.test(eq.condition || "") ? 0 : Number(eq.stock) || 0;
@@ -252,7 +261,7 @@ export function searchEquipment({ query = "", subjectId, grade, limit = 8 } = {}
   if (grade) list = list.filter((e) => !e.grades?.length || e.grades.includes(Number(grade)));
   if (!qt.length) return normalize(query) ? [] : list.slice(0, limit).map(brief); // có câu hỏi nhưng toàn từ phổ biến -> không đoán bừa
   return list
-    .map((e) => ({ e, score: scoreMatch(qt, { name: e.name, keywords: (e.keywords || []).join(" ") }) }))
+    .map((e) => ({ e, score: scoreMatch(qt, { name: e.name, keywords: [...(e.keywords || []), e.topic || ""].join(" ") }) }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)

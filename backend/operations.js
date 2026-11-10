@@ -8,8 +8,8 @@
  */
 import db, { newId } from "./database.js";
 import { SUBJECTS } from "./chatTools.js";
-import { parseDate, formatDate, todayVN, getEquipment, availabilityOf, normalizeSlots, slotLabel, requestCells, recordCovers, recordSlots } from "./equipment.js";
-import { serial, applyDelta, refreshCache, withDerived, equipmentCol, purchaseCol, penaltyCol, int, str, schoolYearOf, createLossReport, listLossReports, confirmLoss, rejectLoss } from "./inventory.js";
+import { parseDate, formatDate, todayVN, getEquipment, availabilityOf, normalizeSlots, slotLabel, requestCells, recordCovers, recordSlots, isExpired as isExpiredEq } from "./equipment.js";
+import { serial, applyDelta, refreshCache, withDerived, equipmentCol, purchaseCol, penaltyCol, int, str, schoolYearOf, createLossReport, listLossReports, confirmLoss, rejectLoss, logChange, listChanges, lossCol } from "./inventory.js";
 import { principalConfigured } from "./auth.js";
 import { emailProposal, newEmailToken, registerEmailActionRoutes } from "./principalEmail.js";
 import notifications from "./notifications.js";
@@ -118,6 +118,13 @@ export function finishAudit(id, user) {
           source: "audit", auditId: a.id, auditTitle: a.title, note: row.note || "", reportedBy: user.name });
         row.lossReportId = lr.id;
       }
+      const afterAudit = {
+        ...eq,
+        qtyGood: row.countGood + lent,
+        qtyBroken: countBroken,
+        qtyLostPending: (eq.qtyLostPending || 0) + Math.max(0, -diff),
+      };
+      await logChange(eq, afterAudit, { kind: "Kiểm kê", refId: a.id, by: user.name, note: `${a.title}: phải có ${expected}, đếm được ${row.countGood + countBroken}${row.note ? ` – ${row.note}` : ""}`, always: true });
       await equipmentCol().update(eq.id, {
         qtyGood: row.countGood + lent,
         qtyBroken: countBroken,
@@ -155,7 +162,7 @@ export function createMaintenance(body, user) {
     const source = body.source === "good" ? "qtyGood" : "qtyBroken";
     if ((eq[source] || 0) < qty) return { error: `Chỉ có ${eq[source] || 0} thiết bị ${source === "qtyGood" ? "tốt" : "hỏng"} để gửi bảo trì` };
     const date = parseDate(body.date) || todayVN();
-    await applyDelta(eq.id, { [source]: -qty, qtyRepair: qty });
+    await applyDelta(eq.id, { [source]: -qty, qtyRepair: qty }, { kind: "Gửi bảo trì", by: user.name, note: str(body.content, 200) });
     const doc = {
       id: newId(), equipmentId: eq.id, name: eq.name, subjectId: eq.subjectId, quantity: qty,
       source: source === "qtyGood" ? "good" : "broken", kind: body.kind === "Bảo dưỡng" ? "Bảo dưỡng" : "Sửa chữa",
@@ -179,7 +186,7 @@ export function completeMaintenance(id, body, user) {
     if (repaired === null || disposed === null || cost === null || repaired + disposed !== m.quantity) {
       return { error: `Số sửa được + số thanh lý phải bằng ${m.quantity}` };
     }
-    await applyDelta(m.equipmentId, { qtyRepair: -m.quantity, qtyGood: repaired, qtyDisposed: disposed });
+    await applyDelta(m.equipmentId, { qtyRepair: -m.quantity, qtyGood: repaired, qtyDisposed: disposed }, { kind: "Hoàn thành bảo trì", refId: m.id, by: user.name, note: `Sửa được ${repaired}, thanh lý ${disposed}` });
     const doc = await maintCol().update(id, {
       status: "Hoàn thành", repaired, disposed, cost, resultNote: str(body?.note, 300),
       finishedAt: new Date().toISOString(), finishedOn: formatDate(todayVN()), finishedBy: user.name,
@@ -192,7 +199,7 @@ export function completeMaintenance(id, body, user) {
 // =====================================================================
 // GHI GIẢM THIẾT BỊ (thanh lý, mất, điều chuyển)
 // =====================================================================
-const DISPOSAL_REASONS = ["Thanh lý", "Mất", "Điều chuyển", "Hư hỏng không sửa được", "Khác"];
+const DISPOSAL_REASONS = ["Thanh lý", "Mất", "Điều chuyển", "Hư hỏng không sửa được", "Tiêu hủy (hóa chất hết hạn)", "Khác"];
 const BUCKETS = { good: "qtyGood", broken: "qtyBroken", lost: "qtyLost" };
 
 export const listDisposals = () => disposalCol().all();
@@ -207,7 +214,7 @@ export function createDisposal(body, user) {
     if ((eq[key] || 0) < qty) return { error: `Chỉ có ${eq[key] || 0} thiết bị ở nhóm đã chọn` };
     const reason = DISPOSAL_REASONS.includes(body.reason) ? body.reason : "Thanh lý";
     const date = parseDate(body.date) || todayVN();
-    await applyDelta(eq.id, { [key]: -qty, qtyDisposed: qty });
+    await applyDelta(eq.id, { [key]: -qty, qtyDisposed: qty }, { kind: "Ghi giảm", by: user.name, note: `${body.reason || "Thanh lý"}${body.decisionNo ? ` – QĐ ${str(body.decisionNo, 60)}` : ""}` });
     const doc = {
       id: newId(), equipmentId: eq.id, name: eq.name, subjectId: eq.subjectId, quantity: qty, source: body.source in BUCKETS ? body.source : "broken",
       reason, decisionNo: str(body.decisionNo, 60), note: str(body.note, 300), date: formatDate(date),
@@ -390,6 +397,84 @@ export function registerOperationRoutes(app, { requireAuth, requireAdmin, wrap }
   const send = (res, r, ok = 200) => (r.error ? res.status(r.status || 400).json({ error: r.error, ...(r.id ? { id: r.id } : {}) }) : res.status(ok).json(r.value));
 
   app.get("/api/inventory/equipment/:id/detail", requireAuth, wrap(async (req, res) => send(res, await equipmentDetail(req.params.id, req.session.user))));
+
+  // ---------- Hóa chất, vật tư tiêu hao (UC33, R10) ----------
+  app.get("/api/inventory/alerts", requireAdmin, wrap(async (req, res) => {
+    const list = await refreshCache();
+    const today = todayVN(), soon = new Date(today.getTime() + 30 * DAY);
+    const exp = (e) => (e.expiry ? parseDate(e.expiry) : null);
+    res.json({
+      expired: list.filter((e) => e.kind === "Hóa chất" && exp(e) && exp(e) < today),
+      expiringSoon: list.filter((e) => e.kind === "Hóa chất" && exp(e) && exp(e) >= today && exp(e) <= soon),
+      lowStock: list.filter((e) => e.minStock > 0 && e.qtyGood < e.minStock),
+      noExpiry: list.filter((e) => e.kind === "Hóa chất" && !e.expiry),
+    });
+  }));
+  const consumeCol = () => db.collection("consumptions");
+  app.get("/api/inventory/consumptions", requireAdmin, wrap(async (req, res) => res.json(await consumeCol().all())));
+  app.post("/api/inventory/consume", requireAdmin, wrap(async (req, res) => {
+    const b = req.body || {};
+    const r = await serial(async () => {
+      const eq = await equipmentCol().get(b.equipmentId);
+      if (!eq) return { error: "Chọn hóa chất / vật tư" };
+      if ((eq.kind || "Thiết bị") === "Thiết bị") return { error: "Chỉ xuất dùng được hóa chất hoặc vật tư tiêu hao; thiết bị phải đăng ký mượn – trả" };
+      const qty = int(b.quantity, 1, 100000);
+      if (qty === null) return { error: "Số lượng không hợp lệ" };
+      if ((eq.qtyGood || 0) < qty) return { error: `Chỉ còn ${eq.qtyGood || 0} ${eq.unit || ""}` };
+      if (isExpiredEq(eq)) return { error: "Hóa chất đã hết hạn sử dụng, không xuất dùng được (cần tiêu hủy)" };
+      const date = parseDate(b.date) || todayVN();
+      const doc = { id: newId(), equipmentId: eq.id, name: eq.name, unit: eq.unit || "", quantity: qty, receiver: str(b.receiver, 80), purpose: str(b.purpose, 200), date: formatDate(date), createdBy: req.session.user.name, createdAt: new Date().toISOString() };
+      await applyDelta(eq.id, { qtyGood: -qty, qtyConsumed: qty }, { kind: "Xuất dùng", refId: doc.id, by: req.session.user.name, note: `${doc.receiver}${doc.purpose ? ` – ${doc.purpose}` : ""}` });
+      await consumeCol().insert(doc);
+      await refreshCache();
+      return { value: doc };
+    });
+    send(res, r, 201);
+  }));
+  // Nhật ký thay đổi trong khoảng thời gian (dùng cho Sổ theo dõi tình trạng thiết bị – Mẫu 1)
+  app.get("/api/inventory/changes", requireAdmin, wrap(async (req, res) => {
+    const from = req.query.from ? new Date(req.query.from).toISOString() : "0000";
+    const to = req.query.to ? new Date(req.query.to).toISOString() : "9999";
+    res.json((await listChanges()).filter((c) => c.createdAt >= from && c.createdAt <= to));
+  }));
+
+  // ---------- Truy vết lịch sử một thiết bị (UC31) ----------
+  app.get("/api/inventory/equipment/:id/history", requireAdmin, wrap(async (req, res) => {
+    const id = req.params.id;
+    const eq = await equipmentCol().get(id);
+    const changes = await listChanges(id);
+    if (!eq && !changes.length) return res.status(404).json({ error: "Không tìm thấy thiết bị" });
+    const all = await db.records.findAll();
+    const loans = all.filter((r) => (r.items || []).some((x) => x.equipmentId === id)).map((r) => {
+      const it = r.items.find((x) => x.equipmentId === id);
+      const ret = (r.returnReport?.items || []).find((x) => x.equipmentId === id);
+      return { id: r.id, code: r.code || "", teacherName: r.teacherName, className: r.className, subjectName: r.subjectName, borrowDate: r.borrowDate, returnDate: r.returnDate,
+        period: r.period || "", status: r.status, quantity: it.quantity, createdAt: r.createdAt, approvedAt: r.approvedAt || null, approvedBy: r.approvedBy || "",
+        returnedAt: r.returnedAt || null, damaged: ret?.damaged || 0, lost: ret?.lost || 0, lostStatus: ret?.lostStatus || "", roomName: r.roomName || "" };
+    });
+    const losses = (await lossCol().all()).filter((x) => x.equipmentId === id).map(({ emailToken, emailTokenExpires, ...x }) => x);
+    // Mốc cuối cùng thiết bị còn được xác nhận đủ: kiểm kê không chênh lệch, hoặc lần trả không thiếu
+    const audits = (await auditCol().all()).filter((a) => a.status === "Hoàn tất");
+    const okAudit = audits.map((a) => ({ at: a.finishedAt, title: a.title, row: (a.items || []).find((i) => i.equipmentId === id) }))
+      .filter((x) => x.row && x.row.countGood !== null && !x.row.diff).sort((a, b) => b.at.localeCompare(a.at))[0];
+    const okReturn = loans.filter((l) => l.status === "Trả" && !l.lost && l.returnedAt).sort((a, b) => b.returnedAt.localeCompare(a.returnedAt))[0];
+    const since = [okAudit?.at, okReturn?.returnedAt].filter(Boolean).sort().pop() || null;
+    const candidates = loans.filter((l) => l.status !== "Từ chối" && l.status !== "Chờ duyệt" && (!since || (l.approvedAt || l.createdAt) >= since))
+      .sort((a, b) => (b.approvedAt || b.createdAt).localeCompare(a.approvedAt || a.createdAt));
+    res.json({ equipment: eq ? withDerived(eq) : { id, name: changes[0]?.name || id, deleted: true }, changes, loans, losses,
+      trace: { lastAuditOk: okAudit ? { at: okAudit.at, title: okAudit.title } : null, lastReturnOk: okReturn ? { at: okReturn.returnedAt, teacherName: okReturn.teacherName, code: okReturn.code } : null, since, candidates } });
+  }));
+
+  // ---------- Ghi kết quả xác minh báo mất (UC32) ----------
+  app.patch("/api/loss-reports/:id/verify", requireAdmin, wrap(async (req, res) => {
+    const lr = await lossCol().get(req.params.id);
+    if (!lr) return res.status(404).json({ error: "Không tìm thấy báo mất" });
+    const b = req.body || {};
+    const verification = { searchScope: str(b.searchScope, 500), involved: str(b.involved, 500), findings: str(b.findings, 1000), by: req.session.user.name, at: new Date().toISOString() };
+    if (!verification.searchScope && !verification.findings) return res.status(400).json({ error: "Ghi ít nhất phạm vi tìm kiếm hoặc kết quả xác minh" });
+    const { emailToken, emailTokenExpires, ...doc } = await lossCol().update(lr.id, { verification });
+    res.json(doc);
+  }));
 
   app.get("/api/audits", requireAdmin, wrap(async (req, res) => res.json(await listAudits())));
   app.post("/api/audits", requireAdmin, wrap(async (req, res) => send(res, await startAudit(req.session.user, req.body || {}), 201)));

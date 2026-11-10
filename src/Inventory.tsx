@@ -2,11 +2,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import {
   fetchInventory, createEquipment, updateEquipment, deleteEquipment, fetchPurchases, createPurchase,
-  fetchMyPoints, fetchAllPoints, fetchTeacherPoints, adjustPoints, unlockTeacher, returnRecord,
+  fetchMyPoints, fetchAllPoints, fetchTeacherPoints, adjustPoints, unlockTeacher, returnRecord, fold,
   type Equipment, type Purchase, type PenaltyEntry, type PointRules, type TeacherScore, type BorrowRecord,
 } from "@/api"
 
-import { printQrLabels, exportExcel } from "./Operations"
+import { printQrLabels, exportExcel, EquipmentHistoryDialog } from "./Operations"
 
 export type Subject = { id: string; name: string; color: string }
 
@@ -53,14 +53,18 @@ function useRules() {
 export function ReturnDialog({ record, subjects, onClose, onDone }: { record: BorrowRecord; subjects: Subject[]; onClose: () => void; onDone: () => void }) {
   const rules = useRules()
   const [inventory, setInventory] = useState<Equipment[]>([])
-  const [rows, setRows] = useState<{ equipmentId: string; borrowed?: number; damaged: number; lost: number }[]>(
-    (record.items || []).map((it) => ({ equipmentId: it.equipmentId, borrowed: it.quantity, damaged: 0, lost: 0 })),
+  const [rows, setRows] = useState<{ equipmentId: string; borrowed?: number; damaged: number; lost: number; consumed: number }[]>(
+    (record.items || []).map((it) => ({ equipmentId: it.equipmentId, borrowed: it.quantity, damaged: 0, lost: 0, consumed: 0 })),
   )
+  const [consumedInit, setConsumedInit] = useState(false)
   const [note, setNote] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   useEffect(() => { fetchInventory().then(setInventory).catch((e) => setError(e.message)) }, [])
   const byId = useMemo(() => new Map(inventory.map((e) => [e.id, e])), [inventory])
+  const isConsumable = (id: string) => { const k = byId.get(id)?.kind; return k === "Hóa chất" || k === "Vật tư tiêu hao" }
+  // Hóa chất, vật tư: mặc định coi như đã dùng hết số đã mượn (sửa nếu có dư trả lại)
+  useEffect(() => { if (!consumedInit && inventory.length) { setRows((rs) => rs.map((r) => (isConsumable(r.equipmentId) ? { ...r, consumed: r.borrowed ?? 0 } : r))); setConsumedInit(true) } }, [inventory]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ngày trễ (ước tính phía giao diện; máy chủ tính lại khi lưu)
   const lateDays = (() => {
@@ -76,7 +80,7 @@ export function ReturnDialog({ record, subjects, onClose, onDone }: { record: Bo
   const save = async () => {
     setBusy(true); setError("")
     try {
-      await returnRecord(record.id, { items: rows.filter((r) => r.damaged || r.lost).map(({ equipmentId, damaged, lost }) => ({ equipmentId, damaged, lost })), note })
+      await returnRecord(record.id, { items: rows.filter((r) => r.damaged || r.lost || r.consumed).map(({ equipmentId, damaged, lost, consumed }) => ({ equipmentId, damaged, lost, consumed })), note })
       onDone()
     } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } finally { setBusy(false) }
   }
@@ -93,7 +97,7 @@ export function ReturnDialog({ record, subjects, onClose, onDone }: { record: Bo
       <div className="text-xs font-semibold text-gray-600 mb-2">Thiết bị hỏng / mất khi trả (để 0 nếu đầy đủ, nguyên vẹn)</div>
       <div className="border border-gray-100 rounded-xl overflow-hidden mb-3">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs text-gray-500"><tr><th className="text-left px-3 py-2">Thiết bị</th><th className="px-3 py-2 w-20">Mượn</th><th className="px-3 py-2 w-24">Hỏng</th><th className="px-3 py-2 w-24">Mất</th><th className="w-8" /></tr></thead>
+          <thead className="bg-gray-50 text-xs text-gray-500"><tr><th className="text-left px-3 py-2">Thiết bị</th><th className="px-3 py-2 w-20">Mượn</th><th className="px-3 py-2 w-24">Hỏng</th><th className="px-3 py-2 w-24">Mất</th><th className="px-3 py-2 w-24">Đã dùng hết</th><th className="w-8" /></tr></thead>
           <tbody className="divide-y divide-gray-50">
             {rows.length === 0 && <tr><td colSpan={5} className="px-3 py-3 text-gray-400 text-center text-xs">Phiếu nhập tay không có mã thiết bị. Nếu có hỏng/mất, thêm thiết bị ở ô bên dưới.</td></tr>}
             {rows.map((r, i) => (
@@ -104,6 +108,7 @@ export function ReturnDialog({ record, subjects, onClose, onDone }: { record: Bo
                   <td key={k} className="px-3 py-2"><input type="number" min={0} max={r.borrowed ?? 999} aria-label={k === "damaged" ? "Số hỏng" : "Số mất"} className={field} value={r[k]}
                     onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, [k]: Math.max(0, Math.floor(Number(e.target.value) || 0)) } : x)))} /></td>
                 ))}
+                <td className="px-3 py-2">{isConsumable(r.equipmentId) ? <input type="number" min={0} max={r.borrowed ?? 999} aria-label="Số đã dùng hết" className={field} value={r.consumed} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, consumed: Math.max(0, Math.floor(Number(e.target.value) || 0)) } : x)))} /> : <span className="text-xs text-gray-300">—</span>}</td>
                 <td>{r.borrowed === undefined && <button onClick={() => setRows(rows.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-600 px-2" aria-label="Bỏ dòng">✕</button>}</td>
               </tr>
             ))}
@@ -111,7 +116,7 @@ export function ReturnDialog({ record, subjects, onClose, onDone }: { record: Bo
         </table>
       </div>
       {subjectEq.length > 0 && (
-        <select className={`${field} mb-3`} value="" aria-label="Thêm thiết bị hỏng hoặc mất" onChange={(e) => e.target.value && setRows([...rows, { equipmentId: e.target.value, damaged: 0, lost: 0 }])}>
+        <select className={`${field} mb-3`} value="" aria-label="Thêm thiết bị hỏng hoặc mất" onChange={(e) => e.target.value && setRows([...rows, { equipmentId: e.target.value, damaged: 0, lost: 0, consumed: 0 }])}>
           <option value="">+ Thêm thiết bị hỏng/mất khác của môn này…</option>
           {subjectEq.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
         </select>
@@ -163,6 +168,19 @@ function EquipmentForm({ initial, subjects, onClose, onSaved }: { initial: Parti
       <div className="space-y-3">
         <div><label className={label}>Tên thiết bị *</label><input className={field} value={f.name || ""} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
         <div className="grid grid-cols-2 gap-3">
+          <div><label className={label}>Loại</label><select className={field} value={f.kind || "Thiết bị"} onChange={(e) => setF({ ...f, kind: e.target.value as Equipment["kind"] })}>
+            <option>Thiết bị</option><option>Hóa chất</option><option>Vật tư tiêu hao</option></select></div>
+          <label className="flex items-center gap-2 text-sm pt-5"><input type="checkbox" checked={!!f.highValue} onChange={(e) => setF({ ...f, highValue: e.target.checked })} />Giá trị cao (mượn nhiều ngày cần duyệt đặc biệt)</label>
+        </div>
+        {(f.kind === "Hóa chất" || f.kind === "Vật tư tiêu hao") && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-amber-50/50 rounded-xl p-3">
+            {f.kind === "Hóa chất" && <div><label className={label}>Hạn sử dụng</label><input type="date" className={field} value={(() => { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(f.expiry || ""); return m ? `${m[3]}-${m[2]}-${m[1]}` : "" })()} onChange={(e) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(e.target.value); setF({ ...f, expiry: m ? `${m[3]}/${m[2]}/${m[1]}` : "" }) }} /></div>}
+            {f.kind === "Hóa chất" && <div><label className={label}>Nồng độ</label><input className={field} value={f.concentration || ""} onChange={(e) => setF({ ...f, concentration: e.target.value })} placeholder="VD: 1M, 10%" /></div>}
+            {f.kind === "Hóa chất" && <div><label className={label}>Cảnh báo an toàn</label><input className={field} value={f.hazard || ""} onChange={(e) => setF({ ...f, hazard: e.target.value })} placeholder="Độc, dễ cháy, ăn mòn…" /></div>}
+            <div><label className={label}>Tồn tối thiểu</label><input type="number" min={0} className={field} value={f.minStock ?? 0} onChange={(e) => setF({ ...f, minStock: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} /></div>
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-3">
           <div><label className={label}>Môn học *</label>
             <select className={field} value={f.subjectId} onChange={(e) => setF({ ...f, subjectId: e.target.value })}>{subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
           </div>
@@ -187,6 +205,7 @@ function EquipmentForm({ initial, subjects, onClose, onSaved }: { initial: Parti
           <div><label className={label}>Năm sử dụng</label><input type="number" min={1990} max={2100} className={field} value={f.yearInUse ?? ""} onChange={(e) => setF({ ...f, yearInUse: e.target.value ? Number(e.target.value) : null })} /></div>
           <div><label className={label}>Nguồn kinh phí</label><select className={field} value={f.fundSource || "Ngân sách"} onChange={(e) => setF({ ...f, fundSource: e.target.value })}>{["Ngân sách", "Xã hội hóa", "Tài trợ", "Khác"].map((x) => <option key={x}>{x}</option>)}</select></div>
         </div>
+        <div><label className={label}>Chủ đề / bài theo chương trình (dùng cho thư mục)</label><input className={field} value={f.topic || ""} onChange={(e) => setF({ ...f, topic: e.target.value })} placeholder="VD: Áp suất chất lỏng; Hình học trực quan" /></div>
         <div><label className={label}>Vị trí cất</label><input className={field} value={f.location || ""} onChange={(e) => setF({ ...f, location: e.target.value })} placeholder="VD: Phòng thiết bị – Tủ Lí 2" /></div>
         <div><label className={label}>Từ khóa (giúp trợ lý AI tìm, cách nhau bằng dấu phẩy)</label><input className={field} value={kw} onChange={(e) => setKw(e.target.value)} /></div>
         <div><label className={label}>Ghi chú</label><input className={field} value={f.note || ""} onChange={(e) => setF({ ...f, note: e.target.value })} /></div>
@@ -205,6 +224,8 @@ export function InventoryTab({ subjects }: { subjects: Subject[] }) {
   const [subject, setSubject] = useState("")
   const [onlyIssue, setOnlyIssue] = useState(false)
   const [editing, setEditing] = useState<Partial<Equipment> | null>(null)
+  const [historyId, setHistoryId] = useState<string | null>(null)
+  const [view, setView] = useState<"list" | "tree">("list")
   const [error, setError] = useState("")
   const [pageNo, setPageNo] = useState(1)
   const PAGE = 20
@@ -215,7 +236,7 @@ export function InventoryTab({ subjects }: { subjects: Subject[] }) {
   const shown = (list || []).filter((e) =>
     (!subject || e.subjectId === subject) &&
     (!onlyIssue || e.qtyBroken > 0 || e.qtyLost > 0 || e.qtyRepair > 0 || (e.qtyLostPending || 0) > 0) &&
-    (!q || [e.name, e.location, e.id].some((v) => (v || "").toLowerCase().includes(q.toLowerCase()))))
+    (!q || fold([e.name, e.location, e.id, e.topic, ...(e.keywords || [])].join(" ")).includes(fold(q))))
   const pages = Math.max(1, Math.ceil(shown.length / PAGE))
   const pageItems = shown.slice((pageNo - 1) * PAGE, pageNo * PAGE)
   const exportList = () => exportExcel("Danh-muc-thiet-bi.xlsx", [{ name: "Danh mục thiết bị", rows: shown.map((e, i) => ({
@@ -246,16 +267,21 @@ export function InventoryTab({ subjects }: { subjects: Subject[] }) {
       <ErrorBox msg={error} />
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center gap-3">
-          <input type="search" aria-label="Tìm thiết bị" placeholder="Tìm mã, tên, vị trí…" className={`${fieldBase} w-full sm:w-60`} value={q} onChange={(e) => setQ(e.target.value)} />
+          <input type="search" aria-label="Tìm thiết bị" placeholder="Tìm mã, tên, chủ đề (không cần dấu)…" className={`${fieldBase} w-full sm:w-60`} value={q} onChange={(e) => setQ(e.target.value)} />
           <select aria-label="Lọc theo môn" className={fieldBase} value={subject} onChange={(e) => setSubject(e.target.value)}>
             <option value="">Tất cả môn</option>{subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
           <label className="flex items-center gap-1.5 text-sm text-gray-600"><input type="checkbox" checked={onlyIssue} onChange={(e) => setOnlyIssue(e.target.checked)} />Chỉ thiết bị có hỏng/mất/đang sửa</label>
-          <button onClick={exportList} disabled={!shown.length} className={`${btnGhost} ml-auto`}>Xuất Excel</button>
+          <div className="flex rounded-lg bg-gray-100 p-0.5 ml-auto" role="group" aria-label="Kiểu xem">
+            {([["list", "Danh sách"], ["tree", "Thư mục"]] as const).map(([k, l]) => <button key={k} onClick={() => setView(k)} aria-pressed={view === k} className={`px-3 py-1.5 rounded-md text-sm font-medium ${view === k ? "bg-white shadow-sm text-[#1a3670]" : "text-gray-600"}`}>{l}</button>)}
+          </div>
+          <button onClick={exportList} disabled={!shown.length} className={btnGhost}>Xuất Excel</button>
           <button onClick={() => printQrLabels(shown, subjects)} disabled={!shown.length} className={btnGhost} title="In nhãn mã QR cho các thiết bị đang hiển thị">In nhãn QR ({shown.length})</button>
           <button onClick={() => setEditing(emptyEq(subject || subjects[0].id))} className={btnPrimary}>+ Thêm thiết bị</button>
         </div>
-        {list === null ? <p className="p-6 text-sm text-gray-400">Đang tải…</p> : (
+        {list === null ? <p className="p-6 text-sm text-gray-400">Đang tải…</p> : view === "tree" ? (
+          <TreeView items={shown} subjects={subjects} onHistory={setHistoryId} onEdit={setEditing} />
+        ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="bg-gray-50 border-b border-gray-100">
@@ -267,7 +293,11 @@ export function InventoryTab({ subjects }: { subjects: Subject[] }) {
                   return (
                     <tr key={e.id} className="hover:bg-gray-50/60">
                       <td className="px-3 py-2.5 text-[11px] text-gray-400 font-mono whitespace-nowrap">{e.id}</td>
-                      <td className="px-3 py-2.5 font-medium text-gray-900 min-w-[200px]">{e.name}{e.grades?.length ? <span className="block text-[11px] text-gray-400">Lớp {e.grades.join(", ")}</span> : null}</td>
+                      <td className="px-3 py-2.5 font-medium text-gray-900 min-w-[200px]">{e.name}
+                        {e.kind && e.kind !== "Thiết bị" && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 align-middle">{e.kind}</span>}
+                        {e.expired && <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 align-middle">Hết hạn</span>}
+                        {e.highValue && <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-violet-100 text-violet-700 align-middle">Giá trị cao</span>}
+                        {(e.grades?.length || e.expiry) ? <span className="block text-[11px] text-gray-400">{[e.grades?.length ? `Lớp ${e.grades.join(", ")}` : "", e.expiry ? `hạn ${e.expiry}` : ""].filter(Boolean).join(" · ")}</span> : null}</td>
                       <td className="px-3 py-2.5"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white whitespace-nowrap" style={{ backgroundColor: s?.color || "#888" }}>{s?.name}</span></td>
                       <td className="px-3 py-2.5 text-xs text-gray-500">{e.unit || ""}</td>
                       <td className="px-3 py-2.5 font-semibold text-green-700">{e.qtyGood}</td>
@@ -277,6 +307,7 @@ export function InventoryTab({ subjects }: { subjects: Subject[] }) {
                       <td className="px-3 py-2.5 whitespace-nowrap text-gray-600">{e.unitPrice ? money(e.unitPrice) : <span className="text-gray-300">chưa có</span>}</td>
                       <td className="px-3 py-2.5 text-xs text-gray-500 min-w-[140px]">{e.location}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
+                        <button onClick={() => setHistoryId(e.id)} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 mr-1">Lịch sử</button>
                         <button onClick={() => setEditing(e)} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700">Sửa</button>
                         <button onClick={() => remove(e)} className="ml-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-gray-400 hover:text-red-600 hover:bg-red-50">Xóa</button>
                       </td>
@@ -299,6 +330,7 @@ export function InventoryTab({ subjects }: { subjects: Subject[] }) {
           </div>
         )}
       </div>
+      {historyId && <EquipmentHistoryDialog id={historyId} onClose={() => setHistoryId(null)} />}
       {editing && <EquipmentForm initial={editing} subjects={subjects} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />}
     </div>
   )
@@ -524,5 +556,49 @@ export function MyPointsCard() {
       {d.locked && <p className="text-sm text-rose-700 mt-2">Tài khoản đang tạm khóa quyền đăng ký mượn do điểm dưới {d.rules.lockBelow}. Vui lòng liên hệ phòng thiết bị.</p>}
       {open && <div className="mt-4 space-y-3"><RulesBox rules={d.rules} /><History items={d.history} /></div>}
     </div>
+  )
+}
+
+/** Thư mục: Môn → Khối lớp → Chủ đề → Thiết bị (theo cách trình bày của danh mục tối thiểu) */
+function TreeView({ items, subjects, onHistory, onEdit }: { items: Equipment[]; subjects: Subject[]; onHistory: (id: string) => void; onEdit: (e: Equipment) => void }) {
+  const [open, setOpen] = useState<Record<string, boolean>>({})
+  const toggle = (k: string) => setOpen((o) => ({ ...o, [k]: !o[k] }))
+  const groups = subjects.map((s) => {
+    const list = items.filter((e) => e.subjectId === s.id)
+    const grades = [6, 7, 8, 9].map((g) => ({ g, list: list.filter((e) => (e.grades || []).includes(g)) })).filter((x) => x.list.length)
+    const noGrade = list.filter((e) => !(e.grades || []).length)
+    return { s, list, grades, noGrade }
+  }).filter((x) => x.list.length)
+  const byTopic = (list: Equipment[]) => {
+    const m = new Map<string, Equipment[]>()
+    for (const e of list) { const k = e.topic || "Chưa ghi chủ đề"; m.set(k, [...(m.get(k) || []), e]) }
+    return [...m.entries()].sort((a, b) => (a[0] === "Chưa ghi chủ đề" ? 1 : b[0] === "Chưa ghi chủ đề" ? -1 : a[0].localeCompare(b[0], "vi")))
+  }
+  const row = (e: Equipment) => (
+    <li key={e.id} className="flex items-center gap-3 py-1.5 pl-2 text-sm">
+      <span className="flex-1 min-w-0 truncate">{e.name}</span>
+      <span className="text-xs text-green-700 whitespace-nowrap">tốt {e.qtyGood}</span>
+      {(e.qtyBroken > 0 || e.qtyRepair > 0) && <span className="text-xs text-amber-700 whitespace-nowrap">hỏng/sửa {e.qtyBroken + e.qtyRepair}</span>}
+      <span className="hidden md:inline text-xs text-gray-400 truncate max-w-[180px]">{e.location}</span>
+      <button onClick={() => onHistory(e.id)} className="text-xs font-semibold text-[#1a3670] hover:underline">Lịch sử</button>
+      <button onClick={() => onEdit(e)} className="text-xs font-semibold text-gray-500 hover:underline">Sửa</button>
+    </li>
+  )
+  const branch = (key: string, title: string, count: number, children: ReactNode, level: number) => (
+    <li key={key}>
+      <button onClick={() => toggle(key)} aria-expanded={!!open[key]} className={`w-full flex items-center gap-2 text-left py-1.5 ${level === 0 ? "font-semibold text-gray-900" : level === 1 ? "font-medium text-gray-800" : "text-gray-700"} hover:text-[#1a3670]`}>
+        <span className="w-4 text-gray-400" aria-hidden="true">{open[key] ? "▾" : "▸"}</span>{title}<span className="text-xs text-gray-400 font-normal">({count})</span>
+      </button>
+      {open[key] && <ul className="pl-6 border-l border-gray-100 ml-2">{children}</ul>}
+    </li>
+  )
+  return (
+    <ul className="p-5">
+      {groups.map(({ s, list, grades, noGrade }) => branch(s.id, s.name, list.length, <>
+        {grades.map(({ g, list: gl }) => branch(`${s.id}-${g}`, `Lớp ${g}`, gl.length, byTopic(gl).map(([t, tl]) => branch(`${s.id}-${g}-${t}`, t, tl.length, tl.map(row), 2)), 1))}
+        {noGrade.length > 0 && branch(`${s.id}-none`, "Chưa ghi khối lớp", noGrade.length, noGrade.map(row), 1)}
+      </>, 0))}
+      {groups.length === 0 && <li className="text-sm text-gray-400">Không có thiết bị phù hợp</li>}
+    </ul>
   )
 }

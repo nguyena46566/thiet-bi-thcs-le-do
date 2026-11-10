@@ -4,6 +4,8 @@ import { AuthProvider, useAuth } from "@/AuthContext"
 import { InventoryTab, PurchasesTab, PointsTab, ReturnDialog, MyPointsCard } from "./Inventory"
 import { AuditTab, MaintenanceTab, ReportsTab, EquipmentPage, Dashboard, DisposalTab, BooksTab, LossTab } from "./Operations"
 import { RoomsTab, ProposalsTab, MyProposals } from "./School"
+import { MinlistTab } from "./Minlist"
+import { ChemicalsTab, PlansTab, DecisionsTab } from "./Planning"
 import ChatWidget from "@/ChatWidget"
 import {
   fetchRecords,
@@ -26,6 +28,7 @@ import {
   sendRemindersNow,
   fetchAvailable,
   fetchRoomsAvailability,
+  fold,
   type AvailableItem,
   type Room,
 } from "@/api"
@@ -681,7 +684,7 @@ function BorrowForm({ subjectId, subjectName, onCreated, prefill, onPrefillUsed 
               <ul className="max-h-[26rem] overflow-y-auto divide-y divide-gray-100">
                 {available === null && <li className="px-4 py-3 text-sm text-gray-400">Đang tải danh mục…</li>}
                 {available?.length === 0 && <li className="px-4 py-3 text-sm text-gray-400">Môn này chưa có thiết bị trong danh mục. Ghi đồ dùng ở ô bên dưới.</li>}
-                {available?.filter((a) => !eqQuery || a.name.toLowerCase().includes(eqQuery.toLowerCase())).map((a) => {
+                {available?.filter((a) => !eqQuery || fold(a.name).includes(fold(eqQuery))).map((a) => {
                   const qty = picked.find((p) => p.equipmentId === a.id)?.quantity || 0
                   const setQty = (n: number) => setPicked((prev) => (n <= 0 ? prev.filter((p) => p.equipmentId !== a.id) : prev.some((p) => p.equipmentId === a.id) ? prev.map((p) => (p.equipmentId === a.id ? { ...p, quantity: n } : p)) : [...prev, { equipmentId: a.id, quantity: n }]))
                   return (
@@ -930,10 +933,15 @@ const ADMIN_MENU: { group: string; items: { id: string; label: string; tab: stri
     { id: "ghi-giam", label: "Ghi giảm (thanh lý, mất)", tab: "disposals" },
     { id: "kiem-ke", label: "Kiểm kê", tab: "audit" },
     { id: "bao-tri", label: "Bảo trì – sửa chữa", tab: "maintenance" },
+    { id: "hoa-chat", label: "Hóa chất – vật tư tiêu hao", tab: "chemicals" },
     { id: "xac-nhan-mat", label: "Xác nhận mất thiết bị", tab: "loss" },
     { id: "de-xuat", label: "Đề xuất mua sắm", tab: "proposals" },
   ] },
-  { group: "Danh mục", items: [{ id: "danh-muc", label: "Danh mục thiết bị", tab: "inventory" }, { id: "phong", label: "Phòng bộ môn", tab: "rooms" }] },
+  { group: "Danh mục", items: [{ id: "danh-muc", label: "Danh mục thiết bị", tab: "inventory" }, { id: "phong", label: "Phòng bộ môn", tab: "rooms" }, { id: "toi-thieu", label: "Danh mục tối thiểu (TT 38)", tab: "minlist" }] },
+  { group: "Kế hoạch", items: [
+    { id: "ke-hoach", label: "Kế hoạch năm học", tab: "plans" },
+    { id: "quyet-dinh", label: "Quyết định thành lập", tab: "decisions" },
+  ] },
   { group: "Giáo viên", items: [{ id: "thi-dua", label: "Điểm thi đua", tab: "points" }] },
   { group: "Báo cáo", items: [
     { id: "bao-cao", label: "Báo cáo tổng hợp", tab: "reports" },
@@ -1008,12 +1016,19 @@ function AdminPage({ section = "tong-quan", go }: { section?: string; go: (secti
 
   const handleStatusChange = async (id: string, newStatus: RecordStatus) => {
     let reason: string | undefined
+    let specialNote: string | undefined
+    const rec = records.find((r) => r.id === id)
+    if (newStatus === "Mượn" && rec?.needsSpecialApproval) {
+      const n = prompt(`${rec.specialReason}.\nGhi xác nhận đã được Ban giám hiệu đồng ý (bắt buộc):`, "")
+      if (!n || !n.trim()) return
+      specialNote = n.trim()
+    }
     if (newStatus === "Từ chối") {
       const r = prompt("Lý do từ chối (sẽ gửi cho giáo viên, có thể để trống):", "")
       if (r === null) return // bấm Hủy
       reason = r.trim()
     }
-    try { await updateRecordStatus(id, newStatus, reason); loadData(); loadNotifs() } catch (err) { alert(err instanceof Error ? err.message : "Lỗi") }
+    try { await updateRecordStatus(id, newStatus, reason, specialNote); loadData(); loadNotifs() } catch (err) { alert(err instanceof Error ? err.message : "Lỗi") }
   }
   const handleDelete = async (id: string) => {
     if (!confirm("Xác nhận xóa?")) return
@@ -1042,6 +1057,10 @@ function AdminPage({ section = "tong-quan", go }: { section?: string; go: (secti
         {tab === "books" && <BooksTab subjects={SUBJECTS} />}
         {tab === "loss" && <LossTab />}
         {tab === "rooms" && <RoomsTab subjects={SUBJECTS} />}
+        {tab === "minlist" && <MinlistTab subjects={SUBJECTS} />}
+        {tab === "chemicals" && <ChemicalsTab go={go} />}
+        {tab === "plans" && <PlansTab />}
+        {tab === "decisions" && <DecisionsTab />}
         {tab === "proposals" && <ProposalsTab />}
         {tab === "records" && <AdminSummary onPick={(st) => { setFilterStatus(st); setFilterSubject(""); setSearch("") }} active={filterStatus} refreshKey={records} />}
         {tab === "records" && (
@@ -1085,7 +1104,7 @@ function AdminPage({ section = "tong-quan", go }: { section?: string; go: (secti
                       const btn = "px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap"
                       return (
                         <tr key={r.id} className={isOverdue(r) ? "bg-rose-50/50" : "hover:bg-gray-50/60"}>
-                          <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">{r.teacherName}{(r.code || r.roomName) && <div className="text-[10px] text-gray-400 font-normal">{[r.code, r.roomName].filter(Boolean).join(" · ")}</div>}</td>
+                          <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">{r.teacherName}{(r.code || r.roomName) && <div className="text-[10px] text-gray-400 font-normal">{[r.code, r.roomName].filter(Boolean).join(" · ")}</div>}{r.needsSpecialApproval && <div className="text-[10px] font-bold text-violet-700" title={r.specialReason}>{r.specialApproval ? "Đã duyệt đặc biệt" : "Cần duyệt đặc biệt"}</div>}</td>
                           <td className="px-3 py-3 text-gray-600">{r.className}</td>
                           <td className="px-3 py-3"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white whitespace-nowrap" style={{ backgroundColor: sub?.color || "#888" }}>{r.subjectName}</span></td>
                           <td className="px-3 py-3 text-gray-600 text-xs whitespace-nowrap">{r.period || "-"}</td>

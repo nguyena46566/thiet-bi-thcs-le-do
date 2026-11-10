@@ -4,9 +4,12 @@ import {
   fetchAudits, startAudit, fetchAudit, saveAudit, finishAudit, cancelAudit,
   fetchInventory, fetchMaintenance, createMaintenance, completeMaintenance, fetchReport, fetchEquipmentDetail,
   fetchDisposals, createDisposal, fetchRecords, fetchNotifications, fetchLossReports, confirmLoss, rejectLoss, fetchRooms, fetchRoomLog,
+  fetchEquipmentHistory, verifyLoss, fetchAlerts, fetchChanges, type EquipmentHistory,
   type Audit, type AuditItem, type Equipment, type Maintenance, type Report, type BorrowDraft, type Disposal, type BorrowRecord, type Notification, type LossReport, type Room,
 } from "@/api"
 import type { Subject } from "./Inventory"
+import { printHtml, esc, table, dots } from "./printing"
+import { printSummaryReport } from "./Planning"
 
 const money = (n: number) => `${(n || 0).toLocaleString("vi-VN")} đ`
 const fieldBase = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/20 focus:border-[#1a3670] bg-white"
@@ -101,7 +104,8 @@ export function AuditTab({ subjects }: { subjects: Subject[] }) {
             {!done && <button onClick={save} disabled={busy} className={btnGhost}>Lưu nháp</button>}
             {!done && <button onClick={cancel} className={btnGhost}>Hủy đợt</button>}
             {!done && <button onClick={finish} disabled={busy || counted === 0} className={btnPrimary}>Hoàn tất kiểm kê</button>}
-            {done && <button onClick={() => exportAudit(current)} className={btnPrimary}>Xuất biên bản Excel</button>}
+            {done && <button onClick={() => printAuditMinutes(current, subjects)} className={btnPrimary}>In biên bản kiểm kê (Mẫu 6)</button>}
+            {done && <button onClick={() => exportAudit(current)} className={btnGhost}>Xuất Excel</button>}
             {done && <button onClick={() => setCurrent(null)} className={btnGhost}>Đóng</button>}
           </div>
         </div>
@@ -264,10 +268,10 @@ export function MaintenanceTab({ subjects }: { subjects: Subject[] }) {
           <div className="px-5 py-4 border-b border-gray-100 flex justify-between"><h3 className="font-bold text-gray-900">Đã hoàn thành</h3><span className="text-sm text-gray-500">Tổng chi phí: <strong className="text-gray-800">{money(totalCost)}</strong></span></div>
           {finished.length === 0 ? <p className="p-6 text-center text-sm text-gray-400">Chưa có</p> : (
             <div className="overflow-x-auto"><table className="w-full text-sm">
-              <thead><tr className="bg-gray-50">{["Thiết bị", "Loại", "Gửi", "Xong", "Sửa được", "Thanh lý", "Chi phí"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+              <thead><tr className="bg-gray-50">{["Thiết bị", "Loại", "Gửi", "Xong", "Sửa được", "Thanh lý", "Chi phí", ""].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-gray-50">{finished.map((m) => (
                 <tr key={m.id}><td className="px-3 py-2 font-medium">{m.name}{m.resultNote && <div className="text-[11px] text-gray-400">{m.resultNote}</div>}</td><td className="px-3 py-2 text-gray-600">{m.kind}</td><td className="px-3 py-2 text-xs text-gray-600">{m.date}</td><td className="px-3 py-2 text-xs text-gray-600">{m.finishedOn}</td>
-                  <td className="px-3 py-2 text-green-700 font-semibold">{m.repaired}</td><td className={`px-3 py-2 ${m.disposed ? "text-rose-600 font-semibold" : "text-gray-400"}`}>{m.disposed}</td><td className="px-3 py-2 whitespace-nowrap">{money(m.cost)}</td></tr>
+                  <td className="px-3 py-2 text-green-700 font-semibold">{m.repaired}</td><td className={`px-3 py-2 ${m.disposed ? "text-rose-600 font-semibold" : "text-gray-400"}`}>{m.disposed}</td><td className="px-3 py-2 whitespace-nowrap">{money(m.cost)}</td><td className="px-3 py-2"><button onClick={() => printDamageMinutes(m, inventory.find((e) => e.id === m.equipmentId))} className="text-xs font-semibold text-[#1a3670] hover:underline whitespace-nowrap">In biên bản</button></td></tr>
               ))}</tbody>
             </table></div>
           )}
@@ -500,6 +504,7 @@ export function Dashboard({ go }: { go: (section: string) => void }) {
   const [notifs, setNotifs] = useState<Notification[]>([])
   const [running, setRunning] = useState(0)
   const [lossPending, setLossPending] = useState(0)
+  const [chemAlerts, setChemAlerts] = useState(0)
   useEffect(() => {
     const p = presets()[3]
     fetchReport(isoToVn(p.from), isoToVn(p.to)).then(setRep).catch(() => {})
@@ -507,6 +512,7 @@ export function Dashboard({ go }: { go: (section: string) => void }) {
     fetchInventory().then(setInv).catch(() => {})
     fetchNotifications({ limit: 8 }).then(setNotifs).catch(() => {})
     fetchMaintenance().then((l) => setRunning(l.filter((m) => m.status === "Đang thực hiện").length)).catch(() => {})
+    fetchAlerts().then((a) => setChemAlerts(a.expired.length + a.expiringSoon.length + a.lowStock.length)).catch(() => {})
     fetchLossReports().then((r) => setLossPending(r.reports.filter((x) => x.status === "Chờ xác nhận").reduce((a, x) => a + x.quantity, 0))).catch(() => {})
   }, [])
   const t0 = new Date(); t0.setHours(0, 0, 0, 0)
@@ -522,6 +528,7 @@ export function Dashboard({ go }: { go: (section: string) => void }) {
     ["Thiết bị hỏng chờ xử lý", broken, "bg-orange-50 border-orange-200 text-orange-800", "bao-tri"],
     ["Đang bảo trì", running, "bg-violet-50 border-violet-200 text-violet-800", "bao-tri"],
     ["Báo mất chờ xác nhận", lossPending, "bg-red-50 border-red-200 text-red-800", "xac-nhan-mat"],
+    ["Cảnh báo hóa chất, vật tư", chemAlerts, "bg-yellow-50 border-yellow-200 text-yellow-900", "hoa-chat"],
     ["Giá trị tài sản", money(value), "bg-emerald-50 border-emerald-200 text-emerald-800", "danh-muc"],
   ]
   const months = rep?.byMonth || []
@@ -534,7 +541,7 @@ export function Dashboard({ go }: { go: (section: string) => void }) {
   )
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-8 gap-3">
         {kpis.map(([l, v, c, s]) => (
           <button key={l} onClick={() => go(s)} className={`text-left border rounded-xl px-4 py-3 hover:shadow-md transition-shadow ${c}`}>
             <div className="text-2xl font-bold truncate">{v}</div><div className="text-xs opacity-80">{l}</div>
@@ -642,8 +649,8 @@ export function DisposalTab({ subjects }: { subjects: Subject[] }) {
         </div>
         {list === null ? <p className="p-6 text-sm text-gray-400">Đang tải…</p> : list.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">Chưa có chứng từ ghi giảm</p> : (
           <div className="overflow-x-auto"><table className="w-full text-sm">
-            <thead><tr className="bg-gray-50">{["Ngày", "Thiết bị", "SL", "Lý do", "Số QĐ/BB", "Giá trị"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-50">{list.map((d) => <tr key={d.id}><td className="px-3 py-2 text-xs whitespace-nowrap">{d.date}</td><td className="px-3 py-2">{d.name}{d.note && <div className="text-[11px] text-gray-400">{d.note}</div>}</td><td className="px-3 py-2 font-semibold">{d.quantity}</td><td className="px-3 py-2">{d.reason}</td><td className="px-3 py-2 text-xs">{d.decisionNo}</td><td className="px-3 py-2 whitespace-nowrap text-xs">{money(d.value)}</td></tr>)}</tbody>
+            <thead><tr className="bg-gray-50">{["Ngày", "Thiết bị", "SL", "Lý do", "Số QĐ/BB", "Giá trị", ""].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-gray-50">{list.map((d) => <tr key={d.id}><td className="px-3 py-2 text-xs whitespace-nowrap">{d.date}</td><td className="px-3 py-2">{d.name}{d.note && <div className="text-[11px] text-gray-400">{d.note}</div>}</td><td className="px-3 py-2 font-semibold">{d.quantity}</td><td className="px-3 py-2">{d.reason}</td><td className="px-3 py-2 text-xs">{d.decisionNo}</td><td className="px-3 py-2 whitespace-nowrap text-xs">{money(d.value)}</td><td className="px-3 py-2"><button onClick={() => printDisposalMinutes(d, inventory.find((e) => e.id === d.equipmentId))} className="text-xs font-semibold text-[#1a3670] hover:underline whitespace-nowrap">In biên bản</button></td></tr>)}</tbody>
           </table></div>
         )}
       </div>
@@ -656,7 +663,7 @@ export function DisposalTab({ subjects }: { subjects: Subject[] }) {
 // ===================================================================
 const escH = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!)
 
-function printDoc(title: string, subtitle: string, head: string[], rows: (string | number)[][], landscape = true, opts: { cover?: boolean; comments?: boolean; groupCol?: number } = {}) {
+export function printDoc(title: string, subtitle: string, head: string[], rows: (string | number)[][], landscape = true, opts: { cover?: boolean; comments?: boolean; groupCol?: number } = {}) {
   const w = window.open("", "_blank")
   if (!w) { alert("Trình duyệt chặn cửa sổ mới. Hãy cho phép pop-up để in."); return }
   const today = new Date()
@@ -757,11 +764,32 @@ export function BooksTab({ subjects }: { subjects: Subject[] }) {
       else printDoc("SỔ THEO DÕI SỬA CHỮA, THANH LÝ THIẾT BỊ", `Từ ngày ${isoToVn(from)} đến ngày ${isoToVn(to)}${scope}`, head, rows)
     } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
   }
+  const conditionBook = async (excel: boolean) => {
+    setError("")
+    try {
+      const t = new Date(), sy = t.getMonth() >= 8 ? t.getFullYear() : t.getFullYear() - 1
+      const [inv, ch] = await Promise.all([fetchInventory(), fetchChanges(`${sy}-09-01`, `${sy + 1}-08-31T23:59:59`)])
+      const sum = (id: string, keys: string[], pos = true) => ch.filter((c) => c.equipmentId === id).reduce((a, c) => a + keys.reduce((b, k) => b + (pos ? Math.max(0, c.diff[k] || 0) : 0), 0), 0)
+      const list = inv.filter((e) => !subjectId || e.subjectId === subjectId)
+      const head = ["STT", "Tên thiết bị", "Năm SD", "Nước SX", "Kí hiệu / mã", "Ngày nhập kho", "Số lượng", "Chất lượng (%)", `Tổng số ${sy}–${sy + 1}`, "Nhập mới (SL)", "Hư hỏng, thất thoát (SL)"]
+      const rows = list.map((e, i) => {
+        const total = e.qtyGood + e.qtyBroken + e.qtyRepair + (e.qtyLostPending || 0)
+        const newIn = ch.filter((c) => c.equipmentId === e.id && c.kind === "Ghi tăng").reduce((a, c) => a + (c.diff.qtyGood || 0), 0)
+        return [i + 1, e.name, e.yearInUse || "", e.origin || "", e.id, e.updatedAt ? new Date((e as Equipment & { createdAt?: string }).createdAt || e.updatedAt).toLocaleDateString("vi-VN") : "",
+          total, total ? Math.round((e.qtyGood / total) * 100) : 0, total, newIn, sum(e.id, ["qtyBroken", "qtyLostPending", "qtyLost"])]
+      })
+      if (excel) await exportExcel("So-theo-doi-tinh-trang-thiet-bi-Mau1.xlsx", [{ name: "Mẫu 1", rows: rows.map((r) => Object.fromEntries(head.map((h, i) => [h, r[i]]))) }])
+      else printDoc("SỔ THEO DÕI TÌNH TRẠNG THIẾT BỊ DẠY HỌC", `Năm học ${sy} – ${sy + 1}${scope} · Chất lượng (%) = số tốt / tổng số`, head, rows, true, { cover: withCover })
+    } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
+  }
   const books: [string, string, (excel: boolean) => void][] = [
     ["Sổ mượn trả thiết bị", "Nhóm theo giáo viên / môn / tổ: ngày mượn – trả, số phiếu, ngày lập phiếu, thiết bị, tiết dạy, tên bài dạy, lớp, loại tiết, tình trạng khi trả (BT/Hỏng/Mất), cột ký. Có trang bìa và trang nhận xét của Hiệu trưởng.", borrowBook],
     ["Sổ nhật ký sử dụng phòng bộ môn", "Theo từng phòng: ngày, tiết, lớp, giáo viên, bài dạy, thiết bị sử dụng, tình trạng sau tiết.", roomBook],
     ["Sổ quản lý thiết bị", "Danh mục toàn bộ thiết bị: mã, đơn vị tính, nước sản xuất, năm sử dụng, nguồn kinh phí, số lượng theo tình trạng, giá trị.", assetBook],
     ["Sổ theo dõi sửa chữa, thanh lý", "Các lần bảo trì, sửa chữa và chứng từ ghi giảm trong kỳ, kèm chi phí.", damageBook],
+    ["Sổ theo dõi tình trạng thiết bị (Mẫu 1)", "Năm SX, nước SX, mã, ngày nhập kho, số lượng, chất lượng (%); năm học này: tổng số, nhập mới, hư hỏng – thất thoát (từ nhật ký thay đổi).", conditionBook],
+    ["Báo cáo tổng kết năm học", "Theo mẫu báo cáo tổng kết công tác quản lý – sử dụng thiết bị: tình hình, tổ chức thực hiện, kết quả theo tổ, kiến nghị.", () => printSummaryReport("year")],
+    ["Báo cáo sơ kết học kỳ I", "Số liệu từ 01/09 đến 15/01 theo cùng bố cục.", () => printSummaryReport("hk1")],
   ]
   return (
     <div className="space-y-4">
@@ -795,6 +823,9 @@ export function BooksTab({ subjects }: { subjects: Subject[] }) {
 // ===================================================================
 export function LossTab() {
   const [d, setD] = useState<{ reports: LossReport[]; canConfirm: boolean; principalConfigured: boolean } | null>(null)
+  const [traceId, setTraceId] = useState<string | null>(null)
+  const [verifying, setVerifying] = useState<LossReport | null>(null)
+  const [vf, setVf] = useState({ searchScope: "", involved: "", findings: "" })
   const [error, setError] = useState("")
   const [busy, setBusy] = useState("")
   const load = useCallback(() => { fetchLossReports().then(setD).catch((e) => setError(e.message)) }, [])
@@ -827,6 +858,12 @@ export function LossTab() {
               <div className="min-w-0">
                 <div className="font-medium text-gray-900">{r.name} × {r.quantity}<span className="ml-2 text-xs text-gray-500">({money(r.quantity * (r.unitPrice || 0))})</span></div>
                 <div className="text-xs text-gray-500">{src(r)} · người báo: {r.reportedBy} · {fmtTime(r.createdAt)}{r.note ? ` · ${r.note}` : ""}</div>
+                {r.verification && <div className="text-xs text-emerald-700 mt-0.5">Đã ghi xác minh ({r.verification.by}, {fmtTime(r.verification.at)}): {r.verification.findings || r.verification.searchScope}</div>}
+              </div>
+              <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                <button onClick={() => setTraceId(r.equipmentId)} className={btnGhost}>Truy vết</button>
+                <button onClick={() => { setVerifying(r); setVf({ searchScope: r.verification?.searchScope || "", involved: r.verification?.involved || "", findings: r.verification?.findings || "" }) }} className={btnGhost}>{r.verification ? "Sửa xác minh" : "Ghi xác minh"}</button>
+                <button onClick={() => printLossMinutes(r)} className={btnGhost}>In biên bản</button>
               </div>
               {d.canConfirm ? (
                 <div className="flex gap-2">
@@ -844,12 +881,205 @@ export function LossTab() {
           <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead><tr className="bg-gray-50">{["Thiết bị", "SL", "Nguồn", "Kết quả", "Người xác nhận", "Thời gian"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-50">{done.map((r) => (
-              <tr key={r.id}><td className="px-3 py-2">{r.name}{r.decisionNote && <div className="text-[11px] text-gray-400">{r.decisionNote}</div>}</td><td className="px-3 py-2">{r.quantity}</td><td className="px-3 py-2 text-xs">{src(r)}</td>
+              <tr key={r.id}><td className="px-3 py-2">{r.name}{r.decisionNote && <div className="text-[11px] text-gray-400">{r.decisionNote}</div>}<div className="flex gap-2 mt-1"><button onClick={() => setTraceId(r.equipmentId)} className="text-[11px] font-semibold text-[#1a3670] hover:underline">Truy vết</button><button onClick={() => printLossMinutes(r)} className="text-[11px] font-semibold text-[#1a3670] hover:underline">In biên bản</button></div></td><td className="px-3 py-2">{r.quantity}</td><td className="px-3 py-2 text-xs">{src(r)}</td>
                 <td className={`px-3 py-2 text-xs font-semibold ${r.status === "Đã xác nhận mất" ? "text-red-600" : "text-green-700"}`}>{r.status}</td><td className="px-3 py-2 text-xs">{r.decidedBy}</td><td className="px-3 py-2 text-xs whitespace-nowrap">{fmtTime(r.decidedAt)}</td></tr>
             ))}</tbody>
           </table></div>
         )}
       </div>
+      {traceId && <EquipmentHistoryDialog id={traceId} onClose={() => setTraceId(null)} />}
+      {verifying && (
+        <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-3" onMouseDown={(e) => { if (e.target === e.currentTarget) setVerifying(null) }}>
+          <div role="dialog" aria-modal="true" aria-label="Ghi kết quả xác minh" className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5 space-y-3">
+            <h3 className="font-bold text-gray-900">Xác minh: {verifying.name} × {verifying.quantity}</h3>
+            <p className="text-xs text-gray-500">Dùng nút “Truy vết” để xem những ai giữ thiết bị kể từ lần cuối còn đủ. Nội dung ghi ở đây được in vào biên bản.</p>
+            <div><label className={label} htmlFor="v-scope">Phạm vi đã tìm</label><textarea id="v-scope" rows={2} className={field} value={vf.searchScope} onChange={(e) => setVf({ ...vf, searchScope: e.target.value })} placeholder="VD: phòng KHTN, tủ T1–T3, lớp 8A2, phòng chuẩn bị" /></div>
+            <div><label className={label} htmlFor="v-inv">Người liên quan đã làm việc</label><textarea id="v-inv" rows={2} className={field} value={vf.involved} onChange={(e) => setVf({ ...vf, involved: e.target.value })} placeholder="VD: cô Ngọc Hồng (người mượn), lớp trưởng 8A2" /></div>
+            <div><label className={label} htmlFor="v-find">Kết quả xác minh</label><textarea id="v-find" rows={3} className={field} value={vf.findings} onChange={(e) => setVf({ ...vf, findings: e.target.value })} placeholder="VD: không tìm thấy; người mượn xác nhận làm rơi vỡ khi di chuyển" /></div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setVerifying(null)} className={btnGhost}>Hủy</button>
+              <button onClick={async () => { try { await verifyLoss(verifying.id, vf); setVerifying(null); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } }} className={btnPrimary}>Lưu</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
+}
+
+// ===================================================================
+// TRUY VẾT LỊCH SỬ THIẾT BỊ (UC31) VÀ BIÊN BẢN XÁC MINH MẤT (UC32)
+// ===================================================================
+const QTY_LABEL: Record<string, string> = { qtyGood: "Tốt", qtyBroken: "Hỏng", qtyRepair: "Đang sửa", qtyLostPending: "Chờ xác nhận mất", qtyLost: "Mất", qtyDisposed: "Thanh lý" }
+const diffText = (d: Record<string, number>) => Object.entries(d).map(([k, v]) => `${QTY_LABEL[k] || k} ${v > 0 ? "+" : "−"}${Math.abs(v)}`).join(", ")
+const vnTime = (iso?: string | null) => (iso ? new Date(iso).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" }) : "")
+
+export function EquipmentHistoryDialog({ id, onClose }: { id: string; onClose: () => void }) {
+  const [h, setH] = useState<EquipmentHistory | null>(null)
+  const [error, setError] = useState("")
+  const [tab, setTab] = useState<"trace" | "changes" | "loans">("trace")
+  useEffect(() => { fetchEquipmentHistory(id).then(setH).catch((e) => setError(e.message)) }, [id])
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }; document.addEventListener("keydown", k); return () => document.removeEventListener("keydown", k) }, [onClose])
+  const doExport = () => h && exportExcel(`Lich-su-${h.equipment.id}.xlsx`, [
+    { name: "Nhật ký thay đổi", rows: h.changes.map((c) => ({ "Thời gian": vnTime(c.createdAt), "Nghiệp vụ": c.kind, "Thay đổi": diffText(c.diff), "Người thực hiện": c.by, "Ghi chú": c.note })) },
+    { name: "Lịch sử mượn", rows: h.loans.map((l) => ({ "Số phiếu": l.code, "Giáo viên": l.teacherName, "Lớp": l.className, "Ngày mượn": l.borrowDate, "Ngày trả": l.returnDate, "Tiết": l.period, "Số lượng": l.quantity, "Trạng thái": l.status, "Duyệt lúc": vnTime(l.approvedAt), "Trả lúc": vnTime(l.returnedAt), "Hỏng": l.damaged, "Mất": l.lost })) },
+  ])
+  const e = h?.equipment
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/40 flex items-start sm:items-center justify-center p-3 overflow-y-auto" onMouseDown={(ev) => { if (ev.target === ev.currentTarget) onClose() }}>
+      <div role="dialog" aria-modal="true" aria-label="Lịch sử thiết bị" className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl my-8">
+        <div className="flex items-start justify-between gap-3 px-6 py-4 border-b border-gray-100">
+          <div className="min-w-0">
+            <div className="text-xs text-gray-500 font-mono">{e?.id}</div>
+            <h3 className="font-bold text-gray-900 text-lg">{e?.name || "Đang tải…"}{e?.deleted && <span className="ml-2 text-xs text-red-600">(đã xóa khỏi danh mục)</span>}</h3>
+            {e && !e.deleted && <div className="text-sm text-gray-600 mt-0.5">Tốt {e.qtyGood} · Hỏng {e.qtyBroken} · Đang sửa {e.qtyRepair} · Mất {e.qtyLost}{e.qtyLostPending ? ` · chờ xác nhận mất ${e.qtyLostPending}` : ""}{e.location ? ` · ${e.location}` : ""}</div>}
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button onClick={doExport} disabled={!h} className={btnGhost}>Xuất Excel</button>
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500" aria-label="Đóng">✕</button>
+          </div>
+        </div>
+        <div className="px-6 pt-4">
+          <Err msg={error} />
+          <div className="flex gap-2 mb-4">
+            {([["trace", "Truy vết"], ["changes", `Nhật ký thay đổi (${h?.changes.length ?? 0})`], ["loans", `Lịch sử mượn (${h?.loans.length ?? 0})`]] as const).map(([k, l]) => (
+              <button key={k} onClick={() => setTab(k)} aria-pressed={tab === k} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${tab === k ? "bg-[#1a3670] text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>{l}</button>
+            ))}
+          </div>
+        </div>
+        <div className="px-6 pb-6">
+          {!h ? <p className="text-sm text-gray-400">Đang tải…</p> : tab === "trace" ? (
+            <div className="space-y-4">
+              <div className="rounded-xl bg-[#F6F7F9] p-4 text-sm space-y-1.5">
+                <div><span className="text-gray-500">Kiểm kê gần nhất còn đủ:</span> <strong>{h.trace.lastAuditOk ? `${h.trace.lastAuditOk.title} (${vnTime(h.trace.lastAuditOk.at)})` : "chưa có"}</strong></div>
+                <div><span className="text-gray-500">Lần trả gần nhất không thiếu:</span> <strong>{h.trace.lastReturnOk ? `${vnTime(h.trace.lastReturnOk.at)} – ${h.trace.lastReturnOk.teacherName} (${h.trace.lastReturnOk.code || "phiếu cũ"})` : "chưa có"}</strong></div>
+                <div className="text-gray-600">{h.trace.since ? `Từ ${vnTime(h.trace.since)} đến nay, thiết bị đã qua tay những người dưới đây — đây là phạm vi cần xác minh khi phát hiện thiếu.` : "Chưa có mốc xác nhận đủ, phạm vi xác minh là toàn bộ lịch sử mượn."}</div>
+              </div>
+              {h.trace.candidates.length === 0 ? <p className="text-sm text-gray-500">Không có lượt mượn nào trong phạm vi này.</p> : (
+                <div className="overflow-x-auto"><table className="w-full text-sm">
+                  <thead><tr className="bg-gray-50">{["Số phiếu", "Giáo viên", "Lớp", "Mượn – trả", "Tiết", "SL", "Trạng thái", "Khi trả"].map((x) => <th key={x} className={th}>{x}</th>)}</tr></thead>
+                  <tbody className="divide-y divide-gray-50">{h.trace.candidates.map((l) => (
+                    <tr key={l.id}><td className="px-3 py-2 text-xs font-mono">{l.code}</td><td className="px-3 py-2 font-medium">{l.teacherName}</td><td className="px-3 py-2">{l.className}</td><td className="px-3 py-2 text-xs whitespace-nowrap">{l.borrowDate} – {l.returnDate}</td><td className="px-3 py-2 text-xs">{l.period}</td><td className="px-3 py-2">{l.quantity}</td><td className="px-3 py-2 text-xs">{l.status}</td>
+                      <td className={`px-3 py-2 text-xs ${l.lost ? "text-red-600 font-semibold" : ""}`}>{l.status === "Trả" ? [l.damaged && `hỏng ${l.damaged}`, l.lost && `mất ${l.lost}${l.lostStatus ? ` (${l.lostStatus})` : ""}`].filter(Boolean).join(", ") || "đủ" : "đang giữ"}</td></tr>
+                  ))}</tbody>
+                </table></div>
+              )}
+            </div>
+          ) : tab === "changes" ? (
+            h.changes.length === 0 ? <p className="text-sm text-gray-500">Chưa có thay đổi nào được ghi (nhật ký bắt đầu từ bản cập nhật này).</p> : (
+              <div className="overflow-x-auto max-h-[28rem]"><table className="w-full text-sm">
+                <thead className="sticky top-0"><tr className="bg-gray-50">{["Thời gian", "Nghiệp vụ", "Thay đổi", "Người thực hiện", "Ghi chú"].map((x) => <th key={x} className={th}>{x}</th>)}</tr></thead>
+                <tbody className="divide-y divide-gray-50">{h.changes.map((c) => (
+                  <tr key={c.id}><td className="px-3 py-2 text-xs whitespace-nowrap">{vnTime(c.createdAt)}</td><td className="px-3 py-2 font-medium whitespace-nowrap">{c.kind}</td><td className="px-3 py-2 text-xs">{diffText(c.diff) || "—"}</td><td className="px-3 py-2 text-xs">{c.by}</td><td className="px-3 py-2 text-xs text-gray-600">{c.note}</td></tr>
+                ))}</tbody>
+              </table></div>
+            )
+          ) : (
+            h.loans.length === 0 ? <p className="text-sm text-gray-500">Chưa có lượt mượn nào có mã thiết bị này.</p> : (
+              <div className="overflow-x-auto max-h-[28rem]"><table className="w-full text-sm">
+                <thead className="sticky top-0"><tr className="bg-gray-50">{["Số phiếu", "Giáo viên", "Lớp", "Ngày", "Tiết", "SL", "Trạng thái", "Duyệt", "Trả"].map((x) => <th key={x} className={th}>{x}</th>)}</tr></thead>
+                <tbody className="divide-y divide-gray-50">{h.loans.map((l) => (
+                  <tr key={l.id}><td className="px-3 py-2 text-xs font-mono">{l.code}</td><td className="px-3 py-2">{l.teacherName}</td><td className="px-3 py-2">{l.className}</td><td className="px-3 py-2 text-xs whitespace-nowrap">{l.borrowDate}</td><td className="px-3 py-2 text-xs">{l.period}</td><td className="px-3 py-2">{l.quantity}</td><td className="px-3 py-2 text-xs">{l.status}</td><td className="px-3 py-2 text-xs whitespace-nowrap">{vnTime(l.approvedAt)}</td><td className="px-3 py-2 text-xs whitespace-nowrap">{vnTime(l.returnedAt)}</td></tr>
+                ))}</tbody>
+              </table></div>
+            )
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** In biên bản xác minh thiết bị thất thoát (theo bố cục biên bản hư hỏng, thất thoát – Mẫu 7) */
+export async function printLossMinutes(r: LossReport) {
+  const w = window.open("", "_blank")
+  if (!w) { alert("Trình duyệt chặn cửa sổ mới. Hãy cho phép pop-up để in."); return }
+  w.document.write("<p style='font-family:Arial;padding:20px'>Đang chuẩn bị biên bản…</p>")
+  let h: EquipmentHistory | null = null
+  try { h = await fetchEquipmentHistory(r.equipmentId) } catch { /* vẫn in phần đã có */ }
+  const e = h?.equipment, v = r.verification
+  const dots = (n: number) => `<div class="lines">${"<div></div>".repeat(n)}</div>`
+  const t = new Date()
+  const cand = h?.trace.candidates || []
+  w.document.open()
+  w.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Biên bản xác minh thiết bị thất thoát</title><style>
+    @page{size:A4;margin:16mm}body{font-family:"Times New Roman",serif;font-size:13px;color:#000;margin:0;line-height:1.45}
+    .hd{display:flex;justify-content:space-between;text-align:center}.hd div{width:48%}.hd b{display:block}h1{text-align:center;font-size:17px;margin:16px 0 4px}
+    h2{font-size:13px;margin:12px 0 4px}table{width:100%;border-collapse:collapse;margin:4px 0}th,td{border:1px solid #000;padding:3px 5px;vertical-align:top}th{background:#eee}
+    .lines div{border-bottom:1px dotted #000;height:7mm}.sign{display:flex;justify-content:space-between;margin-top:22px;text-align:center}.sign div{width:32%}.sign i{display:block;font-size:12px}
+    .bar{margin:8px 0}@media print{.bar{display:none}}</style></head><body>
+    <div class="bar"><button onclick="window.print()">In</button></div>
+    <div class="hd"><div>PHÒNG GIÁO DỤC VÀ ĐÀO TẠO<b>TRƯỜNG THCS LÊ ĐỘ</b></div><div><b>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</b><b>Độc lập – Tự do – Hạnh phúc</b></div></div>
+    <h1>BIÊN BẢN XÁC MINH THIẾT BỊ THẤT THOÁT</h1>
+    <p style="text-align:center;font-style:italic;margin:0">Hôm nay, ngày ${t.getDate()} tháng ${t.getMonth() + 1} năm ${t.getFullYear()}, tại phòng thiết bị Trường THCS Lê Độ</p>
+    <h2>I. Thành phần</h2>${dots(3)}
+    <h2>II. Thiết bị thất thoát</h2>
+    <table><tr><th>Mã thiết bị</th><th>Tên thiết bị</th><th>ĐVT</th><th>Số lượng</th><th>Đơn giá (đ)</th><th>Thành tiền (đ)</th></tr>
+    <tr><td>${escH(r.equipmentId)}</td><td>${escH(r.name)}</td><td>${escH(e?.unit || "")}</td><td style="text-align:center">${r.quantity}</td><td style="text-align:right">${(r.unitPrice || 0).toLocaleString("vi-VN")}</td><td style="text-align:right">${((r.unitPrice || 0) * r.quantity).toLocaleString("vi-VN")}</td></tr></table>
+    <h2>III. Phát hiện</h2>
+    <p>Phát hiện khi: ${r.source === "audit" ? `kiểm kê (${escH(r.auditTitle || "")})` : `nhận lại thiết bị theo phiếu mượn của ${escH(r.teacherName || "")}`}; người báo: ${escH(r.reportedBy)}; thời điểm: ${escH(vnTime(r.createdAt))}.${r.note ? ` Ghi chú: ${escH(r.note)}.` : ""}</p>
+    <h2>IV. Truy vết theo hệ thống</h2>
+    <p>Lần kiểm kê gần nhất còn đủ: ${h?.trace.lastAuditOk ? escH(`${h.trace.lastAuditOk.title} (${vnTime(h.trace.lastAuditOk.at)})`) : "chưa có"}. Lần trả gần nhất không thiếu: ${h?.trace.lastReturnOk ? escH(`${vnTime(h.trace.lastReturnOk.at)}, ${h.trace.lastReturnOk.teacherName}`) : "chưa có"}.</p>
+    ${cand.length ? `<table><tr><th>Số phiếu</th><th>Giáo viên</th><th>Lớp</th><th>Mượn – trả</th><th>Tiết</th><th>SL</th><th>Tình trạng khi trả</th></tr>${cand.map((l) => `<tr><td>${escH(l.code)}</td><td>${escH(l.teacherName)}</td><td>${escH(l.className)}</td><td>${escH(l.borrowDate)} – ${escH(l.returnDate)}</td><td>${escH(l.period)}</td><td style="text-align:center">${l.quantity}</td><td>${l.status === "Trả" ? escH([l.damaged ? `hỏng ${l.damaged}` : "", l.lost ? `mất ${l.lost}` : ""].filter(Boolean).join(", ") || "đủ") : "đang giữ"}</td></tr>`).join("")}</table>` : "<p>Không có lượt mượn trong phạm vi xác minh.</p>"}
+    <h2>V. Kết quả xác minh</h2>
+    <p><b>Phạm vi đã tìm:</b> ${v?.searchScope ? escH(v.searchScope) : ""}</p>${v?.searchScope ? "" : dots(2)}
+    <p><b>Người liên quan đã làm việc:</b> ${v?.involved ? escH(v.involved) : ""}</p>${v?.involved ? "" : dots(2)}
+    <p><b>Kết quả:</b> ${v?.findings ? escH(v.findings) : ""}</p>${v?.findings ? "" : dots(3)}
+    <h2>VI. Kết luận và đề xuất xử lý</h2>
+    <p>Trạng thái trên hệ thống: <b>${escH(r.status)}</b>${r.decidedBy ? ` (${escH(r.decidedBy)}, ${escH(vnTime(r.decidedAt))})` : ""}.</p>${dots(3)}
+    <div class="sign"><div><b>Người lập biên bản</b><i>(Ký, ghi rõ họ tên)</i></div><div><b>Người liên quan</b><i>(Ký, ghi rõ họ tên)</i></div><div><b>Hiệu trưởng</b><i>(Ký, đóng dấu)</i></div></div>
+    </body></html>`)
+  w.document.close()
+}
+
+// ===================================================================
+// BIÊN BẢN IN THEO MẪU
+// ===================================================================
+/** Biên bản kiểm kê vật tư thiết bị dạy học (Mẫu 6) kèm phụ lục đầu kỳ – kết quả kiểm kê */
+export function printAuditMinutes(a: Audit, subjects: Subject[]) {
+  const q = (good: number, broken: number) => { const t = good + broken; return t ? `${Math.round((good / t) * 100)}%` : "" }
+  const counted = a.items.filter((i) => i.countGood !== null)
+  const sum = a.summary
+  const rows = counted.map((i, n) => [n + 1, i.name, i.sysGood + i.sysBroken, q(i.sysGood, i.sysBroken), (i.countGood ?? 0) + (i.countBroken ?? i.sysBroken) + i.out, q((i.countGood ?? 0) + i.out, i.countBroken ?? i.sysBroken), i.diff ? (i.diff > 0 ? `+${i.diff}` : String(i.diff)) : "", i.note])
+  printHtml({
+    title: "Biên bản kiểm kê vật tư thiết bị dạy học", subtitle: a.title + (a.subjectId ? ` – ${subjects.find((s) => s.id === a.subjectId)?.name}` : " – toàn bộ kho"),
+    body: `<p>Tổ kiểm kê tài sản vật tư thiết bị dạy học được thành lập theo Quyết định số ……/QĐ-THCSLĐ của Hiệu trưởng đã tiến hành kiểm kê từ ${esc(new Date(a.createdAt).toLocaleDateString("vi-VN"))} đến ${esc(new Date(a.finishedAt || a.createdAt).toLocaleDateString("vi-VN"))}.</p>
+      <h2>I. NHỮNG CÔNG VIỆC ĐÃ TIẾN HÀNH</h2><p>– Kiểm kê, đánh giá chất lượng thiết bị dạy học trong kho do ông (bà) …………………… phụ trách.</p><p>– Đối chiếu số lượng và chất lượng thiết bị so với sổ sách tại thời điểm kiểm kê (thiết bị đang cho mượn được tính riêng) và hóa đơn nhập, xuất.</p>
+      <h2>II. KẾT QUẢ KIỂM TRA</h2><p>– Tổng số loại thiết bị được kiểm tra: <b>${sum?.counted ?? counted.length}</b>.</p><p>– Số thiết bị thiếu so với sổ sách (chuyển xác minh mất): <b>${sum?.missing ?? 0}</b>; thừa: <b>${sum?.surplus ?? 0}</b>; số loại có chênh lệch: <b>${sum?.discrepancies ?? 0}</b>.</p>
+      <p>– Tổng số loại thiết bị không còn sử dụng được cần thanh lý: ……………</p>
+      <h2>III. NHẬN XÉT</h2><p>– Công tác bảo quản: …………………………………………</p><p>– Hiệu quả sử dụng: …………………………………………</p>${dots(1)}
+      <h2>IV. CÁC ĐỀ XUẤT, KIẾN NGHỊ</h2>${dots(3)}
+      <h2 style="page-break-before:always">PHỤ LỤC KÈM THEO BIÊN BẢN</h2>
+      ${table(["STT", "Tên thiết bị", "Sổ sách: số lượng", "Sổ sách: chất lượng", "Kiểm kê: số lượng", "Kiểm kê: chất lượng", "Chênh lệch", "Ghi chú"], rows)}`,
+    signs: [["Hiệu trưởng", "(Ký, đóng dấu)"], ["Tổ kiểm kê", "(Ký, ghi rõ họ tên)"], ["Người phụ trách kho", "(Ký, ghi rõ họ tên)"]],
+  })
+}
+
+/** Biên bản kiểm tra tình trạng hư hỏng của trang thiết bị (từ phiếu bảo trì) */
+export function printDamageMinutes(m: Maintenance, e?: Equipment) {
+  printHtml({
+    title: "Biên bản kiểm tra tình trạng hư hỏng của trang thiết bị",
+    body: `<h2>Thành phần</h2>${dots(3)}
+      <h2>Nội dung kiểm tra</h2>
+      ${table(["Tên thiết bị", "Mã", "Năm sử dụng", "Nước sản xuất", "Số lượng", "Tình trạng hư hỏng"], [[m.name, m.equipmentId, e?.yearInUse || "", e?.origin || "", m.quantity, m.content || ""]])}
+      <p>Ngày phát hiện, gửi kiểm tra: ${esc(m.date)}. Hình thức: ${esc(m.kind)}${m.vendor ? `; đơn vị thực hiện: ${esc(m.vendor)}` : ""}.</p>
+      <h2>Đề xuất</h2><p>${m.status === "Hoàn thành" ? `Kết quả: sửa được ${m.repaired ?? 0}, không sửa được (đề nghị thanh lý) ${m.disposed ?? 0}. ${esc(m.resultNote || "")}` : "Sửa chữa / thay thế / thanh lý: ………………"}</p>
+      <p>Kinh phí: ${m.cost ? `${m.cost.toLocaleString("vi-VN")} đồng` : "……………… đồng"}.</p>${dots(2)}`,
+    signs: [["Người sử dụng", "(Ký, ghi rõ họ tên)"], ["Nhân viên thiết bị", "(Ký, ghi rõ họ tên)"], ["Hiệu trưởng", "(Ký, đóng dấu)"]],
+  })
+}
+
+/** Biên bản thanh lý / ghi giảm thiết bị */
+export function printDisposalMinutes(d: Disposal, e?: Equipment) {
+  printHtml({
+    title: d.reason.startsWith("Tiêu hủy") ? "Biên bản tiêu hủy hóa chất" : "Biên bản thanh lý thiết bị dạy học", number: d.decisionNo ? `theo QĐ ${d.decisionNo}` : undefined,
+    body: `<p>Căn cứ ${d.decisionNo ? `Quyết định số ${esc(d.decisionNo)}` : "quyết định của Hiệu trưởng"} và kết quả kiểm tra thực tế, Hội đồng tiến hành ${d.reason.startsWith("Tiêu hủy") ? "tiêu hủy" : "thanh lý"} thiết bị sau:</p>
+      <h2>I. Thành phần hội đồng</h2>${dots(3)}
+      <h2>II. Danh mục</h2>
+      ${table(["Mã", "Tên thiết bị", "ĐVT", "Năm sử dụng", "Số lượng", "Đơn giá (đ)", "Giá trị (đ)", "Lý do"], [[d.equipmentId, d.name, e?.unit || "", e?.yearInUse || "", d.quantity, d.unitPrice.toLocaleString("vi-VN"), d.value.toLocaleString("vi-VN"), d.reason]])}
+      <p>Ngày thực hiện: ${esc(d.date)}.${d.note ? ` Ghi chú: ${esc(d.note)}.` : ""}</p>
+      <h2>III. Hình thức ${d.reason.startsWith("Tiêu hủy") ? "tiêu hủy (bảo đảm an toàn, vệ sinh môi trường)" : "thanh lý"}</h2>${dots(2)}
+      <h2>IV. Kết luận</h2>${dots(2)}`,
+    signs: [["Thư ký", "(Ký, ghi rõ họ tên)"], ["Chủ tịch hội đồng", "(Ký, ghi rõ họ tên)"], ["Hiệu trưởng", "(Ký, đóng dấu)"]],
+  })
 }

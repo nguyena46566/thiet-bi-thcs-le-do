@@ -46,9 +46,12 @@ export interface BorrowRecord {
   periods?: string[];
   roomId?: string;
   roomName?: string;
+  needsSpecialApproval?: boolean;
+  specialReason?: string;
+  specialApproval?: { note: string; by: string; at: string };
   /** Biên bản trả: hỏng / mất / trễ hạn */
   returnReport?: {
-    items: { equipmentId: string; name: string; damaged: number; lost: number; unitPrice: number; lostStatus?: string }[];
+    items: { equipmentId: string; name: string; damaged: number; lost: number; consumed?: number; unitPrice: number; lostStatus?: string }[];
     note: string; lateDays: number; returnedOn: string; pointsDeducted: number; compensation: number;
   } | null;
 }
@@ -135,14 +138,14 @@ export async function createRecord(data: NewRecordInput): Promise<BorrowRecord> 
   return res.json();
 }
 
-export async function updateRecordStatus(id: string, status: RecordStatus, reason?: string): Promise<BorrowRecord> {
+export async function updateRecordStatus(id: string, status: RecordStatus, reason?: string, specialApprovalNote?: string): Promise<BorrowRecord> {
   const res = await fetch(`${API_BASE}/api/records/${encodeURIComponent(id)}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ status, reason }),
+    body: JSON.stringify({ status, reason, specialApprovalNote }),
   });
-  if (!res.ok) throw new Error("Không thể cập nhật trạng thái");
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || "Không thể cập nhật trạng thái"); }
   return res.json();
 }
 
@@ -269,6 +272,15 @@ export interface Equipment {
   qtyRepair: number;
   qtyDisposed?: number;
   qtyLostPending?: number;
+  qtyConsumed?: number;
+  kind?: "Thiết bị" | "Hóa chất" | "Vật tư tiêu hao";
+  expiry?: string;
+  expired?: boolean;
+  hazard?: string;
+  concentration?: string;
+  minStock?: number;
+  highValue?: boolean;
+  topic?: string;
   unit?: string;
   origin?: string;
   fundSource?: string;
@@ -288,7 +300,7 @@ export interface PenaltyEntry {
 }
 export interface PointRules { startPoints: number; lockBelow: number; latePerDay: number; lateMaxPerRecord: number; damagePerUnit: number; lossPerUnit: number }
 export interface TeacherScore { userId: string; teacherName: string; score: number; locked: boolean; records: number; late: number; damaged: number; lost: number }
-export interface ReturnReportInput { items: { equipmentId: string; damaged: number; lost: number }[]; note?: string }
+export interface ReturnReportInput { items: { equipmentId: string; damaged: number; lost: number; consumed?: number }[]; note?: string }
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -344,7 +356,7 @@ export const createDisposal = (b: { equipmentId: string; quantity: number; sourc
 export interface AvailableItem { id: string; name: string; grades: number[]; unit: string; location: string; good: number; available: number }
 export const fetchAvailable = (subjectId: string, from: string, to: string, periods: string[] = []) =>
   call<AvailableItem[]>("GET", `/api/inventory/available?subjectId=${encodeURIComponent(subjectId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&periods=${periods.join(",")}`);
-export interface LossReport { id: string; status: string; createdAt: string; equipmentId: string; name: string; quantity: number; unitPrice: number; source: "return" | "audit"; recordId?: string; teacherName?: string; auditTitle?: string; note?: string; reportedBy: string; decidedBy?: string; decidedAt?: string; decisionNote?: string }
+export interface LossReport { verification?: { searchScope: string; involved: string; findings: string; by: string; at: string }; id: string; status: string; createdAt: string; equipmentId: string; name: string; quantity: number; unitPrice: number; source: "return" | "audit"; recordId?: string; teacherName?: string; auditTitle?: string; note?: string; reportedBy: string; decidedBy?: string; decidedAt?: string; decisionNote?: string }
 export const fetchLossReports = () => call<{ reports: LossReport[]; canConfirm: boolean; principalConfigured: boolean }>("GET", "/api/loss-reports");
 export const confirmLoss = (id: string, note: string) => call<LossReport>("POST", `/api/loss-reports/${encodeURIComponent(id)}/confirm`, { note });
 export const rejectLoss = (id: string, note: string) => call<LossReport>("POST", `/api/loss-reports/${encodeURIComponent(id)}/reject`, { note });
@@ -366,3 +378,48 @@ export const fetchProposals = (mine = false) => call<{ proposals: Proposal[]; ca
 export const createProposal = (b: { purpose: string; items: ProposalItem[] }) => call<Proposal>("POST", "/api/proposals", b);
 export const decideProposal = (id: string, approve: boolean, note: string) => call<Proposal>("POST", `/api/proposals/${encodeURIComponent(id)}/decide`, { approve, note });
 export const markProposalPurchased = (id: string, note: string) => call<Proposal>("POST", `/api/proposals/${encodeURIComponent(id)}/purchased`, { note });
+
+// ============ TRUY VẾT THIẾT BỊ, XÁC MINH MẤT ============
+export interface ChangeEntry { id: string; createdAt: string; equipmentId: string; name: string; kind: string; refId: string | null; by: string; note: string; diff: Record<string, number> }
+export interface LoanEntry { id: string; code: string; teacherName: string; className: string; subjectName: string; borrowDate: string; returnDate: string; period: string; status: string; quantity: number; createdAt: string; approvedAt: string | null; approvedBy: string; returnedAt: string | null; damaged: number; lost: number; lostStatus: string; roomName: string }
+export interface EquipmentHistory {
+  equipment: Equipment & { deleted?: boolean };
+  changes: ChangeEntry[]; loans: LoanEntry[]; losses: LossReport[];
+  trace: { lastAuditOk: { at: string; title: string } | null; lastReturnOk: { at: string; teacherName: string; code: string } | null; since: string | null; candidates: LoanEntry[] };
+}
+export const fetchEquipmentHistory = (id: string) => call<EquipmentHistory>("GET", `/api/inventory/equipment/${encodeURIComponent(id)}/history`);
+export const verifyLoss = (id: string, b: { searchScope: string; involved: string; findings: string }) => call<LossReport>("PATCH", `/api/loss-reports/${encodeURIComponent(id)}/verify`, b);
+
+// ============ DANH MỤC THIẾT BỊ TỐI THIỂU (TT 38/2021) ============
+export interface MinItem { id: string; mon: string; stt: string; group: string; topic: string; name: string; purpose: string; forTeacher: boolean; forStudent: boolean; unit: string; normQty: number; normPer: string; normDiv?: number; norm?: string; grades: number[]; note: string; siteSubjectId: string; linkedEquipmentIds: string[]; source: string; required: number; have: number; missing: number; status: string }
+export interface MinSettings { teachers: Record<string, number>; rooms?: Record<string, number>; classes: Record<string, number>; hsPerRoom: number }
+export const fetchMinlist = () => call<{ subjects: string[]; amended?: string[]; settings: MinSettings; items: MinItem[] }>("GET", "/api/minlist");
+export const reseedMinlist = (mon: string) => call<{ imported: number }>("POST", "/api/minlist/reseed", { mon });
+export const saveMinSettings = (s: MinSettings) => call<MinSettings>("PUT", "/api/minlist/settings", s);
+export const linkMinItem = (id: string, linkedEquipmentIds: string[]) => call<MinItem>("PATCH", `/api/minlist/${encodeURIComponent(id)}`, { linkedEquipmentIds });
+export const deleteMinItem = (id: string) => call<boolean>("DELETE", `/api/minlist/${encodeURIComponent(id)}`);
+export const importMinlist = (rows: Record<string, unknown>[], replace: boolean) => call<{ imported: number; errors: string[] }>("POST", "/api/minlist/import", { rows, replace });
+
+/** Bỏ dấu tiếng Việt để tìm kiếm không phân biệt dấu */
+export const fold = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+
+// ============ HÓA CHẤT, VẬT TƯ; KẾ HOẠCH; QUYẾT ĐỊNH ============
+export const fetchAlerts = () => call<{ expired: Equipment[]; expiringSoon: Equipment[]; lowStock: Equipment[]; noExpiry: Equipment[] }>("GET", "/api/inventory/alerts");
+export interface Consumption { id: string; equipmentId: string; name: string; unit: string; quantity: number; receiver: string; purpose: string; date: string; createdBy: string; createdAt: string }
+export const fetchConsumptions = () => call<Consumption[]>("GET", "/api/inventory/consumptions");
+export const consume = (b: { equipmentId: string; quantity: number; receiver: string; purpose: string; date: string }) => call<Consumption>("POST", "/api/inventory/consume", b);
+export const fetchChanges = (from: string, to: string) => call<ChangeEntry[]>("GET", `/api/inventory/changes?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+
+export interface PlanTask { id: string; name: string; start: string; end: string; owner: string; done: boolean }
+export interface Plan { id: string; schoolYear: string; title: string; number: string; status: "Nháp" | "Chờ duyệt" | "Đã duyệt" | "Trả lại"; sections: Record<string, string>; tasks: PlanTask[]; createdBy: string; createdAt: string; submittedAt?: string; decidedBy?: string; decidedAt?: string; decisionNote?: string }
+export const fetchPlans = () => call<{ plans: Plan[]; canDecide: boolean }>("GET", "/api/plans");
+export const createPlan = (b: Partial<Plan> = {}) => call<Plan>("POST", "/api/plans", b);
+export const updatePlan = (id: string, b: Partial<Plan>) => call<Plan>("PATCH", `/api/plans/${encodeURIComponent(id)}`, b);
+export const submitPlan = (id: string) => call<Plan>("POST", `/api/plans/${encodeURIComponent(id)}/submit`);
+export const decidePlan = (id: string, approve: boolean, note: string) => call<Plan>("POST", `/api/plans/${encodeURIComponent(id)}/decide`, { approve, note });
+export const deletePlan = (id: string) => call<boolean>("DELETE", `/api/plans/${encodeURIComponent(id)}`);
+
+export interface Decision { id: string; type: string; number: string; date: string; scope: string; from: string; to: string; members: { name: string; position: string; duty: string }[]; duties: string; createdBy: string; createdAt: string }
+export const fetchDecisions = () => call<Decision[]>("GET", "/api/decisions");
+export const saveDecision = (b: Partial<Decision>) => (b.id ? call<Decision>("PATCH", `/api/decisions/${encodeURIComponent(b.id)}`, b) : call<Decision>("POST", "/api/decisions", b));
+export const deleteDecision = (id: string) => call<boolean>("DELETE", `/api/decisions/${encodeURIComponent(id)}`);
