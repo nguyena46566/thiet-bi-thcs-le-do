@@ -514,7 +514,9 @@ export function registerOperationRoutes(app, { requireAuth, requireAdmin, wrap }
   const validRoom = (b) => {
     const name = str(b?.name, 80);
     if (!name) return { error: "Tên phòng không được để trống" };
-    return { value: { name, kind: str(b.kind, 60), subjectIds: (Array.isArray(b.subjectIds) ? b.subjectIds : []).filter((x) => SUBJECTS.some((s) => s.id === x)), note: str(b.note, 200) } };
+    const subjectIds = (Array.isArray(b.subjectIds) ? b.subjectIds : []).filter((x) => SUBJECTS.some((s) => s.id === x));
+    // Thông tư 23/2024/TT-BGDĐT: cho phép ghép phòng học bộ môn có chức năng tương đồng, phải bảo đảm đủ thiết bị và thời gian dạy học
+    return { value: { name, kind: str(b.kind, 60), subjectIds, combined: subjectIds.length > 1, note: str(b.note, 200) } };
   };
   app.get("/api/rooms", requireAuth, wrap(async (req, res) => res.json((await roomCol().all()).sort((a, b) => a.name.localeCompare(b.name, "vi")))));
   app.post("/api/rooms", requireAdmin, wrap(async (req, res) => {
@@ -550,7 +552,10 @@ export function registerOperationRoutes(app, { requireAuth, requireAdmin, wrap }
     const from = parseDate(req.query.from), to = parseDate(req.query.to);
     const list = (await db.records.findAll()).filter((r) => r.roomId === rm.id && r.status !== "Từ chối" && (!from || parseDate(r.borrowDate) >= from) && (!to || parseDate(r.borrowDate) <= to))
       .sort((a, b) => parseDate(a.borrowDate) - parseDate(b.borrowDate));
-    res.json({ room: rm, entries: list.map((r) => ({ date: r.borrowDate, period: r.period, className: r.className, teacherName: r.teacherName, subject: r.subjectName,
+    // Phòng ghép: thời lượng sử dụng của từng môn (số tiết) để chứng minh bảo đảm thời gian dạy học
+    const share = {};
+    for (const r of list) { const k = r.subjectName || r.subjectId; share[k] = (share[k] || 0) + Math.max(1, (r.periods || []).length || 1); }
+    res.json({ room: rm, share, entries: list.map((r) => ({ date: r.borrowDate, period: r.period, className: r.className, teacherName: r.teacherName, subject: r.subjectName,
       lessonName: r.lessonName || r.periodPPCT || "", equipment: r.equipment, status: r.status,
       condition: r.returnReport ? ((r.returnReport.items || []).map((x) => [x.damaged && `hỏng ${x.damaged}`, x.lost && `mất ${x.lost}`].filter(Boolean).join(", ")).filter(Boolean).join("; ") || "Bình thường") : "" })) });
   }));

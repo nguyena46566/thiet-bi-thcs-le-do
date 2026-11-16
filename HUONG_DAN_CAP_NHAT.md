@@ -49,3 +49,20 @@ npm run dev                                          # trong thư mục backend
 ```
 
 Mở thêm một terminal ở thư mục gốc và chạy `npm run dev`. Nếu để trống `DATABASE_URL`, dữ liệu sẽ lưu vào `backend/data/`.
+
+## Biến môi trường mới (bản v13 – v17)
+
+| Biến | Bắt buộc | Ý nghĩa |
+| --- | --- | --- |
+| `BACKUP_KEY` | Nên có | Khóa mã hóa bản sao lưu. Chuỗi dài, ngẫu nhiên; **cất giữ ở nơi an toàn ngoài Render** – mất khóa thì không mở được bản sao lưu. Chưa đặt thì sao lưu tự động bị từ chối. |
+| `TEST_ACCOUNTS` | Không | `1` = bật 6 tài khoản thử nghiệm (mật khẩu chung `Test@2026`). **Xóa khi dùng chính thức.** |
+| `HIGH_VALUE_VND` | Không | Ngưỡng thiết bị giá trị cao (mặc định 5 000 000). |
+| `GUEST_RETENTION_DAYS` | Không | Số ngày giữ thông tin khách vãng lai trước khi ẩn danh (mặc định 365). |
+
+## Sao lưu tự động hằng đêm
+
+1. Trên Render đặt `BACKUP_KEY` (và `CRON_SECRET` nếu chưa có).
+2. Trên GitHub > Settings > Secrets and variables > Actions có `APP_URL`, `CRON_SECRET` (dùng chung với nhắc hạn trả).
+3. Tệp `.github/workflows/sao-luu.yml` chạy lúc 1 giờ sáng, lưu bản sao lưu đã mã hóa ở tab **Actions > Sao luu du lieu > Artifacts**, giữ 30 ngày. Có thể bấm **Run workflow** để chạy ngay.
+4. Mở bản sao lưu ngoài máy chủ: `BACKUP_KEY="..." node backend/tools/giai-ma-sao-luu.mjs tep.tbk > du-lieu.json`.
+5. Khôi phục: đăng nhập quản trị hệ thống > **Hệ thống > Sao lưu, trạng thái hệ thống > Khôi phục**.

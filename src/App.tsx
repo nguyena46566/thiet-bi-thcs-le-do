@@ -6,6 +6,11 @@ import { AuditTab, MaintenanceTab, ReportsTab, EquipmentPage, Dashboard, Disposa
 import { RoomsTab, ProposalsTab, MyProposals } from "./School"
 import { MinlistTab } from "./Minlist"
 import { ChemicalsTab, PlansTab, DecisionsTab } from "./Planning"
+import { LoginPage, PendingPage, PrincipalPage, HeadPage, UsersTab, ChangePassword } from "./Roles"
+import { SystemTab, LoginLogTab, CsdlExportTab, EvidenceTab } from "./Ops"
+import { PrivacyPage, ConsentGate, ProfilePage, GuestPage, GuestSlipPage, GuestsTab, DataRequestsTab } from "./Privacy"
+import { CirculationTab, ReadersTab, ReadingPeriodsTab, StocktakeTab, LibraryStatsTab, OpacPage, MyLibraryLoans } from "./Circulation"
+import { ReceiptsTab, BooksTab as LibBooksTab, ShelvesTab, LibraryLedgerTab, BookCopyPage, ShelfPage } from "./Library"
 import ChatWidget from "@/ChatWidget"
 import {
   fetchRecords,
@@ -129,27 +134,40 @@ function Sidebar({ page, setPage }: { page: Page; setPage: (p: Page) => void }) 
         {inAdmin ? (
           <>
             <div className="pt-4">{item("back", "← Trang giáo viên", false, () => go("home"))}</div>
-            {ADMIN_MENU.map((g) => (
+            {ADMIN_MENU.filter((g) => g.items.some((it) => (!["nguoi-dung", "du-lieu-ca-nhan", "nhat-ky-dang-nhap", "he-thong"].includes(it.id) || user?.isSysadmin) && menuAllowed(user, g.group, it.id))).map((g) => (
               <div key={g.group || "chung"}>
                 {groupTitle(g.group || "Điều hành")}
-                {g.items.map((it) => item(it.id, it.label, adminSection === it.id, () => go(`admin/${it.id}`), undefined,
+                {g.items.filter((it) => (!["nguoi-dung", "du-lieu-ca-nhan", "nhat-ky-dang-nhap", "he-thong"].includes(it.id) || user?.isSysadmin) && menuAllowed(user, g.group, it.id)).map((it) => item(it.id, it.label, adminSection === it.id, () => go(`admin/${it.id}`), undefined,
                   it.id === "thong-bao" && unreadCount > 0 ? <span className="text-[11px] font-bold rounded-full px-1.5 bg-red-500 text-white">{badge}</span> : null))}
               </div>
             ))}
           </>
         ) : (
           <>
+            {(user?.isHead || user?.isPrincipal || user?.isSysadmin) && <>
+              {groupTitle("Trang của tôi")}
+              {user?.isPrincipal && item("bgh", "Ban giám hiệu", page === "bgh", () => go("bgh"), "#F5B841")}
+              {user?.isHead && item("to-truong", `Tổ trưởng – ${user.group?.replace(/^Tổ /, "") || "tổ"}`, page === "to-truong", () => go("to-truong"), "#9FD3B5")}
+              {user?.isSysadmin && item("qtht", "Quản trị hệ thống", false, () => go("admin/nguoi-dung"), "#C4B5FD")}
+            </>}
             {groupTitle("Tổng quan")}
             {item("home", "Trang chủ", page === "home", () => go("home"), "")}
             {user && item("mine", "Phiếu của tôi", page === "mine", () => go("mine"), "#9FD3B5")}
+            {user && item("ho-so", "Hồ sơ của tôi", page === "ho-so", () => go("ho-so"), "#C4B5FD")}
+            {!user && item("khach", "Đăng ký khách đến trường", page === "khach", () => go("khach"), "#F5B841")}
+            {item("tra-cuu-sach", "Tra cứu sách thư viện", page === "tra-cuu-sach", () => go("tra-cuu-sach"), "#7DD3FC")}
             {item("noiquy", "Nội quy", page === "noiquy", () => go("noiquy"), "#CBD5E1")}
+            {item("bao-mat", "Dữ liệu cá nhân", page === "bao-mat", () => go("bao-mat"), "#CBD5E1")}
             {groupTitle("Môn học")}
             {SUBJECTS.map((s) => item(s.id, s.name, page === s.id, () => go(s.id), s.color))}
           </>
         )}
       </nav>
       <div className="p-3 border-t border-white/10 space-y-2">
-        {user?.isAdmin && !inAdmin && (
+        {user?.isLibrarian && !user.isEquipment && !inAdmin && (
+          <button onClick={() => go("admin/nhan-sach")} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-[#F5B841] text-[#1a2b55] font-semibold text-sm hover:bg-[#f7c463]">Thư viện</button>
+        )}
+        {(user?.isEquipment || user?.isPrincipal) && !inAdmin && (
           <button onClick={() => go("admin")} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-[#F5B841] text-[#1a2b55] font-semibold text-sm hover:bg-[#f7c463]">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
             <span className="flex-1 text-left">Quản lý đăng ký</span>
@@ -159,11 +177,11 @@ function Sidebar({ page, setPage }: { page: Page; setPage: (p: Page) => void }) 
         {user ? (
           <div className="flex items-center gap-2.5 px-2 py-1.5">
             {user.avatar ? <img src={user.avatar} alt="" className="w-8 h-8 rounded-full" /> : <span className="w-8 h-8 rounded-full bg-white/15 text-white text-sm font-bold flex items-center justify-center">{user.name.trim().split(/\s+/).pop()?.[0]?.toUpperCase()}</span>}
-            <span className="flex-1 min-w-0"><span className="block text-sm text-white font-medium truncate">{user.name}</span><span className="block text-xs text-white/50">{user.isAdmin ? "Quản trị" : "Giáo viên"}</span></span>
+            <span className="flex-1 min-w-0"><span className="block text-sm text-white font-medium truncate">{user.name}</span><span className="block text-xs text-white/50 truncate">{user.isSysadmin ? "Quản trị hệ thống" : user.isPrincipal ? "Ban giám hiệu" : user.isEquipment ? "Nhân viên thiết bị" : user.isLibrarian ? "Nhân viên thư viện" : user.isHead ? "Tổ trưởng" : "Giáo viên"}{user.test ? " · thử nghiệm" : ""}</span></span>
             <button onClick={logout} className="text-xs text-white/70 hover:text-white px-2 py-1 rounded-lg hover:bg-white/10">Đăng xuất</button>
           </div>
         ) : (
-          <button onClick={login} className="w-full px-3 py-2.5 rounded-xl bg-white text-[#1a3670] font-semibold text-sm hover:bg-white/90">Đăng nhập bằng Google</button>
+          <button onClick={login} className="w-full px-3 py-2.5 rounded-xl bg-white text-[#1a3670] font-semibold text-sm hover:bg-white/90">Đăng nhập</button>
         )}
       </div>
     </div>
@@ -938,6 +956,17 @@ const ADMIN_MENU: { group: string; items: { id: string; label: string; tab: stri
     { id: "de-xuat", label: "Đề xuất mua sắm", tab: "proposals" },
   ] },
   { group: "Danh mục", items: [{ id: "danh-muc", label: "Danh mục thiết bị", tab: "inventory" }, { id: "phong", label: "Phòng bộ môn", tab: "rooms" }, { id: "toi-thieu", label: "Danh mục tối thiểu (TT 38)", tab: "minlist" }] },
+  { group: "Thư viện", items: [
+    { id: "muon-tra-sach", label: "Mượn – trả sách", tab: "lib-circ" },
+    { id: "ban-doc", label: "Bạn đọc, thẻ thư viện", tab: "lib-readers" },
+    { id: "tiet-doc", label: "Tiết đọc thư viện", tab: "lib-periods" },
+    { id: "nhan-sach", label: "Nhận sách theo hóa đơn", tab: "lib-receipts" },
+    { id: "kho-sach", label: "Kho sách", tab: "lib-books" },
+    { id: "ke-sach", label: "Kệ sách, xếp giá", tab: "lib-shelves" },
+    { id: "kiem-ke-sach", label: "Kiểm kê – thanh lọc", tab: "lib-stock" },
+    { id: "thong-ke-thu-vien", label: "Thống kê thư viện", tab: "lib-stats" },
+    { id: "so-thu-vien", label: "Sổ thư viện", tab: "lib-ledger" },
+  ] },
   { group: "Kế hoạch", items: [
     { id: "ke-hoach", label: "Kế hoạch năm học", tab: "plans" },
     { id: "quyet-dinh", label: "Quyết định thành lập", tab: "decisions" },
@@ -946,10 +975,24 @@ const ADMIN_MENU: { group: string; items: { id: string; label: string; tab: stri
   { group: "Báo cáo", items: [
     { id: "bao-cao", label: "Báo cáo tổng hợp", tab: "reports" },
     { id: "so-sach", label: "Sổ sách, biểu mẫu", tab: "books" },
+    { id: "minh-chung", label: "Minh chứng kiểm định", tab: "evidence" },
+    { id: "du-lieu-nganh", label: "Xuất dữ liệu CSDL ngành", tab: "csdl" },
   ] },
-  { group: "Hệ thống", items: [{ id: "thong-bao", label: "Thông báo", tab: "notifications" }] },
+  { group: "Hệ thống", items: [
+    { id: "thong-bao", label: "Thông báo", tab: "notifications" },
+    { id: "khach-vang-lai", label: "Sổ khách vãng lai", tab: "guests" },
+    { id: "nguoi-dung", label: "Người dùng và phân quyền", tab: "users" },
+    { id: "du-lieu-ca-nhan", label: "Yêu cầu dữ liệu cá nhân", tab: "datareq" },
+    { id: "nhat-ky-dang-nhap", label: "Nhật ký đăng nhập", tab: "loginlog" },
+    { id: "he-thong", label: "Sao lưu, trạng thái hệ thống", tab: "system" },
+  ] },
 ]
 const ADMIN_ITEMS = ADMIN_MENU.flatMap((g) => g.items)
+/** Nhân viên thư viện (không kiêm thiết bị) chỉ thấy mục Thư viện và Thông báo */
+function menuAllowed(user: ReturnType<typeof useAuth>["user"], group: string, id: string) {
+  if (!user?.isLibrarian || user.isEquipment || user.isSysadmin || user.isPrincipal) return true
+  return group === "Thư viện" || id === "thong-bao" || id === "khach-vang-lai"
+}
 
 function AdminPage({ section = "tong-quan", go }: { section?: string; go: (section: string) => void }) {
   const { user } = useAuth()
@@ -1061,6 +1104,22 @@ function AdminPage({ section = "tong-quan", go }: { section?: string; go: (secti
         {tab === "chemicals" && <ChemicalsTab go={go} />}
         {tab === "plans" && <PlansTab />}
         {tab === "decisions" && <DecisionsTab />}
+        {tab === "guests" && <GuestsTab />}
+        {tab === "evidence" && <EvidenceTab go={go} />}
+        {tab === "csdl" && <CsdlExportTab subjects={SUBJECTS} />}
+        {tab === "loginlog" && (user?.isSysadmin ? <LoginLogTab /> : <p className="text-sm text-gray-500">Chỉ quản trị hệ thống.</p>)}
+        {tab === "system" && (user?.isSysadmin ? <SystemTab /> : <p className="text-sm text-gray-500">Chỉ quản trị hệ thống.</p>)}
+        {tab === "datareq" && (user?.isSysadmin ? <DataRequestsTab /> : <p className="text-sm text-gray-500">Chỉ quản trị hệ thống.</p>)}
+        {tab === "lib-circ" && <CirculationTab />}
+        {tab === "lib-readers" && <ReadersTab />}
+        {tab === "lib-periods" && <ReadingPeriodsTab />}
+        {tab === "lib-stock" && <StocktakeTab />}
+        {tab === "lib-stats" && <LibraryStatsTab />}
+        {tab === "lib-receipts" && <ReceiptsTab />}
+        {tab === "lib-books" && <LibBooksTab />}
+        {tab === "lib-shelves" && <ShelvesTab />}
+        {tab === "lib-ledger" && <LibraryLedgerTab />}
+        {tab === "users" && (user?.isSysadmin ? <UsersTab /> : <p className="text-sm text-gray-500">Chỉ quản trị hệ thống quản lý người dùng.</p>)}
         {tab === "proposals" && <ProposalsTab />}
         {tab === "records" && <AdminSummary onPick={(st) => { setFilterStatus(st); setFilterSubject(""); setSearch("") }} active={filterStatus} refreshKey={records} />}
         {tab === "records" && (
@@ -1297,22 +1356,26 @@ function MyRecordsPage({ setPage }: { setPage: (p: Page) => void }) {
           </div>
         )}
         <MyProposals subjects={SUBJECTS} />
+        <MyLibraryLoans />
+        {user?.authType === "password" && <ChangePassword />}
       </div>
     </main>
   )
 }
 
 // ============ MAIN APP ============
-const PAGES = new Set<string>(["home", "noiquy", "admin", "mine", ...SUBJECTS.map((s) => s.id)])
+const PAGES = new Set<string>(["home", "noiquy", "admin", "mine", "dang-nhap", "cho-duyet", "bgh", "to-truong", "bao-mat", "ho-so", "khach", "tra-cuu-sach", ...SUBJECTS.map((s) => s.id)])
 function readHash(): Page {
   const h = decodeURIComponent(window.location.hash.replace(/^#\/?/, ""))
   if (/^admin\/[a-z-]+$/.test(h)) return h // các mục trong trang quản trị
   if (/^thiet-bi\/[\w.-]+$/.test(h)) return h // trang chi tiết thiết bị (mở từ mã QR)
+  if (/^(sach|ke)\/[\w.-]+$/i.test(h)) return h // quyển sách, kệ sách (mở từ mã QR)
+  if (/^khach\/[\w-]+$/i.test(h)) return h // phiếu khách vãng lai
   return PAGES.has(h) ? h : "home"
 }
 
 function AppContent() {
-  const { loading, user, login, slow, offline } = useAuth()
+  const { loading, user, login, slow, offline, pending } = useAuth()
   // Trang hiện tại lưu trên URL (#vat-li, #admin...) để tải lại trang không bị mất,
   // nút Back của trình duyệt hoạt động và có thể gửi link cho người khác.
   const [page, setPageState] = useState<Page>(readHash)
@@ -1361,10 +1424,22 @@ function AppContent() {
           <button onClick={() => window.location.reload()} className="font-semibold underline">Tải lại</button>
         </div>
       )}
+      {pending && !user ? <PendingPage /> : <>
+      {page === "dang-nhap" && <LoginPage go={setPage} />}
+      {page === "bao-mat" && <PrivacyPage />}
+      {page === "tra-cuu-sach" && <OpacPage />}
+      {page === "ho-so" && <ProfilePage go={setPage} />}
+      {page === "khach" && <GuestPage />}
+      {/^khach\//i.test(page) && <GuestSlipPage key={page} code={page.slice(6).toUpperCase()} />}
+      {page === "cho-duyet" && <PendingPage />}
+      {page === "bgh" && (user?.isPrincipal || user?.isSysadmin ? <PrincipalPage go={setPage} /> : <main className="pt-24 px-6 text-sm text-gray-500">Trang dành cho Ban giám hiệu.</main>)}
+      {page === "to-truong" && (user?.isHead || user?.isSysadmin ? <HeadPage WeekGrid={WeekGrid} /> : <main className="pt-24 px-6 text-sm text-gray-500">Trang dành cho tổ trưởng chuyên môn.</main>)}
       {page === "home" && <HomePage setPage={setPage} onQuick={fillFormFromChat} />}
       {page === "noiquy" && <NoiQuyPage />}
       {page.startsWith("admin") && <AdminPage section={page.split("/")[1]} go={(sec) => setPage(`admin/${sec}`)} />}
       {page === "mine" && <MyRecordsPage setPage={setPage} />}
+      {/^sach\//i.test(page) && <BookCopyPage key={page} code={page.slice(5).toUpperCase()} />}
+      {/^ke\//i.test(page) && <ShelfPage key={page} code={page.slice(3).toUpperCase()} />}
       {page.startsWith("thiet-bi/") && <EquipmentPage key={page} id={page.slice(9)} isAdmin={!!user?.isAdmin} loggedIn={!!user} login={login} onBorrow={fillFormFromChat} goHome={() => setPage("home")} />}
       {SUBJECTS.some((s) => s.id === page) && (
         <SubjectPage
@@ -1376,6 +1451,8 @@ function AppContent() {
           onPrefillUsed={() => setPrefill(null)}
         />
       )}
+      </>}
+      <ConsentGate />
       <ChatWidget
         subjectId={currentSubjectId}
         onFillForm={fillFormFromChat}

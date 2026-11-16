@@ -94,7 +94,10 @@ const emailList = (v) => (v || "").split(",").map((e) => e.trim().toLowerCase())
 export function isPrincipal(email) {
   return !!email && emailList(process.env.PRINCIPAL_EMAILS).includes(email.toLowerCase());
 }
-export const principalConfigured = () => emailList(process.env.PRINCIPAL_EMAILS).length > 0;
+// Có Ban giám hiệu khi: khai báo PRINCIPAL_EMAILS, hoặc có tài khoản được gán vai trò Ban giám hiệu (users.js cập nhật)
+let principalActive = false;
+export const setPrincipalActive = (v) => { principalActive = !!v; };
+export const principalConfigured = () => emailList(process.env.PRINCIPAL_EMAILS).length > 0 || principalActive;
 
 export function isAdmin(email) {
   if (!email) return false;

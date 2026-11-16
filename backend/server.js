@@ -21,6 +21,12 @@ import { initInventory, registerInventoryRoutes, processReturn, undoReturn, scor
 import { registerOperationRoutes, startReminderScheduler } from "./operations.js";
 import { initMinlist, registerMinlistRoutes } from "./minlist.js";
 import { registerPlanningRoutes } from "./planning.js";
+import { initUsers, registerUserRoutes, resolveGoogle, refreshSessionUser, landingOf } from "./users.js";
+import { registerRolePageRoutes } from "./rolepages.js";
+import { registerLibraryRoutes } from "./library.js";
+import { registerCirculationRoutes } from "./circulation.js";
+import { registerOpsRoutes, logLogin, pruneLoginLog } from "./ops.js";
+import { registerPrivacyRoutes, anonymizeOldGuests } from "./privacy.js";
 import { listInventory } from "./inventory.js";
 import { sendBorrowNotification, sendStatusEmail } from "./mailer.js";
 import { createChatRouter } from "./chat.js";
@@ -88,6 +94,8 @@ app.use(
 
 // Bọc route async: lỗi sẽ được trả về 500 thay vì làm treo request
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+// Quyền lấy từ danh sách người dùng ở mỗi yêu cầu: đổi vai trò hoặc khóa tài khoản có hiệu lực ngay
+app.use("/api", refreshSessionUser);
 
 // ============ Serve frontend (production only) ============
 const distPath = path.join(__dirname, "..", "dist");
@@ -100,7 +108,7 @@ if (isProd) {
 // ============ AUTH ROUTES (Google OAuth) ============
 
 app.get("/api/auth/me", (req, res) => {
-  res.json({ user: req.session?.user || null });
+  res.json({ user: req.session?.user || null, pending: req.session?.user ? null : req.session?.pending || null });
 });
 
 app.get("/api/auth/google/login", (req, res) => {
@@ -123,22 +131,19 @@ app.get("/api/auth/google/callback", async (req, res) => {
     const profile = await getGoogleProfile(tokenData.access_token);
     if (!profile.email || profile.verified_email === false) return res.redirect("/?error=email_not_verified");
 
-    const user = {
-      id: profile.id,
-      email: profile.email,
-      name: profile.name || profile.email,
-      avatar: profile.picture || null,
-      isAdmin: isAdmin(profile.email),
-      isPrincipal: isPrincipal(profile.email),
-    };
-
+    // Tài khoản phải được quản trị hệ thống duyệt (trừ ADMIN_EMAILS / PRINCIPAL_EMAILS)
+    const r = await resolveGoogle(profile);
+    await logLogin(req, { method: "Google", email: profile.email, userId: profile.id, name: profile.name || profile.email, result: r.locked ? "Tài khoản bị khóa" : r.pending ? "Chờ duyệt" : "Thành công" });
+    if (r.locked) return res.redirect("/?error=locked");
     // Tạo session mới sau khi đăng nhập (chống session fixation)
     req.session.regenerate((err) => {
       if (err) { console.error("Session error:", err); return res.redirect("/?error=callback_failed"); }
-      req.session.user = user;
-      req.session.save(() => res.redirect(FRONTEND_URL || "/"));
+      if (r.pending) { req.session.pending = r.pending; return req.session.save(() => res.redirect(`${FRONTEND_URL || ""}/#cho-duyet`)); }
+      req.session.user = r.user;
+      const landing = landingOf(r.user);
+      req.session.save(() => res.redirect(`${FRONTEND_URL || ""}/${landing ? `#${landing}` : ""}`));
     });
-    console.log(`Login: ${user.email} - Admin: ${user.isAdmin}`);
+    console.log(`Login: ${profile.email} - ${r.pending ? "chờ duyệt" : r.user.roles.join(",")}`);
   } catch (err) {
     console.error("Google callback error:", err.message);
     res.redirect("/?error=callback_failed");
@@ -399,6 +404,16 @@ registerInventoryRoutes(app, { requireAuth, requireAdmin, wrap });
 registerOperationRoutes(app, { requireAuth, requireAdmin, wrap });
 // ============ DANH MỤC THIẾT BỊ TỐI THIỂU (TT 38/2021) ============
 registerMinlistRoutes(app, { requireAdmin, wrap, getInventory: listInventory });
+// ============ NGƯỜI DÙNG, PHÂN QUYỀN, TRANG RIÊNG THEO VAI TRÒ ============
+registerUserRoutes(app, { requireAuth, requireAdmin, wrap });
+registerRolePageRoutes(app, { requireAuth, wrap });
+// ============ THƯ VIỆN: NHẬN SÁCH THEO HÓA ĐƠN, ĐKCB, KỆ SÁCH ============
+registerLibraryRoutes(app, { requireAuth, wrap });
+registerCirculationRoutes(app, { requireAuth, wrap });
+// ============ VẬN HÀNH: SAO LƯU, KHÔI PHỤC, NHẬT KÝ ĐĂNG NHẬP, TRẠNG THÁI ============
+registerOpsRoutes(app, { requireAuth, wrap, express });
+// ============ DỮ LIỆU CÁ NHÂN: ĐỒNG Ý, HỒ SƠ CỦA TÔI, KHÁCH VÃNG LAI ============
+registerPrivacyRoutes(app, { requireAuth, requireAdmin, wrap });
 // ============ KẾ HOẠCH NĂM HỌC, QUYẾT ĐỊNH THÀNH LẬP TỔ / HỘI ĐỒNG ============
 registerPlanningRoutes(app, { requireAdmin, wrap });
 
@@ -445,7 +460,11 @@ async function connectDatabase(attempt = 1) {
       new Promise((_, reject) => setTimeout(() => reject(new Error(`quá ${DB_INIT_TIMEOUT_MS / 1000} giây không phản hồi`)), DB_INIT_TIMEOUT_MS)),
     ]);
     await initInventory(); // khởi tạo kho thiết bị (lần đầu chép từ catalog/equipment.json)
-    await initMinlist(); // nạp danh mục tối thiểu đã có (Ngữ văn, Toán, Ngoại ngữ)
+    await initMinlist(); // nạp danh mục tối thiểu theo Thông tư 38/2021
+    await initUsers(); // người dùng, phân quyền, tài khoản thử nghiệm
+    await anonymizeOldGuests(); // ẩn danh khách quá thời hạn lưu
+    await pruneLoginLog();
+    setInterval(() => { anonymizeOldGuests().catch(() => {}); pruneLoginLog().catch(() => {}); }, 24 * 3600e3).unref();
     dbReady = true;
     dbError = "";
     console.log(`[DB] Kết nối ${db.kind} thành công${attempt > 1 ? ` sau ${attempt} lần thử` : ""}`);

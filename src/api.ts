@@ -8,6 +8,16 @@ export interface User {
   name: string;
   avatar: string | null;
   isAdmin: boolean;
+  isPrincipal?: boolean;
+  isSysadmin?: boolean;
+  isEquipment?: boolean;
+  isHead?: boolean;
+  isLibrarian?: boolean;
+  consentVersion?: string;
+  roles?: string[];
+  group?: string;
+  authType?: string;
+  test?: boolean;
 }
 
 export type RecordStatus = "Mượn" | "Trả" | "Chờ duyệt" | "Từ chối";
@@ -75,12 +85,14 @@ export interface Notification {
   createdAt: string;
 }
 // ============ AUTH ============
+export let pendingAccount: { name: string; email: string } | null = null;
 export async function fetchCurrentUser(): Promise<User | null> {
   // Không chờ vô hạn: Render miễn phí có thể mất tới ~1 phút khi khởi động lại
   const res = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include", signal: AbortSignal.timeout(25000) });
   if (res.status === 503 || res.status >= 500) throw new Error("server-starting"); // máy chủ đang khởi động / đang kết nối CSDL
   if (!res.ok) return null;
   const data = await res.json();
+  pendingAccount = data.pending || null;
   return data.user;
 }
 export function getGoogleLoginURL(): string {
@@ -370,7 +382,7 @@ export const createRoom = (r: Partial<Room>) => call<Room>("POST", "/api/rooms",
 export const updateRoom = (id: string, r: Partial<Room>) => call<Room>("PATCH", `/api/rooms/${encodeURIComponent(id)}`, r);
 export const deleteRoom = (id: string) => call<boolean>("DELETE", `/api/rooms/${encodeURIComponent(id)}`);
 export interface RoomLogEntry { date: string; period: string; className: string; teacherName: string; subject: string; lessonName: string; equipment: string; status: string; condition: string }
-export const fetchRoomLog = (id: string, from: string, to: string) => call<{ room: Room; entries: RoomLogEntry[] }>("GET", `/api/rooms/${encodeURIComponent(id)}/log?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+export const fetchRoomLog = (id: string, from: string, to: string) => call<{ room: Room; share?: Record<string, number>; entries: RoomLogEntry[] }>("GET", `/api/rooms/${encodeURIComponent(id)}/log?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
 
 export interface ProposalItem { name: string; subjectId: string; equipmentId?: string | null; quantity: number; estPrice: number; reason: string }
 export interface Proposal { id: string; status: "Chờ duyệt" | "Đã duyệt" | "Từ chối" | "Đã mua"; items: ProposalItem[]; total: number; purpose: string; userId: string; userName: string; createdAt: string; decisionNote?: string; decidedBy?: string; purchaseNote?: string }
@@ -391,7 +403,7 @@ export const fetchEquipmentHistory = (id: string) => call<EquipmentHistory>("GET
 export const verifyLoss = (id: string, b: { searchScope: string; involved: string; findings: string }) => call<LossReport>("PATCH", `/api/loss-reports/${encodeURIComponent(id)}/verify`, b);
 
 // ============ DANH MỤC THIẾT BỊ TỐI THIỂU (TT 38/2021) ============
-export interface MinItem { id: string; mon: string; stt: string; group: string; topic: string; name: string; purpose: string; forTeacher: boolean; forStudent: boolean; unit: string; normQty: number; normPer: string; normDiv?: number; norm?: string; grades: number[]; note: string; siteSubjectId: string; linkedEquipmentIds: string[]; source: string; required: number; have: number; missing: number; status: string }
+export interface MinItem { id: string; mon: string; stt: string; group: string; topic: string; name: string; purpose: string; forTeacher: boolean; forStudent: boolean; unit: string; normQty: number; normPer: string; normDiv?: number; norm?: string; grades: number[]; note: string; siteSubjectId: string; linkedEquipmentIds: string[]; source: string; amendedBy?: string; required: number; have: number; missing: number; status: string }
 export interface MinSettings { teachers: Record<string, number>; rooms?: Record<string, number>; classes: Record<string, number>; hsPerRoom: number }
 export const fetchMinlist = () => call<{ subjects: string[]; amended?: string[]; settings: MinSettings; items: MinItem[] }>("GET", "/api/minlist");
 export const reseedMinlist = (mon: string) => call<{ imported: number }>("POST", "/api/minlist/reseed", { mon });
@@ -423,3 +435,116 @@ export interface Decision { id: string; type: string; number: string; date: stri
 export const fetchDecisions = () => call<Decision[]>("GET", "/api/decisions");
 export const saveDecision = (b: Partial<Decision>) => (b.id ? call<Decision>("PATCH", `/api/decisions/${encodeURIComponent(b.id)}`, b) : call<Decision>("POST", "/api/decisions", b));
 export const deleteDecision = (id: string) => call<boolean>("DELETE", `/api/decisions/${encodeURIComponent(id)}`);
+
+// ============ ĐĂNG NHẬP, NGƯỜI DÙNG, TRANG THEO VAI TRÒ ============
+export interface AuthOptions { google: boolean; testAccounts: { username: string; label: string }[]; testPassword: string | null; roles: Record<string, string>; groups: string[] }
+export const fetchAuthOptions = () => call<AuthOptions>("GET", "/api/auth/options");
+export const loginPassword = (username: string, password: string) => call<{ user: User; landing: string }>("POST", "/api/auth/login", { username, password });
+export const registerAccount = (b: { name: string; email: string; username: string; password: string; requestedRoles: string[]; group: string }) => call<{ ok: boolean }>("POST", "/api/auth/register", b);
+export const changeMyPassword = (current: string, password: string) => call<{ ok: boolean }>("POST", "/api/auth/password", { current, password });
+export interface AppUser { id: string; username?: string; email: string; name: string; avatar?: string | null; roles: string[]; requestedRoles?: string[]; requestedGroup?: string; group?: string; status: "pending" | "active" | "locked"; authType: string; test?: boolean; createdAt: string; approvedBy?: string; lastLoginAt?: string }
+export interface RoleLog { id: string; action: string; targetName: string; by: string; detail: string; createdAt: string }
+export const fetchUsers = () => call<{ users: AppUser[]; roles: Record<string, string>; groups: string[]; logs: RoleLog[]; testAccounts: boolean }>("GET", "/api/users");
+export const approveUser = (id: string, roles: string[], group: string) => call<AppUser>("POST", `/api/users/${encodeURIComponent(id)}/approve`, { roles, group });
+export const rejectUser = (id: string) => call<{ ok: boolean }>("POST", `/api/users/${encodeURIComponent(id)}/reject`, {});
+export const updateUser = (id: string, b: Partial<AppUser>) => call<AppUser>("PATCH", `/api/users/${encodeURIComponent(id)}`, b);
+export const createUser = (b: { name: string; username: string; email: string; password: string; roles: string[]; group: string; test?: boolean }) => call<AppUser>("POST", "/api/users", b);
+export const resetUserPassword = (id: string, password: string) => call<{ ok: boolean }>("POST", `/api/users/${encodeURIComponent(id)}/password`, { password });
+export const fetchPrincipalOverview = () => call<{ losses: LossReport[]; proposals: Proposal[]; plans: Plan[]; special: BorrowRecord[]; stats: { monthRecords: number; borrowing: number; overdue: number; pending: number } }>("GET", "/api/principal/overview");
+export const fetchHeadOverview = (group = "") => call<{ group: string; subjects: { id: string; name: string; group: string }[]; records: BorrowRecord[]; proposals: Proposal[] }>("GET", `/api/head/overview?group=${encodeURIComponent(group)}`);
+
+// ============ THƯ VIỆN ============
+export interface ReceiptLine { id: string; title: string; author: string; publisher: string; year: string; kind: string; grade: string; isbn: string; invoiceQty: number; price: number; receivedQty: number | null; note: string; titleId?: string; codeFrom?: string; codeTo?: string; diff?: number }
+export interface BookReceipt { id: string; status: string; invoiceNo: string; invoiceDate: string; supplier: string; source: string; note: string; defaultShelf: string; lines: ReceiptLine[]; invoiceTotal: number; receivedTotal?: number; receivedCopies?: number; countNote?: string; createdBy: string; createdAt: string; receivedBy?: string; receivedAt?: string; copies?: BookCopy[] }
+export interface BookTitle { id: string; title: string; author: string; publisher: string; year: string; kind: string; grade: string; price: number; isbn?: string; classification?: string; callNumber?: string; keywords?: string; summary?: string; pages?: string; size?: string; copies: number; onShelf: number; unshelved: number }
+export interface BookCopy { id: string; code: string; titleId: string; receiptId: string; price: number; shelf: string; status: string; note?: string; createdAt: string }
+export interface Shelf { id: string; code: string; name: string; room: string; kinds: string[]; count: number }
+export const fetchLibraryMeta = () => call<{ kinds: Record<string, string>; statuses: string[]; sources: string[] }>("GET", "/api/library/meta");
+export const fetchReceipts = () => call<BookReceipt[]>("GET", "/api/library/receipts");
+export const fetchReceipt = (id: string) => call<BookReceipt>("GET", `/api/library/receipts/${encodeURIComponent(id)}`);
+export const createReceipt = (b: Partial<BookReceipt>) => call<BookReceipt>("POST", "/api/library/receipts", b);
+export const updateReceipt = (id: string, b: Partial<BookReceipt>) => call<BookReceipt>("PATCH", `/api/library/receipts/${encodeURIComponent(id)}`, b);
+export const deleteReceipt = (id: string) => call<boolean>("DELETE", `/api/library/receipts/${encodeURIComponent(id)}`);
+export const receiveReceipt = (id: string, lines: { id: string; receivedQty: number }[], countNote: string, shelf: string) => call<BookReceipt>("POST", `/api/library/receipts/${encodeURIComponent(id)}/receive`, { lines, countNote, shelf });
+export const fetchTitles = () => call<BookTitle[]>("GET", "/api/library/titles");
+export const fetchCopies = (q: { titleId?: string; shelf?: string; status?: string; receiptId?: string } = {}) => call<BookCopy[]>("GET", `/api/library/copies?${new URLSearchParams(q as Record<string, string>)}`);
+export const fetchCopy = (code: string) => call<{ copy: BookCopy; title: BookTitle; shelf: Shelf | null; receipt: { invoiceNo: string; invoiceDate: string; supplier: string; source: string } | null; staff: boolean }>("GET", `/api/library/copies/${encodeURIComponent(code)}`);
+export const updateCopy = (code: string, b: { status?: string; note?: string }) => call<BookCopy>("PATCH", `/api/library/copies/${encodeURIComponent(code)}`, b);
+export const shelveCopies = (shelf: string, codes: string[]) => call<{ shelf: string; done: string[]; notFound: string[]; skipped: string[] }>("POST", "/api/library/shelve", { shelf, codes });
+export const fetchShelves = () => call<Shelf[]>("GET", "/api/library/shelves");
+export const createShelf = (b: { code: string; name: string; room: string; kinds: string[] }) => call<Shelf>("POST", "/api/library/shelves", b);
+export const deleteShelf = (id: string) => call<boolean>("DELETE", `/api/library/shelves/${encodeURIComponent(id)}`);
+
+// ============ DỮ LIỆU CÁ NHÂN, HỒ SƠ, KHÁCH VÃNG LAI ============
+export interface PrivacyMeta { version: string; guestRetentionDays: number; requestTypes: string[]; guestKinds: string[]; guestPurposes: string[] }
+export interface DataRequest { id: string; userId: string; userName: string; email: string; type: string; content: string; status: string; response?: string; handledBy?: string; handledAt?: string; createdAt: string }
+export interface MyProfile { user: { id: string; name: string; email: string; username: string; phone: string; position: string; roles: string[]; roleNames: string[]; group: string; authType: string; createdAt: string | null; lastLoginAt: string | null; approvedBy: string }; consent: { version: string; at: string } | null; privacyVersion: string; stats: { records: number; borrowing: number; pending: number; proposals: number }; requests: DataRequest[] }
+export interface Guest { id: string; code: string; name: string; kind: string; org: string; phone: string; purpose: string; place: string; note: string; checkInAt: string; checkOutAt: string | null; createdBy: string; anonymized?: boolean }
+export const fetchPrivacyMeta = () => call<PrivacyMeta>("GET", "/api/privacy/meta");
+export const giveConsent = (version: string) => call<{ ok: boolean }>("POST", "/api/privacy/consent", { version });
+export const fetchMyProfile = () => call<MyProfile>("GET", "/api/me/profile");
+export const updateMyProfile = (b: { name?: string; phone?: string; position?: string }) => call<{ ok: boolean }>("PATCH", "/api/me/profile", b);
+export const sendDataRequest = (type: string, content: string) => call<DataRequest>("POST", "/api/me/requests", { type, content });
+export const fetchDataRequests = () => call<DataRequest[]>("GET", "/api/data-requests");
+export const handleDataRequest = (id: string, status: string, response: string) => call<DataRequest>("PATCH", `/api/data-requests/${encodeURIComponent(id)}`, { status, response });
+export const guestSelfCheckIn = (b: Partial<Guest> & { consent: boolean }) => call<{ code: string; name: string; checkInAt: string; purpose: string; place: string }>("POST", "/api/guests/self", b);
+export const fetchGuestSlip = (code: string) => call<{ code: string; name: string; checkInAt: string; checkOutAt: string | null; purpose: string; place: string }>("GET", `/api/guests/slip/${encodeURIComponent(code)}`);
+export const fetchGuests = (from: string, to: string) => call<{ guests: Guest[]; retentionDays: number }>("GET", `/api/guests?from=${from}&to=${to}`);
+export const addGuest = (b: Partial<Guest> & { consent: boolean }) => call<Guest>("POST", "/api/guests", b);
+export const checkoutGuest = (id: string) => call<Guest>("POST", `/api/guests/${encodeURIComponent(id)}/checkout`, {});
+export const anonymizeGuest = (id: string) => call<Guest>("POST", `/api/guests/${encodeURIComponent(id)}/anonymize`, {});
+
+// ============ THƯ VIỆN: BẠN ĐỌC, LƯU THÔNG, TIẾT ĐỌC, TRA CỨU, KIỂM KÊ, THỐNG KÊ ============
+export interface Reader { id: string; name: string; type: string; className: string; grade: number | null; userId: string | null; status: string; onLoan?: number; createdAt: string }
+export interface BookLoan { id: string; copyCode: string; titleId: string; title?: string; readerId: string; readerName: string; readerType: string; className: string; mode: string; loanDate: string; dueDate: string; returnedAt: string | null; returnDate?: string; condition?: string; renewals: number; overdueDays?: number; lateDays?: number; shelf?: string }
+export interface LibRules { studentMax: number; studentDays: number; staffMax: number; staffDays: number }
+export interface ReadingPeriod { id: string; date: string; slot: string; slotName: string; className: string; schoolYear: string; term: string; topic: string; leader: string; status: string; attendance: number | null; note: string }
+export interface LibAudit { id: string; title: string; shelf: string; expected: string[]; found: string[]; extra: string[]; missing?: string[]; status: string; createdBy: string; createdAt: string; finishedAt?: string; markedMissing?: boolean }
+export interface OpacResult { id: string; title: string; author: string; publisher: string; year: string; kind: string; grade: string; callNumber: string; summary: string; total: number; available: number; shelves: string[] }
+export const fetchLibRules = () => call<LibRules>("GET", "/api/library/rules");
+export const saveLibRules = (r: LibRules) => call<LibRules>("PUT", "/api/library/rules", r);
+export const fetchReaders = () => call<Reader[]>("GET", "/api/library/readers");
+export const createReaders = (readers: Record<string, unknown>[]) => call<{ created: Reader[]; errors: string[] }>("POST", "/api/library/readers", { readers });
+export const readersFromUsers = () => call<{ added: number }>("POST", "/api/library/readers/from-users", {});
+export const updateReader = (id: string, b: { status?: string; className?: string }) => call<Reader>("PATCH", `/api/library/readers/${encodeURIComponent(id)}`, b);
+export const deleteReader = (id: string) => call<{ ok: boolean }>("DELETE", `/api/library/readers/${encodeURIComponent(id)}`);
+export const fetchLoans = (q: { readerId?: string; open?: string; overdue?: string } = {}) => call<BookLoan[]>("GET", `/api/library/loans?${new URLSearchParams(q as Record<string, string>)}`);
+export const fetchMyLibraryLoans = () => call<{ reader: Reader | null; loans: BookLoan[] }>("GET", "/api/library/my-loans");
+export const lendBooks = (b: { readerId: string; codes: string[]; mode: string; dueDate?: string }) => call<BookLoan[]>("POST", "/api/library/loans", b);
+export const returnBook = (code: string, condition: string, note = "") => call<BookLoan>("POST", "/api/library/returns", { code, condition, note });
+export const renewLoan = (id: string) => call<BookLoan>("POST", `/api/library/loans/${encodeURIComponent(id)}/renew`, {});
+export const fetchReadingPeriods = (schoolYear = "") => call<{ schoolYear: string; min: number; periods: ReadingPeriod[]; summary: { className: string; hk1: number; hk2: number; planned: number; ok1: boolean; ok2: boolean }[] }>("GET", `/api/library/reading-periods?schoolYear=${schoolYear}`);
+export const createReadingPeriod = (b: { date: string; slot: string; className: string; topic: string; leader: string }) => call<ReadingPeriod>("POST", "/api/library/reading-periods", b);
+export const updateReadingPeriod = (id: string, b: { status?: string; attendance?: number; note?: string }) => call<ReadingPeriod>("PATCH", `/api/library/reading-periods/${encodeURIComponent(id)}`, b);
+export const deleteReadingPeriod = (id: string) => call<boolean>("DELETE", `/api/library/reading-periods/${encodeURIComponent(id)}`);
+export const searchOpac = (q: string, kind = "", grade = "") => call<{ results: OpacResult[]; kinds: Record<string, string> }>("GET", `/api/opac?q=${encodeURIComponent(q)}&kind=${kind}&grade=${grade}`);
+export const catalogTitle = (id: string, b: Record<string, string>) => call<BookTitle>("PATCH", `/api/library/titles/${encodeURIComponent(id)}`, b);
+export const fetchStocktakes = () => call<LibAudit[]>("GET", "/api/library/stocktakes");
+export const createStocktake = (shelf: string, title: string) => call<LibAudit>("POST", "/api/library/stocktakes", { shelf, title });
+export const scanStocktake = (id: string, codes: string[]) => call<LibAudit>("POST", `/api/library/stocktakes/${encodeURIComponent(id)}/scan`, { codes });
+export const finishStocktake = (id: string, markMissing: boolean) => call<LibAudit>("POST", `/api/library/stocktakes/${encodeURIComponent(id)}/finish`, { markMissing });
+export const weedCopies = (codes: string[], reason: string, decisionNo: string) => call<{ weeded: string[] }>("POST", "/api/library/weed", { codes, reason, decisionNo });
+export interface LibStats { schoolYear: string; collection: { titles: number; copies: number; byKind: Record<string, number>; onLoan: number; damaged: number; lost: number; weeded: number }; readers: { students: number; teachers: number; studentsActive: number; teachersActive: number; studentPct: number; teacherPct: number; copiesPerStudent: number | null }; loans: { total: number; home: number; inLibrary: number; open: number; overdue: number; byMonth: Record<string, number>; topTitles: { title: string; loans: number }[] }; byClass: Record<string, { readers: number; active: number; loans: number }>; readingPeriods: { done: number; planned: number } }
+export const fetchLibStats = () => call<LibStats>("GET", "/api/library/stats");
+
+// ============ VẬN HÀNH ============
+export interface BackupEntry { id: string; at: string; by: string; kind: string; size: number; encrypted: boolean; counts: Record<string, number> }
+export interface LoginEntry { id: string; at: string; method: string; username?: string; email?: string; name?: string; userId?: string | null; result: string; ip: string; ua?: string; device?: string }
+export interface SystemStatus { storage: string; uptimeMinutes: number; node: string; counts: Record<string, number>; lastBackup: BackupEntry | null; backupEncrypted: boolean; logins24h: { ok: number; failed: number }; checks: { label: string; ok: boolean }[] }
+export const fetchSystemStatus = () => call<SystemStatus>("GET", "/api/admin/status");
+export const fetchBackups = () => call<BackupEntry[]>("GET", "/api/admin/backups");
+export const fetchLoginLog = (q = "", result = "") => call<LoginEntry[]>("GET", `/api/admin/login-log?q=${encodeURIComponent(q)}&result=${encodeURIComponent(result)}`);
+export const fetchMyLogins = () => call<LoginEntry[]>("GET", "/api/me/logins");
+export async function downloadBackup() {
+  const res = await fetch(`${API_BASE}/api/admin/backup`, { credentials: "include" })
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Không tải được bản sao lưu")
+  const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") || "")?.[1] || "sao-luu.tbk"
+  const a = document.createElement("a"); a.href = URL.createObjectURL(await res.blob()); a.download = name; a.click(); URL.revokeObjectURL(a.href)
+  return name
+}
+export async function restoreBackup(file: File, dry: boolean) {
+  const res = await fetch(`${API_BASE}/api/admin/restore?${dry ? "dry=1" : "confirm=KHOI-PHUC"}`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/octet-stream" }, body: await file.arrayBuffer() })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || "Khôi phục thất bại")
+  return data as { createdAt?: string; restoredFrom?: string; counts: Record<string, number>; current?: Record<string, number> }
+}

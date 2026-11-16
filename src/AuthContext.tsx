@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { fetchCurrentUser, getGoogleLoginURL, logout as apiLogout, type User } from "@/api";
+import { fetchCurrentUser, getGoogleLoginURL, logout as apiLogout, pendingAccount, type User } from "@/api";
 
 interface AuthContextType {
   user: User | null;
@@ -8,7 +8,13 @@ interface AuthContextType {
   slow: boolean;
   /** Thử nhiều lần vẫn không kết nối được máy chủ */
   offline: boolean;
+  /** Mở trang đăng nhập (Google, mật khẩu, đăng ký) */
   login: () => void;
+  loginGoogle: () => void;
+  /** Gọi sau khi đăng nhập bằng mật khẩu thành công */
+  setLoggedIn: (u: User) => void;
+  /** Tài khoản Google đã đăng nhập nhưng chưa được duyệt */
+  pending: { name: string; email: string } | null;
   logout: () => Promise<void>;
 }
 
@@ -18,6 +24,9 @@ const AuthContext = createContext<AuthContextType>({
   slow: false,
   offline: false,
   login: () => {},
+  loginGoogle: () => {},
+  setLoggedIn: () => {},
+  pending: null,
   logout: async () => {},
 });
 
@@ -26,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [slow, setSlow] = useState(false);
   const [offline, setOffline] = useState(false);
+  const [pending, setPending] = useState<{ name: string; email: string } | null>(null);
 
   // Lấy thông tin đăng nhập; nếu máy chủ đang khởi động (Render "ngủ" dậy, đang nối CSDL) thì thử lại,
   // tối đa khoảng 2 phút rồi mới hiện trang ở chế độ khách kèm thông báo — không xoay mãi.
@@ -37,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const u = await fetchCurrentUser();
         if (stop) return;
-        setUser(u); setOffline(false); setLoading(false);
+        setUser(u); setPending(pendingAccount); setOffline(false); setLoading(false);
       } catch {
         if (stop) return;
         tries++;
@@ -49,10 +59,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { stop = true; clearTimeout(slowTimer); };
   }, []);
 
-  const login = () => {
-    // Redirect to backend Google OAuth
+  const loginGoogle = () => {
+    // Chuyển sang đăng nhập Google ở máy chủ
     window.location.href = getGoogleLoginURL();
   };
+  const login = () => { window.location.hash = "dang-nhap"; };
+  const setLoggedIn = (u: User) => { setUser(u); setPending(null); };
 
   const logout = async () => {
     await apiLogout();
@@ -60,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, slow, offline, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, slow, offline, login, loginGoogle, setLoggedIn, pending, logout }}>
       {children}
     </AuthContext.Provider>
   );

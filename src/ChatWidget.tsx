@@ -290,6 +290,7 @@ export default function ChatWidget({
                 onSubmit={(e) => { e.preventDefault(); submit(input) }}
                 className="border-t border-gray-100 p-3"
               >
+                <p className="text-[11px] text-gray-400 mb-1.5">Câu hỏi được gửi tới Google Gemini để trả lời. Không nhập thông tin cá nhân của học sinh. <a href="#bao-mat" className="underline">Dữ liệu cá nhân</a></p>
                 <div className="flex items-end gap-2">
                   <textarea
                     ref={inputRef}

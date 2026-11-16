@@ -60,7 +60,7 @@ export function RoomsTab({ subjects }: { subjects: Subject[] }) {
         {list === null ? <p className="p-6 text-sm text-gray-400">Đang tải…</p> : list.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">Chưa có phòng nào</p> : (
           <ul className="divide-y divide-gray-50">{list.map((r) => (
             <li key={r.id} className="px-5 py-3 flex flex-wrap items-center justify-between gap-2">
-              <div><div className="font-medium text-gray-900">{r.name} <span className="text-xs text-gray-500 font-normal">· {r.kind}</span></div>
+              <div><div className="font-medium text-gray-900">{r.name} <span className="text-xs text-gray-500 font-normal">· {r.kind}</span>{r.subjectIds.length > 1 && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-violet-100 text-violet-700" title="Thông tư 23/2024/TT-BGDĐT cho phép ghép phòng học bộ môn có chức năng tương đồng, phải bảo đảm đủ thiết bị và thời gian dạy học">Phòng ghép {r.subjectIds.length} môn</span>}</div>
                 <div className="text-xs text-gray-500">{r.subjectIds.map((id) => subjects.find((s) => s.id === id)?.name).filter(Boolean).join(", ") || "Mọi môn"}{r.note ? ` · ${r.note}` : ""}</div></div>
               <div className="flex gap-1"><button onClick={() => setF(r)} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200">Sửa</button><button onClick={() => remove(r)} className="px-2.5 py-1 rounded-lg text-xs font-semibold text-gray-400 hover:text-red-600 hover:bg-red-50">Xóa</button></div>
             </li>

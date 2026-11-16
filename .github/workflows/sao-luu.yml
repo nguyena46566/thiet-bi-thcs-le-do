@@ -1,0 +1,30 @@
+# Sao lưu dữ liệu website mỗi đêm. Bản sao lưu đã MÃ HÓA (máy chủ từ chối nếu chưa đặt BACKUP_KEY),
+# được lưu thành "artifact" của lần chạy, giữ 30 ngày (xem ở tab Actions > Sao luu du lieu > chọn lần chạy > Artifacts).
+#
+# Cần các secret ở GitHub > Settings > Secrets and variables > Actions (dùng chung với nhắc hạn trả):
+#   APP_URL     = địa chỉ web, ví dụ https://thiet-bi-thcs-le-do.onrender.com (không có dấu / cuối)
+#   CRON_SECRET = giống biến CRON_SECRET đã đặt trên Render
+# Trên Render cần thêm biến BACKUP_KEY (chuỗi bí mật dài, cất giữ cẩn thận: mất khóa = không mở được bản sao lưu).
+name: Sao luu du lieu
+on:
+  schedule:
+    - cron: "0 18 * * *" # 1 giờ sáng giờ Việt Nam, hằng ngày
+  workflow_dispatch:
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tai ban sao luu da ma hoa
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          mkdir -p backup
+          curl -fsS --retry 6 --retry-delay 30 --retry-all-errors --max-time 300 \
+            -H "x-cron-secret: $CRON_SECRET" -o "backup/sao-luu-$(date -u +%Y-%m-%d).tbk" "$APP_URL/api/cron/backup"
+          ls -l backup
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sao-luu-${{ github.run_number }}
+          path: backup/
+          retention-days: 30

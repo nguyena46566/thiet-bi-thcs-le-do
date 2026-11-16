@@ -230,7 +230,8 @@ export function printDecision(x: Decision) {
     body: `<p style="text-align:center;font-weight:bold;margin-top:8px">HIỆU TRƯỞNG TRƯỜNG THCS LÊ ĐỘ</p>
       <p><i>Căn cứ Thông tư 32/2020/TT-BGDĐT ngày 15/9/2020 của Bộ trưởng Bộ Giáo dục và Đào tạo ban hành Điều lệ trường trung học cơ sở, trường trung học phổ thông và trường phổ thông có nhiều cấp học;</i></p>
       <p><i>Căn cứ Thông tư 14/2020/TT-BGDĐT ngày 26/5/2020 của Bộ trưởng Bộ Giáo dục và Đào tạo quy định phòng học bộ môn của cơ sở giáo dục phổ thông;</i></p>
-      <p><i>Căn cứ quy định về quản lý, sử dụng tài sản công và tình hình thực tế của nhà trường,</i></p>
+      <p><i>Căn cứ Luật Quản lý, sử dụng tài sản công và Nghị định 186/2025/NĐ-CP ngày 01/7/2025 của Chính phủ quy định chi tiết một số điều của Luật Quản lý, sử dụng tài sản công;</i></p>
+      <p><i>Căn cứ tình hình thực tế của nhà trường,</i></p>
       <p style="text-align:center;font-weight:bold;margin:10px 0">QUYẾT ĐỊNH:</p>
       <p><b>Điều 1.</b> Thành lập ${esc(x.type)}${x.scope ? ` (${esc(x.scope)})` : ""}${x.from ? `, làm việc từ ngày ${esc(isoToVn(x.from))}${x.to ? ` đến ngày ${esc(isoToVn(x.to))}` : ""}` : ""}, gồm các ông (bà) có tên sau:</p>
       ${table(["STT", "Họ và tên", "Chức vụ", "Nhiệm vụ"], x.members.map((m, i) => [i + 1, m.name, m.position, m.duty]))}

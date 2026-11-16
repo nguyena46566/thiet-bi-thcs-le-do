@@ -130,14 +130,22 @@ export function seedRows() {
 }
 // Các môn có mục đã được Thông tư 26/2023 sửa đổi, bổ sung
 export const AMENDED_BY_TT26 = ["Toán", "Giáo dục công dân", "Khoa học tự nhiên", "Công nghệ", "Giáo dục thể chất", "Mĩ thuật", "Thiết bị dùng chung"];
-const SEED_VERSION = 2;
+const SEED_VERSION = 3;
+// Các dòng được Thông tư 26/2023/TT-BGDĐT sửa đổi, bổ sung (Điều 2), kèm đính chính tại Quyết định 1450/QĐ-BGDĐT (2024)
+const TT26_ROWS = {
+  "Toán": ["A.3"],
+  "Khoa học tự nhiên": ["4", "20", "37", "40", "III.3", "III.15", "III.19", "III.26", "III.32", "III.33", "V.1"],
+  "Thiết bị dùng chung": ["8"],
+};
+const TT26_NOTE = "Đã được Thông tư 26/2023/TT-BGDĐT sửa đổi, bổ sung (đối chiếu cả Quyết định 1450/QĐ-BGDĐT đính chính) – cập nhật nội dung theo phụ lục mới";
+const isAmended = (mon, stt) => (TT26_ROWS[mon] || []).includes(String(stt));
 
 async function insertRows(mon, rows, startOrd) {
   const now = new Date().toISOString();
   let n = 0;
   for (const r of rows) {
     const v = validItem({ ...r, mon, target: r.target, forTeacher: /GV/.test(r.target || "GV"), forStudent: /HS/.test(r.target || "") });
-    if (v.value) { await col().insert({ id: newId(), ...v.value, ord: startOrd + n, linkedEquipmentIds: [], source: "TT 38/2021", createdAt: now }); n++; }
+    if (v.value) { await col().insert({ id: newId(), ...v.value, ord: startOrd + n, linkedEquipmentIds: [], source: "TT 38/2021", ...(isAmended(mon, v.value.stt) && { amendedBy: TT26_NOTE }), createdAt: now }); n++; }
   }
   return n;
 }
@@ -156,6 +164,8 @@ export async function initMinlist() {
     if (!add.length) continue;
     const n = await insertRows(mon, add, ord); ord += n; total += n;
   }
+  // Đánh dấu các dòng đã bị Thông tư 26/2023 sửa đổi (áp dụng cả cho dữ liệu đã nạp trước đây)
+  for (const it of await col().all()) if (isAmended(it.mon, it.stt) && !it.amendedBy && it.source === "TT 38/2021") await col().update(it.id, { amendedBy: TT26_NOTE });
   const doc = { id: "minlistSeed", version: SEED_VERSION, at: new Date().toISOString() };
   if (meta.version) await settingsCol().update("minlistSeed", doc); else if (await settingsCol().get("minlistSeed")) await settingsCol().update("minlistSeed", doc); else await settingsCol().insert(doc);
   if (total) console.log(`[Danh mục tối thiểu] Đã nạp ${total} dòng theo Thông tư 38/2021`);

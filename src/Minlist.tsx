@@ -20,6 +20,7 @@ const COLS: [string, string][] = [["Môn", "mon"], ["STT", "stt"], ["Nhóm", "gr
 export function MinlistTab({ subjects: siteSubjects }: { subjects: { id: string; name: string }[] }) {
   const [d, setD] = useState<{ subjects: string[]; amended?: string[]; settings: MinSettings; items: MinItem[] } | null>(null)
   const [mon, setMon] = useState("Toán")
+  const [onlyAmended, setOnlyAmended] = useState(false)
   const [inv, setInv] = useState<Equipment[]>([])
   const [linking, setLinking] = useState<MinItem | null>(null)
   const [showSettings, setShowSettings] = useState(false)
@@ -40,7 +41,8 @@ export function MinlistTab({ subjects: siteSubjects }: { subjects: { id: string;
     return out
   }, [d])
   if (!d || !st) return <p className="text-sm text-gray-400">{error || "Đang tải…"}</p>
-  const items = d.items.filter((i) => i.mon === mon)
+  const items = d.items.filter((i) => i.mon === mon && (!onlyAmended || i.amendedBy))
+  const amendedCount = d.items.filter((i) => i.amendedBy).length
   const all = d.items.length, ok = d.items.filter((i) => i.status === "Đủ").length
 
   const downloadTemplate = () => exportExcel("Mau-nhap-danh-muc-toi-thieu-TT38.xlsx", [{ name: "Danh mục", rows: [
@@ -89,6 +91,7 @@ export function MinlistTab({ subjects: siteSubjects }: { subjects: { id: string;
         <button onClick={downloadTemplate} className={btnGhost}>Tải file mẫu Excel</button>
         <button onClick={() => fileRef.current?.click()} className={btnGhost}>Nhập từ Excel</button>
         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = "" }} />
+        <label className="flex items-center gap-1.5 text-sm ml-2"><input type="checkbox" checked={onlyAmended} onChange={(e) => setOnlyAmended(e.target.checked)} />Chỉ mục đã sửa đổi ({amendedCount})</label>
         <button onClick={exportReport} className={`${btnPrimary} ml-auto`}>Xuất báo cáo mức đáp ứng</button>
       </div>
 
@@ -140,6 +143,7 @@ export function MinlistTab({ subjects: siteSubjects }: { subjects: { id: string;
                 <td className="px-3 py-2 text-xs text-gray-600 min-w-[160px]">{i.topic}</td>
                 <td className="px-3 py-2 min-w-[220px]"><div className="font-medium text-gray-900">{i.name}</div>
                   <div className="text-[11px] text-gray-400">{[i.grades.length ? `Lớp ${i.grades.join(", ")}` : "", i.note].filter(Boolean).join(" · ")}</div>
+                  {i.amendedBy && <div className="text-[11px] font-semibold text-amber-800 bg-amber-50 rounded px-1.5 py-0.5 mt-0.5 inline-block" title={i.amendedBy}>Sửa đổi theo TT 26/2023</div>}
                   {i.linkedEquipmentIds.length > 0 && <div className="text-[11px] text-[#1a3670]">↳ {i.linkedEquipmentIds.map((id) => inv.find((e) => e.id === id)?.name || id).join("; ")}</div>}</td>
                 <td className="px-3 py-2 text-xs">{target(i)}</td>
                 <td className="px-3 py-2 text-xs">{i.unit}</td>

@@ -737,7 +737,8 @@ export function BooksTab({ subjects }: { subjects: Subject[] }) {
       const head = ["STT", "Ngày", "Tiết", "Lớp", "Giáo viên", "Môn", "Tên bài dạy", "Thiết bị sử dụng", "Tình trạng phòng/thiết bị sau tiết", "Ký"]
       const rows = r.entries.map((x, i) => [i + 1, x.date, x.period, x.className, x.teacherName, x.subject, x.lessonName, x.equipment, x.condition || (x.status === "Mượn" ? "Đang sử dụng" : ""), ""])
       if (excel) await exportExcel(`So-nhat-ky-${r.room.name.replace(/\s+/g, "-")}.xlsx`, [{ name: "Nhật ký phòng", rows: rows.map((row) => Object.fromEntries(head.map((h, i) => [h, row[i]]))) }])
-      else printDoc(`SỔ NHẬT KÝ SỬ DỤNG ${r.room.name.toUpperCase()}`, `Từ ngày ${isoToVn(from)} đến ngày ${isoToVn(to)}`, head, rows, true, { cover: withCover })
+      const shareText = r.share && Object.keys(r.share).length > 1 ? ` · Phòng ghép – số tiết theo môn: ${Object.entries(r.share).map(([k, v]) => `${k} ${v}`).join(", ")}` : ""
+      if (!excel) printDoc(`SỔ NHẬT KÝ SỬ DỤNG ${r.room.name.toUpperCase()}`, `Từ ngày ${isoToVn(from)} đến ngày ${isoToVn(to)}${shareText}`, head, rows, true, { cover: withCover })
     } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
   }
   const assetBook = async (excel: boolean) => {
@@ -1073,7 +1074,8 @@ export function printDamageMinutes(m: Maintenance, e?: Equipment) {
 export function printDisposalMinutes(d: Disposal, e?: Equipment) {
   printHtml({
     title: d.reason.startsWith("Tiêu hủy") ? "Biên bản tiêu hủy hóa chất" : "Biên bản thanh lý thiết bị dạy học", number: d.decisionNo ? `theo QĐ ${d.decisionNo}` : undefined,
-    body: `<p>Căn cứ ${d.decisionNo ? `Quyết định số ${esc(d.decisionNo)}` : "quyết định của Hiệu trưởng"} và kết quả kiểm tra thực tế, Hội đồng tiến hành ${d.reason.startsWith("Tiêu hủy") ? "tiêu hủy" : "thanh lý"} thiết bị sau:</p>
+    body: `<p><i>Căn cứ Luật Quản lý, sử dụng tài sản công và các văn bản sửa đổi, bổ sung; Nghị định 186/2025/NĐ-CP ngày 01/7/2025 của Chính phủ quy định chi tiết một số điều của Luật Quản lý, sử dụng tài sản công;</i></p>
+      <p>Căn cứ ${d.decisionNo ? `Quyết định số ${esc(d.decisionNo)}` : "quyết định của Hiệu trưởng"} và kết quả kiểm tra thực tế, Hội đồng tiến hành ${d.reason.startsWith("Tiêu hủy") ? "tiêu hủy" : "thanh lý"} thiết bị sau:</p>
       <h2>I. Thành phần hội đồng</h2>${dots(3)}
       <h2>II. Danh mục</h2>
       ${table(["Mã", "Tên thiết bị", "ĐVT", "Năm sử dụng", "Số lượng", "Đơn giá (đ)", "Giá trị (đ)", "Lý do"], [[d.equipmentId, d.name, e?.unit || "", e?.yearInUse || "", d.quantity, d.unitPrice.toLocaleString("vi-VN"), d.value.toLocaleString("vi-VN"), d.reason]])}
