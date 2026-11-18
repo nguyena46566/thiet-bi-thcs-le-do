@@ -102,8 +102,7 @@ export const SLOT_START = {
   C1: "13:30", C2: "14:20", C3: "15:15", C4: "16:05", C5: "16:55",
 };
 export const ALL_SLOTS = Object.keys(SLOT_START);
-// Phiếu cũ ghi "Tiết 1".."Tiết 5" = buổi sáng
-export const PERIOD_START = { "Tiết 1": "07:00", "Tiết 2": "07:50", "Tiết 3": "08:55", "Tiết 4": "09:45", "Tiết 5": "10:35" };
+// Phiếu cũ ghi "Tiết 1".."Tiết 5" = buổi sáng (S1..S5)
 const legacySlot = (p) => { const m = /^Tiết (\d)$/.exec(p || ""); return m ? `S${m[1]}` : null; };
 
 /** Chuẩn hóa danh sách tiết; bỏ mã sai, sắp theo thứ tự trong ngày */

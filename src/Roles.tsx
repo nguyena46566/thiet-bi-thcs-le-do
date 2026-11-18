@@ -99,6 +99,8 @@ export function LoginPage({ go }: { go: (p: string) => void }) {
               <li key={t.username}><button disabled={busy} onClick={() => doLogin(t.username, opt.testPassword || "")} className="w-full text-left px-3 py-2.5 rounded-xl bg-white border border-gray-200 hover:border-[#1a3670] text-sm">
                 <span className="font-mono font-semibold text-[#1a3670]">{t.username}</span><span className="block text-xs text-gray-500">{t.label}</span></button></li>
             ))}</ul>
+            {opt.demoAccounts && opt.demoAccounts.length > 0 && <details className="mt-3"><summary className="text-sm font-semibold text-[#1a3670] cursor-pointer">Giáo viên trong dữ liệu mẫu ({opt.demoAccounts.length})</summary>
+              <ul className="mt-2 space-y-1">{opt.demoAccounts.map((t) => <li key={t.username}><button disabled={busy} onClick={() => doLogin(t.username, opt.testPassword || "")} className="w-full text-left px-3 py-1.5 rounded-lg bg-white border border-gray-200 hover:border-[#1a3670] text-xs"><span className="font-mono font-semibold text-[#1a3670]">{t.username}</span> · {t.label}</button></li>)}</ul></details>}
           </aside>
         )}
       </div>

@@ -1,7 +1,7 @@
 // Thư viện: mượn – trả, bạn đọc, tiết đọc, kiểm kê – thanh lọc, thống kê, tra cứu công khai
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
-  fetchLibRules, saveLibRules, fetchReaders, createReaders, readersFromUsers, updateReader, deleteReader, fetchLoans, lendBooks, returnBook, renewLoan,
+  fetchLibRules, saveLibRules, fetchReaders, createReaders, readersFromUsers, updateReader, deleteReader, fetchLoans, lendBooks, returnBook, renewLoan, setCompensation,
   fetchReadingPeriods, createReadingPeriod, updateReadingPeriod, deleteReadingPeriod, searchOpac, fetchStocktakes, createStocktake, scanStocktake, finishStocktake,
   weedCopies, fetchLibStats, fetchCopies, fetchTitles, fetchShelves, fold,
   type Reader, type BookLoan, type LibRules, type ReadingPeriod, type LibAudit, type OpacResult, type LibStats, type BookCopy, type BookTitle, type Shelf,
@@ -30,6 +30,7 @@ export function CirculationTab() {
   const [rules, setRules] = useState<LibRules | null>(null)
   const [readers, setReaders] = useState<Reader[]>([])
   const [open, setOpen] = useState<BookLoan[]>([])
+  const [comp, setComp] = useState<BookLoan[]>([])
   const [readerQ, setReaderQ] = useState("")
   const [reader, setReader] = useState<Reader | null>(null)
   const [codes, setCodes] = useState<string[]>([])
@@ -37,11 +38,11 @@ export function CirculationTab() {
   const [mode, setMode] = useState("Mượn về nhà")
   const [due, setDue] = useState("")
   const [ret, setRet] = useState({ code: "", condition: "Bình thường" })
-  const [view, setView] = useState<"open" | "overdue">("open")
+  const [view, setView] = useState<"open" | "overdue" | "comp">("open")
   const [editRules, setEditRules] = useState(false)
   const [error, setError] = useState(""), [ok, setOk] = useState("")
   const scanRef = useRef<HTMLInputElement>(null), retRef = useRef<HTMLInputElement>(null)
-  const load = useCallback(() => { fetchLibRules().then(setRules).catch(() => {}); fetchReaders().then(setReaders).catch((e) => setError(e.message)); fetchLoans({ open: "1" }).then(setOpen).catch(() => {}) }, [])
+  const load = useCallback(() => { fetchLibRules().then(setRules).catch(() => {}); fetchReaders().then(setReaders).catch((e) => setError(e.message)); fetchLoans({ open: "1" }).then(setOpen).catch(() => {}); fetchLoans().then((all) => setComp(all.filter((l) => l.compensation && l.compensation.status === "Chưa xử lý"))).catch(() => {}) }, [])
   useEffect(() => { load() }, [load])
   const matches = useMemo(() => {
     const q = fold(readerQ.trim()); if (!q) return []
@@ -73,7 +74,7 @@ export function CirculationTab() {
           ) : (
             <>
               <div className="flex items-start justify-between gap-2 rounded-xl bg-[#F6F7F9] p-3 mb-3">
-                <div><div className="font-semibold">{reader.name}</div><div className="text-xs text-gray-500">{reader.id} · {reader.type}{reader.className ? ` · lớp ${reader.className}` : ""} · đang mượn {mine.filter((l) => l.mode !== "Đọc tại chỗ").length}/{reader.type === "Học sinh" ? rules?.studentMax : rules?.staffMax}</div>
+                <div><div className="font-semibold">{reader.name}</div><div className="text-xs text-gray-500">{reader.id} · {reader.type}{reader.className ? ` · lớp ${reader.className}` : ""} · đang mượn {mine.filter((l) => l.mode === "Mượn về nhà").length}/{reader.type === "Học sinh" ? rules?.student.maxBooks : rules?.staff.maxBooks}{mine.some((l) => l.mode === "Theo năm học") ? ` · ${mine.filter((l) => l.mode === "Theo năm học").length} sách giáo khoa theo năm học` : ""}</div>
                   {mine.some((l) => (l.overdueDays || 0) > 0) && <div className="text-xs font-semibold text-red-700 mt-1">Có sách quá hạn – cần trả trước khi mượn tiếp</div>}
                   {reader.status !== "active" && <div className="text-xs font-semibold text-red-700 mt-1">Thẻ đang bị khóa</div>}</div>
                 <button onClick={() => { setReader(null); setCodes([]) }} className="text-xs text-gray-500 hover:underline">Đổi bạn đọc</button>
@@ -85,7 +86,7 @@ export function CirculationTab() {
                 <input ref={scanRef} aria-label="Số ĐKCB" className={field} placeholder="Quét nhãn sách hoặc gõ số ĐKCB rồi Enter" value={scan} onChange={(e) => setScan(e.target.value)} /><button className={btnGhost}>Thêm</button>
               </form>
               {codes.length > 0 && <div className="flex flex-wrap gap-1.5 mt-2">{codes.map((c) => <span key={c} className="px-2 py-1 rounded bg-gray-100 text-xs font-mono">{c} <button onClick={() => setCodes(codes.filter((x) => x !== c))} aria-label={`Bỏ ${c}`} className="text-gray-400">✕</button></span>)}</div>}
-              {mode === "Mượn về nhà" && <div className="mt-3"><label className={label} htmlFor="c-due">Hạn trả (để trống = {reader.type === "Học sinh" ? rules?.studentDays : rules?.staffDays} ngày; SGK cả năm học: chọn ngày cuối năm)</label><input id="c-due" type="date" className={field} value={due} onChange={(e) => setDue(e.target.value)} /></div>}
+              {mode === "Mượn về nhà" && <div className="mt-3"><label className={label} htmlFor="c-due">Hạn trả (để trống = theo quy định: {reader.type === "Học sinh" ? rules?.student.days : rules?.staff.days} ngày; sách giáo khoa tự lấy cuối năm học)</label><input id="c-due" type="date" className={field} value={due} onChange={(e) => setDue(e.target.value)} /></div>}
               <div className="flex justify-end mt-3"><button disabled={!codes.length} onClick={() => act(async () => { const r = await lendBooks({ readerId: reader.id, codes, mode, dueDate: due || undefined }); setCodes([]); return `Đã ${mode === "Đọc tại chỗ" ? "ghi đọc tại chỗ" : "cho mượn"} ${r.length} quyển – hạn trả ${vn(r[0].dueDate)}` })} className={btnPrimary}>{mode === "Đọc tại chỗ" ? "Ghi đọc tại chỗ" : `Cho mượn ${codes.length} quyển`}</button></div>
             </>
           )}
@@ -97,21 +98,30 @@ export function CirculationTab() {
             <div className="flex gap-2">{["Bình thường", "Hỏng", "Mất"].map((c) => <button type="button" key={c} onClick={() => setRet({ ...ret, condition: c })} aria-pressed={ret.condition === c} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${ret.condition === c ? (c === "Bình thường" ? "bg-[#1a3670] text-white" : "bg-red-600 text-white") : "bg-gray-100 text-gray-700"}`}>{c}</button>)}</div>
             <div className="flex justify-end"><button className={btnPrimary}>Nhận trả</button></div>
           </form>
-          {rules && <div className="mt-4 text-xs text-gray-500">Quy định: học sinh tối đa {rules.studentMax} quyển / {rules.studentDays} ngày; giáo viên, nhân viên {rules.staffMax} quyển / {rules.staffDays} ngày; gia hạn 1 lần. <button onClick={() => setEditRules(!editRules)} className="font-semibold text-[#1a3670] hover:underline">Sửa</button></div>}
-          {editRules && rules && <div className="grid grid-cols-4 gap-2 mt-2">{(["studentMax", "studentDays", "staffMax", "staffDays"] as const).map((k) => <div key={k}><label className="text-[11px] text-gray-500">{({ studentMax: "HS: số quyển", studentDays: "HS: số ngày", staffMax: "GV: số quyển", staffDays: "GV: số ngày" })[k]}</label><input type="number" className={field} value={rules[k]} onChange={(e) => setRules({ ...rules, [k]: Number(e.target.value) })} /></div>)}<button onClick={() => act(async () => { await saveLibRules(rules); setEditRules(false); return "Đã lưu quy định" })} className={`${btnPrimary} col-span-4`}>Lưu quy định</button></div>}
+          {rules && <div className="mt-4 text-xs text-gray-500"><RulesSummary r={rules} /> <button onClick={() => setEditRules(!editRules)} className="font-semibold text-[#1a3670] hover:underline">{editRules ? "Đóng" : "Sửa quy định"}</button></div>}
+          {editRules && rules && <RulesEditor rules={rules} setRules={setRules} onSave={() => act(async () => { await saveLibRules(rules); setEditRules(false); return "Đã lưu quy định" })} />}
         </div>
       </div>
       <div className={`${card} overflow-hidden`}>
         <div className="px-5 py-3.5 border-b border-gray-100 flex flex-wrap items-center gap-2 justify-between">
-          <div className="flex gap-2">{([["open", `Đang mượn (${open.length})`], ["overdue", `Quá hạn (${open.filter((l) => (l.overdueDays || 0) > 0).length})`]] as const).map(([k, l]) => <button key={k} onClick={() => setView(k)} aria-pressed={view === k} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${view === k ? "bg-[#1a3670] text-white" : "bg-gray-100 text-gray-700"}`}>{l}</button>)}</div>
+          <div className="flex gap-2">{([["open", `Đang mượn (${open.length})`], ["overdue", `Quá hạn (${open.filter((l) => (l.overdueDays || 0) > 0).length})`], ["comp", `Chờ bồi thường (${comp.length})`]] as const).map(([k, l]) => <button key={k} onClick={() => setView(k)} aria-pressed={view === k} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${view === k ? "bg-[#1a3670] text-white" : "bg-gray-100 text-gray-700"}`}>{l}</button>)}</div>
           <button onClick={printOverdue} className={btnGhost}>In danh sách quá hạn theo lớp</button>
         </div>
-        {shown.length === 0 ? <p className="p-6 text-sm text-gray-400">Không có</p> : (
+        {view === "comp" ? (comp.length === 0 ? <p className="p-6 text-sm text-gray-400">Không có sách mất, hỏng chờ bồi thường</p> : (
+          <ul className="divide-y divide-gray-50">{comp.map((l) => (
+            <li key={l.id} className="px-5 py-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+              <div><span className="font-mono text-xs">{l.copyCode}</span> · {l.title} · <strong>{l.readerName}</strong> <span className="text-xs text-gray-500">{l.className || l.readerType}</span>
+                <div className="text-xs text-red-700">{l.condition} ngày {vn(l.returnDate)} · {l.compensation?.basis}: {(l.compensation?.amount || 0).toLocaleString("vi-VN")} đ</div></div>
+              <div className="flex gap-2">{["Đã đền sách", "Đã nộp tiền"].map((s) => <button key={s} onClick={() => act(async () => { await setCompensation(l.id, s); return `Đã ghi: ${s}` })} className={btnGhost}>{s}</button>)}
+                <button onClick={() => { const n = prompt("Lý do miễn bồi thường:", ""); if (n) act(async () => { await setCompensation(l.id, "Miễn bồi thường", n); return "Đã ghi miễn bồi thường" }) }} className="text-xs text-gray-500 hover:underline">Miễn</button></div>
+            </li>
+          ))}</ul>
+        )) : shown.length === 0 ? <p className="p-6 text-sm text-gray-400">Không có</p> : (
           <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="bg-gray-50">{["Số ĐKCB", "Tên sách", "Bạn đọc", "Mượn", "Hạn trả", ""].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-50">{shown.map((l) => (
               <tr key={l.id} className={(l.overdueDays || 0) > 0 ? "bg-red-50/50" : ""}><td className="px-3 py-2 font-mono text-xs">{l.copyCode}</td><td className="px-3 py-2">{l.title}</td><td className="px-3 py-2">{l.readerName} <span className="text-xs text-gray-500">{l.className || l.readerType}</span></td>
-                <td className="px-3 py-2 text-xs whitespace-nowrap">{vn(l.loanDate)}{l.mode === "Đọc tại chỗ" ? " · tại chỗ" : ""}</td><td className={`px-3 py-2 text-xs whitespace-nowrap ${(l.overdueDays || 0) > 0 ? "text-red-700 font-semibold" : ""}`}>{vn(l.dueDate)}{(l.overdueDays || 0) > 0 ? ` (quá ${l.overdueDays} ngày)` : ""}</td>
-                <td className="px-3 py-2 text-right">{l.mode !== "Đọc tại chỗ" && l.renewals < 1 && <button onClick={() => act(async () => { const x = await renewLoan(l.id); return `Đã gia hạn ${x.copyCode} đến ${vn(x.dueDate)}` })} className="text-xs font-semibold text-[#1a3670] hover:underline">Gia hạn</button>}</td></tr>
+                <td className="px-3 py-2 text-xs whitespace-nowrap">{vn(l.loanDate)}{l.mode === "Đọc tại chỗ" ? " · tại chỗ" : l.mode === "Theo năm học" ? " · cả năm học" : ""}</td><td className={`px-3 py-2 text-xs whitespace-nowrap ${(l.overdueDays || 0) > 0 ? "text-red-700 font-semibold" : ""}`}>{vn(l.dueDate)}{(l.overdueDays || 0) > 0 ? ` (quá ${l.overdueDays} ngày)` : ""}</td>
+                <td className="px-3 py-2 text-right">{l.mode === "Mượn về nhà" && l.renewals < (rules?.maxRenewals ?? 1) && <button onClick={() => act(async () => { const x = await renewLoan(l.id); return `Đã gia hạn ${x.copyCode} đến ${vn(x.dueDate)}` })} className="text-xs font-semibold text-[#1a3670] hover:underline">Gia hạn</button>}</td></tr>
             ))}</tbody></table></div>
         )}
       </div>
@@ -385,6 +395,7 @@ export function OpacPage() {
   return (
     <main className="pt-20 lg:pt-10 pb-24 px-4 lg:px-10"><div className="max-w-4xl">
       <div className="mb-6"><div className="text-sm font-semibold text-gray-500 mb-1">Thư viện Trường THCS Lê Độ</div><h1 className="text-[28px] sm:text-3xl font-bold text-[#1F2937] tracking-tight">Tra cứu sách</h1></div>
+      <LibraryRulesNotice />
       <div className="flex flex-wrap gap-2 mb-4">
         <input type="search" autoFocus aria-label="Tìm sách" className="flex-1 min-w-[240px] border border-gray-200 rounded-xl px-4 py-3 text-[15px]" placeholder="Tên sách, tác giả, chủ đề (không cần dấu)…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select aria-label="Loại tài liệu" className="border border-gray-200 rounded-xl px-3 text-sm" value={kind} onChange={(e) => setKind(e.target.value)}><option value="">Mọi loại</option>{Object.entries(d?.kinds || {}).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
@@ -416,5 +427,56 @@ export function MyLibraryLoans() {
       <p className="text-xs text-gray-500 mb-3">Thẻ {d.reader.id} · đã mượn {d.loans.length} lượt</p>
       {open.length === 0 ? <p className="text-sm text-gray-400">Không có sách đang mượn</p> : <ul className="divide-y divide-gray-100 text-sm">{open.map((l) => <li key={l.id} className="py-2 flex justify-between gap-2"><span>{l.title} <span className="font-mono text-xs text-gray-500">{l.copyCode}</span></span><span className={l.dueDate < today ? "text-red-700 font-semibold" : "text-gray-600"}>hạn {vn(l.dueDate)}</span></li>)}</ul>}
     </section>
+  )
+}
+
+const KIND_NAMES: Record<string, string> = { SGK: "Sách giáo khoa", STK: "Sách tham khảo", STN: "Sách thiếu nhi, truyện", SNV: "Sách nghiệp vụ", BTC: "Báo, tạp chí" }
+const MODE_NAMES: Record<string, string> = { loan: "Mượn về nhà có thời hạn", year: "Mượn theo năm học", staff: "Chỉ giáo viên, nhân viên mượn về", inLibrary: "Chỉ đọc tại chỗ" }
+function RulesSummary({ r }: { r: LibRules }) {
+  return <span>Học sinh tối đa {r.student.maxBooks} quyển / {r.student.days} ngày; giáo viên, nhân viên {r.staff.maxBooks} quyển / {r.staff.days} ngày; {r.maxRenewals ? `gia hạn tối đa ${r.maxRenewals} lần, mỗi lần ${r.renewDays} ngày` : "không gia hạn"}; sách giáo khoa mượn theo năm học, báo – tạp chí đọc tại chỗ (theo bảng loại tài liệu).</span>
+}
+function RulesEditor({ rules, setRules, onSave }: { rules: LibRules; setRules: (r: LibRules) => void; onSave: () => void }) {
+  const num = (v: string) => Math.max(0, Math.floor(Number(v) || 0))
+  return (
+    <div className="mt-3 space-y-3 rounded-xl bg-[#F6F7F9] p-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div><label className="text-[11px] text-gray-500">Học sinh: số quyển</label><input type="number" className={field} value={rules.student.maxBooks} onChange={(e) => setRules({ ...rules, student: { ...rules.student, maxBooks: num(e.target.value) } })} /></div>
+        <div><label className="text-[11px] text-gray-500">Học sinh: số ngày</label><input type="number" className={field} value={rules.student.days} onChange={(e) => setRules({ ...rules, student: { ...rules.student, days: num(e.target.value) } })} /></div>
+        <div><label className="text-[11px] text-gray-500">GV, NV: số quyển</label><input type="number" className={field} value={rules.staff.maxBooks} onChange={(e) => setRules({ ...rules, staff: { ...rules.staff, maxBooks: num(e.target.value) } })} /></div>
+        <div><label className="text-[11px] text-gray-500">GV, NV: số ngày</label><input type="number" className={field} value={rules.staff.days} onChange={(e) => setRules({ ...rules, staff: { ...rules.staff, days: num(e.target.value) } })} /></div>
+        <div><label className="text-[11px] text-gray-500">Số lần gia hạn</label><input type="number" className={field} value={rules.maxRenewals} onChange={(e) => setRules({ ...rules, maxRenewals: num(e.target.value) })} /></div>
+        <div><label className="text-[11px] text-gray-500">Mỗi lần gia hạn (ngày)</label><input type="number" className={field} value={rules.renewDays} onChange={(e) => setRules({ ...rules, renewDays: num(e.target.value) })} /></div>
+        <div><label className="text-[11px] text-gray-500">Bồi thường sách hỏng (% giá)</label><input type="number" className={field} value={rules.damageRate} onChange={(e) => setRules({ ...rules, damageRate: num(e.target.value) })} /></div>
+        <div><label className="text-[11px] text-gray-500">Cuối năm học (tháng-ngày)</label><input className={field} value={rules.schoolYearEnd} onChange={(e) => setRules({ ...rules, schoolYearEnd: e.target.value })} placeholder="05-31" /></div>
+      </div>
+      <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={rules.blockWhenOverdue} onChange={(e) => setRules({ ...rules, blockWhenOverdue: e.target.checked })} />Chưa trả sách quá hạn thì không được mượn tiếp</label>
+      <table className="w-full text-xs"><thead><tr><th className="text-left py-1">Loại tài liệu</th><th className="text-left py-1">Cách cho mượn</th></tr></thead>
+        <tbody>{Object.keys(KIND_NAMES).map((k) => <tr key={k}><td className="py-1">{KIND_NAMES[k]}</td><td className="py-1"><select aria-label={`Cách cho mượn ${KIND_NAMES[k]}`} className="border border-gray-200 rounded px-1.5 py-1" value={rules.kinds[k]} onChange={(e) => setRules({ ...rules, kinds: { ...rules.kinds, [k]: e.target.value } })}>{Object.entries(MODE_NAMES).map(([m, n]) => <option key={m} value={m}>{n}</option>)}</select></td></tr>)}</tbody></table>
+      <button onClick={onSave} className={`${btnPrimary} w-full`}>Lưu quy định</button>
+    </div>
+  )
+}
+/** Nội quy mượn sách hiển thị công khai (sinh từ quy định đang áp dụng) */
+export function LibraryRulesNotice() {
+  const [r, setR] = useState<LibRules | null>(null)
+  useEffect(() => { fetchLibRules().then(setR).catch(() => {}) }, [])
+  if (!r) return null
+  const byMode = (m: string) => Object.keys(KIND_NAMES).filter((k) => r.kinds[k] === m).map((k) => KIND_NAMES[k].toLowerCase())
+  const items = [
+    "Xuất trình thẻ thư viện khi mượn, trả sách; kiểm tra sách trước khi mang ra khỏi thư viện, thấy rách, mất trang thì báo ngay thủ thư.",
+    `Học sinh mượn về nhà tối đa ${r.student.maxBooks} quyển trong ${r.student.days} ngày; giáo viên, nhân viên tối đa ${r.staff.maxBooks} quyển trong ${r.staff.days} ngày.`,
+    r.maxRenewals ? `Đọc chưa xong được gia hạn ${r.maxRenewals > 1 ? `tối đa ${r.maxRenewals} lần, ` : ""}thêm ${r.renewDays} ngày tại quầy thủ thư.` : "",
+    r.blockWhenOverdue ? "Chưa trả sách quá hạn thì chưa được mượn sách mới." : "",
+    byMode("year").length ? `Mượn theo năm học: ${byMode("year").join(", ")} (trả trước ngày ${r.schoolYearEnd.split("-").reverse().join("/")}); không tính vào số quyển được mượn.` : "",
+    byMode("staff").length ? `Chỉ giáo viên, nhân viên mượn về: ${byMode("staff").join(", ")}; học sinh đọc tại thư viện.` : "",
+    byMode("inLibrary").length ? `Chỉ đọc tại chỗ: ${byMode("inLibrary").join(", ")}.` : "",
+    `Làm mất sách phải đền sách cùng tên hoặc tiền bằng giá sách; làm hỏng bồi thường khoảng ${r.damageRate}% giá sách tùy mức độ.`,
+    "Giữ trật tự, vệ sinh; không viết, vẽ, gấp trang, làm rách sách.",
+  ].filter(Boolean)
+  return (
+    <details className="bg-white rounded-2xl border border-gray-200/80 px-5 py-3 mb-4">
+      <summary className="font-semibold text-gray-900 cursor-pointer">Nội quy mượn sách</summary>
+      <ol className="list-decimal pl-5 space-y-1 text-sm text-gray-700 mt-2">{items.map((t) => <li key={t}>{t}</li>)}</ol>
+    </details>
   )
 }

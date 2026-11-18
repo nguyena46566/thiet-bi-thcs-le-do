@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
   fetchSystemStatus, fetchBackups, downloadBackup, restoreBackup, fetchLoginLog, fetchRooms, fetchInventory, fetchMinlist, fetchLibStats,
-  fetchAudits, fetchMaintenance, fetchDecisions, fetchStocktakes, fetchReadingPeriods,
+  fetchAudits, fetchMaintenance, fetchDecisions, fetchStocktakes, fetchReadingPeriods, fetchDemoStatus, createDemoData, removeDemoData,
   type SystemStatus, type BackupEntry, type LoginEntry,
 } from "@/api"
 import { exportExcel } from "./Operations"
@@ -44,6 +44,7 @@ export function SystemTab() {
           <div key={l} className={`${card} px-4 py-3`}><div className="text-xs text-gray-500">{l}</div><div className="font-semibold text-gray-900">{v}</div></div>
         ))}
       </div>
+      <DemoPanel onChange={load} />
       <div className={`${card} p-5`}>
         <h3 className="font-bold text-gray-900 mb-1">Kiểm tra trước khi vận hành chính thức ({passed}/{s.checks.length})</h3>
         <ul className="grid md:grid-cols-2 gap-x-6 gap-y-1.5 mt-3 text-sm">{s.checks.map((c) => <li key={c.label} className="flex gap-2"><span aria-hidden="true" className={c.ok ? "text-green-600" : "text-red-600"}>{c.ok ? "✓" : "✗"}</span><span className={c.ok ? "text-gray-700" : "text-gray-900 font-medium"}>{c.label}</span><span className="sr-only">{c.ok ? "đạt" : "chưa đạt"}</span></li>)}</ul>
@@ -184,6 +185,30 @@ export function EvidenceTab({ go }: { go: (section: string) => void }) {
               <td className="px-3 py-2 text-xs text-gray-400">[……]</td><td className="px-3 py-2"><button onClick={() => go(sec)} className="text-xs font-semibold text-[#1a3670] hover:underline whitespace-nowrap">Mở để in</button></td></tr>
           ))}</tbody></table></div>
       </div>
+    </div>
+  )
+}
+
+/** Dữ liệu mẫu để chạy thử: chỉ hiện khi máy chủ bật TEST_ACCOUNTS=1 */
+function DemoPanel({ onChange }: { onChange: () => void }) {
+  const [st, setSt] = useState<{ active: boolean; at: string | null; summary: Record<string, number> | null } | null>(null)
+  const [hidden, setHidden] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(""), [ok, setOk] = useState("")
+  const load = useCallback(() => { fetchDemoStatus().then(setSt).catch(() => setHidden(true)) }, [])
+  useEffect(() => { load() }, [load])
+  if (hidden || !st) return null
+  const act = async (fn: () => Promise<string>) => { setBusy(true); setError(""); setOk(""); try { setOk(await fn()); load(); onChange() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } finally { setBusy(false) } }
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+      <h3 className="font-bold text-gray-900 mb-1">Dữ liệu mẫu để chạy thử</h3>
+      <p className="text-sm text-gray-700 mb-3">Tạo dữ liệu đầy đủ cho mọi chức năng: 12 giáo viên (mật khẩu Test@2026), phiếu mượn từ đầu năm học (đã trả, đang mượn, quá hạn, chờ duyệt, từ chối, trả hỏng, báo mất), hóa chất sắp hết hạn và đã hết hạn, kiểm kê, bảo trì, ghi giảm, đề xuất mua sắm, kế hoạch năm học, quyết định, thư viện (19 đầu sách, 96 học sinh, lượt mượn, tiết đọc), khách vãng lai… Trước khi tạo, dữ liệu hiện tại được chụp lại; “Xóa dữ liệu mẫu” đưa web về đúng như cũ.</p>
+      <Err msg={error} /><Ok msg={ok} />
+      {st.active ? <>
+        <p className="text-sm mb-2">Đang có dữ liệu mẫu (tạo lúc {vnTime(st.at)}).</p>
+        {st.summary && <ul className="grid sm:grid-cols-2 md:grid-cols-3 gap-x-4 text-xs text-gray-700 mb-3">{Object.entries(st.summary).map(([k, v]) => <li key={k}>{k}: <strong>{v}</strong></li>)}</ul>}
+        <button disabled={busy} onClick={() => { if (confirm("Xóa toàn bộ dữ liệu mẫu và đưa web về trạng thái trước khi tạo? Dữ liệu nhập thêm sau đó cũng bị xóa.")) act(async () => { await removeDemoData(); return "Đã xóa dữ liệu mẫu" }) }} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50">Xóa dữ liệu mẫu</button>
+      </> : <button disabled={busy} onClick={() => act(async () => { const r = await createDemoData(); return `Đã tạo dữ liệu mẫu: ${Object.values(r.summary).reduce((a, b) => a + b, 0)} bản ghi` })} className={btnPrimary}>{busy ? "Đang tạo… (khoảng 1 phút)" : "Tạo dữ liệu mẫu"}</button>}
     </div>
   )
 }

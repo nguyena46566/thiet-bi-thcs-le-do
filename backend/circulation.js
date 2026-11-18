@@ -24,7 +24,31 @@ const addDays = (iso, n) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDa
 const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 export const READER_TYPES = ["Học sinh", "Giáo viên", "Nhân viên"];
 export const MIN_READING_PERIODS = 3;
-const DEFAULT_RULES = { studentMax: 3, studentDays: 14, staffMax: 10, staffDays: 30 };
+/**
+ * Quy tắc mượn theo loại tài liệu (tham khảo nội quy thư viện các trường phổ thông):
+ *  - Sách thiếu nhi, tham khảo: mượn về nhà có giới hạn số quyển, thời hạn; chưa trả sách quá hạn thì không mượn tiếp
+ *  - Sách giáo khoa: mượn theo năm học (tủ sách giáo khoa dùng chung), không tính vào giới hạn số quyển
+ *  - Sách nghiệp vụ: chỉ giáo viên, nhân viên mượn về; học sinh đọc tại chỗ
+ *  - Báo, tạp chí: chỉ đọc tại chỗ
+ *  - Mất sách: đền sách cùng tên hoặc tiền theo giá; làm hỏng: bồi thường tùy mức độ
+ */
+export const KIND_MODES = { loan: "Mượn về nhà có thời hạn", year: "Mượn theo năm học", staff: "Chỉ giáo viên, nhân viên mượn về", inLibrary: "Chỉ đọc tại chỗ" };
+const DEFAULT_RULES = {
+  student: { maxBooks: 3, days: 7 }, staff: { maxBooks: 5, days: 30 },
+  renewDays: 7, maxRenewals: 1, blockWhenOverdue: true, damageRate: 30, schoolYearEnd: "05-31",
+  kinds: { SGK: "year", STK: "loan", STN: "loan", SNV: "staff", BTC: "inLibrary" },
+};
+/** Ghép quy tắc đã lưu (kể cả kiểu cũ studentMax/staffMax) với mặc định */
+function normalizeRules(saved = {}) {
+  const r = JSON.parse(JSON.stringify(DEFAULT_RULES));
+  if (saved.studentMax || saved.staffMax) { r.student.maxBooks = saved.studentMax || r.student.maxBooks; r.staff.maxBooks = saved.staffMax || r.staff.maxBooks; }
+  for (const who of ["student", "staff"]) if (saved[who]) Object.assign(r[who], saved[who]);
+  for (const k of ["renewDays", "maxRenewals", "blockWhenOverdue", "damageRate", "schoolYearEnd"]) if (saved[k] !== undefined) r[k] = saved[k];
+  if (saved.kinds) for (const [k, v] of Object.entries(saved.kinds)) if (k in r.kinds && v in KIND_MODES) r.kinds[k] = v;
+  return r;
+}
+/** Ngày cuối năm học chứa ngày t (mặc định 31/5) */
+const yearEndOf = (t, mmdd) => { const [y, m] = t.split("-").map(Number); const ey = m >= 6 ? y + 1 : y; return `${ey}-${mmdd}`; };
 /** Năm học và học kỳ của một ngày (học kỳ I: tháng 9 – tháng 1; học kỳ II: tháng 2 – tháng 8) */
 export function termOf(iso) {
   const [y, m] = iso.split("-").map(Number);
@@ -33,7 +57,7 @@ export function termOf(iso) {
 }
 const currentSchoolYear = () => termOf(today()).schoolYear;
 const inYear = (iso, sy) => iso && termOf(iso.slice(0, 10)).schoolYear === sy;
-async function getRules() { return { ...DEFAULT_RULES, ...((await settings().get("libraryRules")) || {}) }; }
+async function getRules() { return normalizeRules((await settings().get("libraryRules")) || {}); }
 
 export function registerCirculationRoutes(app, { requireAuth, wrap }) {
   const requireLibrary = (req, res, next) => {
@@ -44,10 +68,20 @@ export function registerCirculationRoutes(app, { requireAuth, wrap }) {
   };
 
   // ---------- Quy định mượn ----------
-  app.get("/api/library/rules", requireAuth, wrap(async (req, res) => res.json(await getRules())));
+  // Công khai: trang tra cứu sách hiển thị nội quy mượn sách
+  app.get("/api/library/rules", wrap(async (req, res) => res.json({ ...(await getRules()), modes: KIND_MODES })));
   app.put("/api/library/rules", requireLibrary, wrap(async (req, res) => {
     const b = req.body || {}, n = (v, d, max) => Math.max(1, Math.min(max, Math.floor(Number(v)) || d));
-    const doc = { id: "libraryRules", studentMax: n(b.studentMax, 3, 20), studentDays: n(b.studentDays, 14, 365), staffMax: n(b.staffMax, 10, 50), staffDays: n(b.staffDays, 30, 365) };
+    const cur = await getRules();
+    const kinds = { ...cur.kinds };
+    for (const [k, v] of Object.entries(b.kinds || {})) if (k in kinds && v in KIND_MODES) kinds[k] = v;
+    const doc = { id: "libraryRules",
+      student: { maxBooks: n(b.student?.maxBooks, cur.student.maxBooks, 20), days: n(b.student?.days, cur.student.days, 120) },
+      staff: { maxBooks: n(b.staff?.maxBooks, cur.staff.maxBooks, 50), days: n(b.staff?.days, cur.staff.days, 365) },
+      renewDays: n(b.renewDays, cur.renewDays, 60), maxRenewals: Math.max(0, Math.min(5, Math.floor(Number(b.maxRenewals ?? cur.maxRenewals)))),
+      blockWhenOverdue: b.blockWhenOverdue === undefined ? cur.blockWhenOverdue : !!b.blockWhenOverdue,
+      damageRate: Math.max(0, Math.min(100, Math.floor(Number(b.damageRate ?? cur.damageRate)))),
+      schoolYearEnd: /^\d{2}-\d{2}$/.test(b.schoolYearEnd || "") ? b.schoolYearEnd : cur.schoolYearEnd, kinds };
     if (await settings().get("libraryRules")) await settings().update("libraryRules", doc); else await settings().insert(doc);
     res.json(doc);
   }));
@@ -139,29 +173,37 @@ export function registerCirculationRoutes(app, { requireAuth, wrap }) {
       const r = await readers().get(str(req.body?.readerId, 20).toUpperCase());
       if (!r) return { status: 404, error: "Không tìm thấy thẻ bạn đọc" };
       if (r.status !== "active") return { status: 409, error: "Thẻ bạn đọc đang bị khóa" };
-      const rules = await getRules(), isStudent = r.type === "Học sinh";
-      const mode = req.body?.mode === "Đọc tại chỗ" ? "Đọc tại chỗ" : "Mượn về nhà";
+      const rules = await getRules(), isStudent = r.type === "Học sinh", who = isStudent ? rules.student : rules.staff;
+      const inLib = req.body?.mode === "Đọc tại chỗ";
       const codes = [...new Set((Array.isArray(req.body?.codes) ? req.body.codes : []).map((x) => str(x, 30).toUpperCase()).filter(Boolean))];
       if (!codes.length) return { status: 400, error: "Quét hoặc nhập số ĐKCB của sách" };
       const all = await loans().all(), t = today();
-      const open = all.filter((l) => l.readerId === r.id && !l.returnedAt && l.mode !== "Đọc tại chỗ");
-      if (mode === "Mượn về nhà" && open.some((l) => l.dueDate < t)) return { status: 409, error: `${r.name} đang có sách quá hạn, cần trả trước khi mượn tiếp` };
-      const max = isStudent ? rules.studentMax : rules.staffMax;
-      if (mode === "Mượn về nhà" && open.length + codes.length > max) return { status: 409, error: `${r.name} chỉ được mượn tối đa ${max} quyển cùng lúc (đang mượn ${open.length})` };
-      const due = mode === "Đọc tại chỗ" ? t : isoDay(req.body?.dueDate) || addDays(t, isStudent ? rules.studentDays : rules.staffDays);
-      if (due < t) return { status: 400, error: "Hạn trả phải từ hôm nay trở đi" };
       const cs = [];
       for (const code of codes) {
         const c = await copies().get(code);
         if (!c) return { status: 404, error: `Không có quyển ${code}` };
         if (!["Trên giá", "Chưa xếp giá"].includes(c.status)) return { status: 409, error: `Quyển ${code} đang ở tình trạng “${c.status}”` };
-        cs.push(c);
+        const kindMode = rules.kinds[code.split("-")[0]] || "loan";
+        if (!inLib && kindMode === "inLibrary") return { status: 409, error: `Quyển ${code}: loại tài liệu này chỉ đọc tại chỗ` };
+        if (!inLib && kindMode === "staff" && isStudent) return { status: 409, error: `Quyển ${code}: sách nghiệp vụ chỉ giáo viên, nhân viên mượn về; học sinh đọc tại chỗ` };
+        cs.push({ ...c, kindMode });
       }
+      // Giới hạn số quyển chỉ tính sách mượn về có thời hạn (không tính sách giáo khoa mượn theo năm học, không tính đọc tại chỗ)
+      const counted = (l) => !l.returnedAt && l.mode !== "Đọc tại chỗ" && l.mode !== "Theo năm học";
+      const open = all.filter((l) => l.readerId === r.id && counted(l));
+      if (!inLib && rules.blockWhenOverdue && all.some((l) => l.readerId === r.id && !l.returnedAt && l.mode !== "Đọc tại chỗ" && l.dueDate < t)) return { status: 409, error: `${r.name} đang có sách quá hạn, cần trả trước khi mượn tiếp` };
+      const adding = inLib ? 0 : cs.filter((c) => c.kindMode !== "year").length;
+      if (adding && open.length + adding > who.maxBooks) return { status: 409, error: `${r.name} chỉ được mượn tối đa ${who.maxBooks} quyển cùng lúc (đang mượn ${open.length}, không tính sách giáo khoa)` };
+      const custom = isoDay(req.body?.dueDate);
+      if (custom && custom < t) return { status: 400, error: "Hạn trả phải từ hôm nay trở đi" };
       const now = new Date().toISOString(), made = [];
       for (const c of cs) {
+        const year = c.kindMode === "year";
+        const mode = inLib ? "Đọc tại chỗ" : year ? "Theo năm học" : "Mượn về nhà";
+        const due = inLib ? t : custom || (year ? yearEndOf(t, rules.schoolYearEnd) : addDays(t, who.days));
         await copies().update(c.code, { status: "Đang mượn", updatedAt: now });
         made.push(await loans().insert({ id: newId(), copyCode: c.code, titleId: c.titleId, kind: c.code.split("-")[0], readerId: r.id, readerName: r.name, readerType: r.type, className: r.className || "",
-          mode, loanAt: now, loanDate: t, dueDate: due, returnedAt: null, staff: req.session.user.name, renewals: 0, shelf: c.shelf || "" }));
+          mode, loanAt: now, loanDate: t, dueDate: due, returnedAt: null, staff: req.session.user.name, renewals: 0, shelf: c.shelf || "", price: c.price || 0 }));
       }
       return { value: made };
     });
@@ -178,7 +220,10 @@ export function registerCirculationRoutes(app, { requireAuth, wrap }) {
       const now = new Date().toISOString(), t = today();
       const c = await copies().get(code);
       await copies().update(code, { status: condition === "Hỏng" ? "Hỏng" : condition === "Mất" ? "Mất" : c?.shelf ? "Trên giá" : "Chưa xếp giá", updatedAt: now });
-      return { value: await loans().update(l.id, { returnedAt: now, returnDate: t, condition, note: str(req.body?.note, 200), lateDays: l.dueDate < t ? Math.round((new Date(t) - new Date(l.dueDate)) / 864e5) : 0, returnedTo: req.session.user.name }) };
+      // Bồi thường: mất → đền sách cùng tên hoặc tiền theo giá; hỏng → theo tỉ lệ nhà trường quy định (thủ thư ghi khi bạn đọc thực hiện)
+      const rules = await getRules(), price = c?.price || l.price || 0;
+      const compensation = condition === "Bình thường" ? null : { amount: Math.round(price * (condition === "Mất" ? 1 : rules.damageRate / 100)), status: "Chưa xử lý", basis: condition === "Mất" ? "Đền sách cùng tên hoặc tiền bằng giá sách" : `Bồi thường ${rules.damageRate}% giá sách` };
+      return { value: await loans().update(l.id, { returnedAt: now, returnDate: t, condition, note: str(req.body?.note, 200), lateDays: l.dueDate < t ? Math.round((new Date(t) - new Date(l.dueDate)) / 864e5) : 0, returnedTo: req.session.user.name, compensation }) };
     });
     if (out.error) return res.status(out.status).json({ error: out.error });
     res.json(out.value);
@@ -186,9 +231,20 @@ export function registerCirculationRoutes(app, { requireAuth, wrap }) {
   app.post("/api/library/loans/:id/renew", requireLibrary, wrap(async (req, res) => {
     const l = await loans().get(req.params.id);
     if (!l || l.returnedAt) return res.status(404).json({ error: "Không có lượt mượn đang mở" });
-    if (l.renewals >= 1) return res.status(409).json({ error: "Mỗi lượt mượn chỉ gia hạn một lần" });
-    const rules = await getRules(), base = l.dueDate > today() ? l.dueDate : today();
-    res.json(await loans().update(l.id, { dueDate: addDays(base, l.readerType === "Học sinh" ? rules.studentDays : rules.staffDays), renewals: (l.renewals || 0) + 1 }));
+    const rules = await getRules();
+    if (l.mode !== "Mượn về nhà") return res.status(409).json({ error: "Chỉ gia hạn sách mượn về nhà có thời hạn" });
+    if ((l.renewals || 0) >= rules.maxRenewals) return res.status(409).json({ error: rules.maxRenewals ? `Mỗi lượt mượn chỉ gia hạn tối đa ${rules.maxRenewals} lần` : "Thư viện không cho gia hạn" });
+    const base = l.dueDate > today() ? l.dueDate : today();
+    res.json(await loans().update(l.id, { dueDate: addDays(base, rules.renewDays), renewals: (l.renewals || 0) + 1 }));
+  }));
+  // Ghi nhận bạn đọc đã bồi thường sách mất, hỏng
+  app.patch("/api/library/loans/:id/compensation", requireLibrary, wrap(async (req, res) => {
+    const l = await loans().get(req.params.id);
+    if (!l?.compensation) return res.status(404).json({ error: "Lượt mượn này không phải bồi thường" });
+    const status = ["Chưa xử lý", "Đã đền sách", "Đã nộp tiền", "Miễn bồi thường"].includes(req.body?.status) ? req.body.status : null;
+    if (!status) return res.status(400).json({ error: "Trạng thái không hợp lệ" });
+    if (status === "Miễn bồi thường" && !str(req.body?.note, 200)) return res.status(400).json({ error: "Miễn bồi thường cần ghi lý do" });
+    res.json(await loans().update(l.id, { compensation: { ...l.compensation, status, note: str(req.body?.note, 200), handledBy: req.session.user.name, handledAt: new Date().toISOString() } }));
   }));
 
   // ---------- Tiết đọc thư viện ----------

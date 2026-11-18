@@ -26,6 +26,7 @@ import { registerRolePageRoutes } from "./rolepages.js";
 import { registerLibraryRoutes } from "./library.js";
 import { registerCirculationRoutes } from "./circulation.js";
 import { registerOpsRoutes, logLogin, pruneLoginLog } from "./ops.js";
+import { registerDemoRoutes } from "./demo.js";
 import { registerPrivacyRoutes, anonymizeOldGuests } from "./privacy.js";
 import { listInventory } from "./inventory.js";
 import { sendBorrowNotification, sendStatusEmail } from "./mailer.js";
@@ -412,6 +413,7 @@ registerLibraryRoutes(app, { requireAuth, wrap });
 registerCirculationRoutes(app, { requireAuth, wrap });
 // ============ VẬN HÀNH: SAO LƯU, KHÔI PHỤC, NHẬT KÝ ĐĂNG NHẬP, TRẠNG THÁI ============
 registerOpsRoutes(app, { requireAuth, wrap, express });
+registerDemoRoutes(app, { requireAuth, wrap });
 // ============ DỮ LIỆU CÁ NHÂN: ĐỒNG Ý, HỒ SƠ CỦA TÔI, KHÁCH VÃNG LAI ============
 registerPrivacyRoutes(app, { requireAuth, requireAdmin, wrap });
 // ============ KẾ HOẠCH NĂM HỌC, QUYẾT ĐỊNH THÀNH LẬP TỔ / HỘI ĐỒNG ============

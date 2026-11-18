@@ -437,7 +437,7 @@ export const saveDecision = (b: Partial<Decision>) => (b.id ? call<Decision>("PA
 export const deleteDecision = (id: string) => call<boolean>("DELETE", `/api/decisions/${encodeURIComponent(id)}`);
 
 // ============ ĐĂNG NHẬP, NGƯỜI DÙNG, TRANG THEO VAI TRÒ ============
-export interface AuthOptions { google: boolean; testAccounts: { username: string; label: string }[]; testPassword: string | null; roles: Record<string, string>; groups: string[] }
+export interface AuthOptions { google: boolean; testAccounts: { username: string; label: string }[]; demoAccounts?: { username: string; label: string }[]; testPassword: string | null; roles: Record<string, string>; groups: string[] }
 export const fetchAuthOptions = () => call<AuthOptions>("GET", "/api/auth/options");
 export const loginPassword = (username: string, password: string) => call<{ user: User; landing: string }>("POST", "/api/auth/login", { username, password });
 export const registerAccount = (b: { name: string; email: string; username: string; password: string; requestedRoles: string[]; group: string }) => call<{ ok: boolean }>("POST", "/api/auth/register", b);
@@ -496,8 +496,8 @@ export const anonymizeGuest = (id: string) => call<Guest>("POST", `/api/guests/$
 
 // ============ THƯ VIỆN: BẠN ĐỌC, LƯU THÔNG, TIẾT ĐỌC, TRA CỨU, KIỂM KÊ, THỐNG KÊ ============
 export interface Reader { id: string; name: string; type: string; className: string; grade: number | null; userId: string | null; status: string; onLoan?: number; createdAt: string }
-export interface BookLoan { id: string; copyCode: string; titleId: string; title?: string; readerId: string; readerName: string; readerType: string; className: string; mode: string; loanDate: string; dueDate: string; returnedAt: string | null; returnDate?: string; condition?: string; renewals: number; overdueDays?: number; lateDays?: number; shelf?: string }
-export interface LibRules { studentMax: number; studentDays: number; staffMax: number; staffDays: number }
+export interface BookLoan { id: string; copyCode: string; titleId: string; title?: string; readerId: string; readerName: string; readerType: string; className: string; mode: string; loanDate: string; dueDate: string; returnedAt: string | null; returnDate?: string; condition?: string; renewals: number; overdueDays?: number; lateDays?: number; shelf?: string; compensation?: { amount: number; status: string; basis: string; note?: string } | null }
+export interface LibRules { student: { maxBooks: number; days: number }; staff: { maxBooks: number; days: number }; renewDays: number; maxRenewals: number; blockWhenOverdue: boolean; damageRate: number; schoolYearEnd: string; kinds: Record<string, string>; modes?: Record<string, string> }
 export interface ReadingPeriod { id: string; date: string; slot: string; slotName: string; className: string; schoolYear: string; term: string; topic: string; leader: string; status: string; attendance: number | null; note: string }
 export interface LibAudit { id: string; title: string; shelf: string; expected: string[]; found: string[]; extra: string[]; missing?: string[]; status: string; createdBy: string; createdAt: string; finishedAt?: string; markedMissing?: boolean }
 export interface OpacResult { id: string; title: string; author: string; publisher: string; year: string; kind: string; grade: string; callNumber: string; summary: string; total: number; available: number; shelves: string[] }
@@ -512,6 +512,7 @@ export const fetchLoans = (q: { readerId?: string; open?: string; overdue?: stri
 export const fetchMyLibraryLoans = () => call<{ reader: Reader | null; loans: BookLoan[] }>("GET", "/api/library/my-loans");
 export const lendBooks = (b: { readerId: string; codes: string[]; mode: string; dueDate?: string }) => call<BookLoan[]>("POST", "/api/library/loans", b);
 export const returnBook = (code: string, condition: string, note = "") => call<BookLoan>("POST", "/api/library/returns", { code, condition, note });
+export const setCompensation = (id: string, status: string, note = "") => call<BookLoan>("PATCH", `/api/library/loans/${encodeURIComponent(id)}/compensation`, { status, note });
 export const renewLoan = (id: string) => call<BookLoan>("POST", `/api/library/loans/${encodeURIComponent(id)}/renew`, {});
 export const fetchReadingPeriods = (schoolYear = "") => call<{ schoolYear: string; min: number; periods: ReadingPeriod[]; summary: { className: string; hk1: number; hk2: number; planned: number; ok1: boolean; ok2: boolean }[] }>("GET", `/api/library/reading-periods?schoolYear=${schoolYear}`);
 export const createReadingPeriod = (b: { date: string; slot: string; className: string; topic: string; leader: string }) => call<ReadingPeriod>("POST", "/api/library/reading-periods", b);
@@ -548,3 +549,7 @@ export async function restoreBackup(file: File, dry: boolean) {
   if (!res.ok) throw new Error(data.error || "Khôi phục thất bại")
   return data as { createdAt?: string; restoredFrom?: string; counts: Record<string, number>; current?: Record<string, number> }
 }
+
+export const fetchDemoStatus = () => call<{ active: boolean; at: string | null; summary: Record<string, number> | null }>("GET", "/api/admin/demo-data");
+export const createDemoData = () => call<{ summary: Record<string, number> }>("POST", "/api/admin/demo-data", {});
+export const removeDemoData = () => call<{ restoredTo: string }>("DELETE", "/api/admin/demo-data");

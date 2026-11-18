@@ -157,6 +157,7 @@ export function registerUserRoutes(app, { requireAuth, requireAdmin, wrap }) {
     google: !!process.env.GOOGLE_CLIENT_ID,
     testAccounts: testAccountsEnabled() ? TEST_USERS.map((t) => ({ username: t.username, label: t.roles.map((r) => ROLES[r]).join(" + ") + (t.group ? ` (${t.group})` : "") })) : [],
     testPassword: testAccountsEnabled() ? TEST_PASSWORD : null,
+    demoAccounts: testAccountsEnabled() ? [...cache.values()].filter((u) => u.demo && u.status === "active").map((u) => ({ username: u.username, label: `${u.name} – ${u.position || ""}` })) : [],
     roles: ROLES, groups: GROUPS,
   }));
 

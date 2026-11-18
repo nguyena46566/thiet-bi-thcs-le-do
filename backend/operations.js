@@ -11,7 +11,6 @@ import { SUBJECTS } from "./chatTools.js";
 import { parseDate, formatDate, todayVN, getEquipment, availabilityOf, normalizeSlots, slotLabel, requestCells, recordCovers, recordSlots, isExpired as isExpiredEq } from "./equipment.js";
 import { serial, applyDelta, refreshCache, withDerived, equipmentCol, purchaseCol, penaltyCol, int, str, schoolYearOf, createLossReport, listLossReports, confirmLoss, rejectLoss, logChange, listChanges, lossCol } from "./inventory.js";
 import { principalConfigured } from "./auth.js";
-import { emailProposal, newEmailToken, registerEmailActionRoutes } from "./principalEmail.js";
 import notifications from "./notifications.js";
 import { sendReminderEmail } from "./mailer.js";
 
@@ -578,9 +577,8 @@ export function registerOperationRoutes(app, { requireAuth, requireAdmin, wrap }
     })).filter((it) => it.name);
     if (!items.length || items.some((it) => !it.quantity)) return res.status(400).json({ error: "Cần ít nhất một thiết bị, số lượng từ 1 trở lên" });
     const doc = { id: newId(), status: "Chờ duyệt", items, total: items.reduce((a, it) => a + it.quantity * it.estPrice, 0), purpose: str(req.body?.purpose, 300),
-      userId: u.id, userName: u.name, createdAt: new Date().toISOString(), ...newEmailToken() };
+      userId: u.id, userName: u.name, createdAt: new Date().toISOString() };
     await propCol().insert(doc);
-    emailProposal(doc).catch((e) => console.error("[Mailer] Lỗi email đề xuất:", e.message));
     await notifications.createNotification({ type: "system", title: "Đề xuất mua sắm mới", message: `${u.name} đề xuất ${items.length} thiết bị (dự kiến ${doc.total.toLocaleString("vi-VN")} đ)`, userId: u.id, userName: u.name });
     res.status(201).json(doc);
   }));
@@ -588,14 +586,13 @@ export function registerOperationRoutes(app, { requireAuth, requireAdmin, wrap }
     const p = await propCol().get(id);
     if (!p) return { error: "Không tìm thấy đề xuất", status: 404 };
     if (p.status !== "Chờ duyệt") return { error: "Đề xuất đã được xử lý", status: 409 };
-    return { value: await propCol().update(p.id, { status: approve ? "Đã duyệt" : "Từ chối", decisionNote: str(note, 300), decidedBy: user.name, decidedAt: new Date().toISOString(), emailToken: null }) };
+    return { value: await propCol().update(p.id, { status: approve ? "Đã duyệt" : "Từ chối", decisionNote: str(note, 300), decidedBy: user.name, decidedAt: new Date().toISOString() }) };
   };
   app.post("/api/proposals/:id/decide", requireAdmin, wrap(async (req, res) => {
     if (!canConfirm(req.session.user)) return res.status(403).json({ error: "Chỉ Ban giám hiệu được duyệt đề xuất mua sắm" });
     send(res, await decideProposal(req.params.id, !!req.body?.approve, req.body?.note, req.session.user));
   }));
   // Ban giám hiệu bấm nút trong email (không cần đăng nhập)
-  registerEmailActionRoutes(app, { wrap, handlers: { confirmLoss, rejectLoss, decideProposal } });
   app.post("/api/proposals/:id/purchased", requireAdmin, wrap(async (req, res) => {
     const p = await propCol().get(req.params.id);
     if (!p) return res.status(404).json({ error: "Không tìm thấy đề xuất" });

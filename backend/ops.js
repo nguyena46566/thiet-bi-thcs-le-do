@@ -32,7 +32,7 @@ export async function pruneLoginLog() {
 }
 
 // ---------- Sao lưu ----------
-async function collect() {
+export async function collect() {
   const data = {};
   for (const t of DOC_TABLES) if (t !== "loginlog" && t !== "backuplog") data[t] = await db.collection(t).all();
   data.__records = await db.records.findAll();
@@ -40,7 +40,7 @@ async function collect() {
   const counts = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v.length]));
   return { app: APP_ID, format: 1, createdAt: new Date().toISOString(), counts, data };
 }
-function pack(obj, key) {
+export function pack(obj, key) {
   const gz = zlib.gzipSync(Buffer.from(JSON.stringify(obj)));
   if (!key) return { buf: gz, ext: "json.gz", encrypted: false };
   const iv = crypto.randomBytes(12), c = crypto.createCipheriv("aes-256-gcm", key, iv);
@@ -71,7 +71,7 @@ async function sendBackup(res, by, kind) {
 }
 
 // ---------- Khôi phục ----------
-async function writeAll(data) {
+export async function writeAll(data) {
   for (const t of DOC_TABLES) {
     if (t === "loginlog" || t === "backuplog" || !Array.isArray(data[t])) continue;
     const c = db.collection(t);
