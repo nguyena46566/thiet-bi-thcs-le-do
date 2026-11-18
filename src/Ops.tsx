@@ -176,7 +176,7 @@ export function EvidenceTab({ go }: { go: (section: string) => void }) {
   ]
   return (
     <div className="space-y-4">
-      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-900">Tiêu chuẩn 3 (Cơ sở vật chất và thiết bị dạy học) theo Thông tư 18/2018/TT-BGDĐT, đã sửa đổi bởi Thông tư 22/2024/TT-BGDĐT. Tiêu chí 3.5 về thiết bị gồm: a) thiết bị văn phòng và thiết bị khác; b) đủ thiết bị dạy học tối thiểu; c) hằng năm kiểm kê, sửa chữa. Tiêu chí 3.6 về thư viện. Mã minh chứng do Hội đồng tự đánh giá của trường đánh số. Ý (a) về thiết bị văn phòng nằm ngoài phạm vi website.</div>
+      <p className="text-sm text-gray-500">Tiêu chuẩn 3 – tiêu chí 3.5 (thiết bị) và 3.6 (thư viện). Mã minh chứng do Hội đồng tự đánh giá đánh số.</p>
       <div className={`${card} overflow-hidden`}>
         <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="bg-gray-50">{["Tiêu chí", "Yêu cầu", "Minh chứng trên website", "Năm học này", "Mã minh chứng", ""].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-gray-50">{rows.map(([c, req, ev, k, sec], i) => (

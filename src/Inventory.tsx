@@ -455,10 +455,15 @@ function History({ items }: { items: PenaltyEntry[] }) {
   )
 }
 
+/** Quy chế điểm thi đua – chỉ hiển thị ở mục Thông tin thêm */
+export function PointsRulesText() {
+  const [rules, setRules] = useState<PointRules | null>(null)
+  useEffect(() => { fetchMyPoints().then((d) => setRules(d.rules)).catch(() => {}) }, [])
+  return rules ? <RulesBox rules={rules} /> : <p className="text-sm text-gray-500">Đăng nhập để xem quy chế điểm thi đua.</p>
+}
 function RulesBox({ rules }: { rules: PointRules }) {
   return (
-    <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-900 space-y-0.5">
-      <div className="font-semibold text-sm mb-1">Quy chế điểm thi đua</div>
+    <div className="space-y-1">
       <div>Đầu năm học mỗi giáo viên có {rules.startPoints} điểm. Dưới {rules.lockBelow} điểm tạm khóa quyền đăng ký mượn.</div>
       <div>Trả trễ: lần đầu nhắc nhở; từ lần 2 trừ {rules.latePerDay} điểm/ngày, tối đa {rules.lateMaxPerRecord} điểm/phiếu.</div>
       <div>Làm hỏng: trừ {rules.damagePerUnit} điểm/thiết bị. Làm mất: trừ {rules.lossPerUnit} điểm/thiết bị. Kèm bồi thường theo đơn giá.</div>
@@ -492,7 +497,6 @@ export function PointsTab() {
   if (!data) return <div className="text-sm text-gray-400">{error || "Đang tải…"}</div>
   return (
     <div className="space-y-4">
-      <RulesBox rules={data.rules} />
       <ErrorBox msg={error} />
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -554,7 +558,7 @@ export function MyPointsCard() {
         <button onClick={() => setOpen(!open)} className="text-sm font-semibold text-[#1a3670] hover:underline" aria-expanded={open}>{open ? "Ẩn chi tiết" : "Xem chi tiết và quy chế"}</button>
       </div>
       {d.locked && <p className="text-sm text-rose-700 mt-2">Tài khoản đang tạm khóa quyền đăng ký mượn do điểm dưới {d.rules.lockBelow}. Vui lòng liên hệ phòng thiết bị.</p>}
-      {open && <div className="mt-4 space-y-3"><RulesBox rules={d.rules} /><History items={d.history} /></div>}
+      {open && <div className="mt-4 space-y-3"><History items={d.history} /></div>}
     </div>
   )
 }

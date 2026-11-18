@@ -9,48 +9,31 @@ import { ChemicalsTab, PlansTab, DecisionsTab } from "./Planning"
 import { LoginPage, PendingPage, PrincipalPage, HeadPage, UsersTab, ChangePassword } from "./Roles"
 import { SystemTab, LoginLogTab, CsdlExportTab, EvidenceTab } from "./Ops"
 import { PrivacyPage, ConsentGate, ProfilePage, GuestPage, GuestSlipPage, GuestsTab, DataRequestsTab } from "./Privacy"
-import { CirculationTab, ReadersTab, ReadingPeriodsTab, StocktakeTab, LibraryStatsTab, OpacPage, MyLibraryLoans } from "./Circulation"
+import { CirculationTab, ReadersTab, ReadingPeriodsTab, StocktakeTab, LibraryStatsTab, OpacPage, MyLibraryLoans, LibraryRulesNotice } from "./Circulation"
+import { SUBJECTS } from "./subjects"
+import { TeacherHome, BorrowPage, SubjectsPage, InfoPage } from "./Teacher"
+import { PointsRulesText } from "./Inventory"
 import { ReceiptsTab, BooksTab as LibBooksTab, ShelvesTab, LibraryLedgerTab, BookCopyPage, ShelfPage } from "./Library"
 import ChatWidget from "@/ChatWidget"
 import {
   fetchRecords,
   fetchMyRecords,
-  createRecord,
   updateRecordStatus,
   deleteRecord,
-  fetchStats,
-  fetchSubjectStats,
   fetchNotifications,
   fetchUnreadCount,
   markNotificationRead,
   markAllNotificationsRead,
   type BorrowRecord,
   type BorrowDraft,
-  type BorrowItem,
   type RecordStatus,
-  type Stats,
   type Notification,
   sendRemindersNow,
   fetchAvailable,
-  fetchRoomsAvailability,
-  fold,
-  type AvailableItem,
-  type Room,
 } from "@/api"
 
 type Page = "home" | "admin" | "noiquy" | "mine" | string
 
-const SUBJECTS = [
-  { id: "hoa-hoc", group: "Tổ Khoa học tự nhiên", name: "Hóa học", color: "#059669", img: "https://images.unsplash.com/photo-1614308460927-5024ba2e1dcb?w=600&h=400&fit=crop&auto=format", desc: "Thiết bị thí nghiệm, dụng cụ phòng lab hóa học" },
-  { id: "vat-li", group: "Tổ Khoa học tự nhiên", name: "Vật lí", color: "#2563eb", img: "https://images.unsplash.com/photo-1763098844157-d0fffcc966a1?w=600&h=400&fit=crop&auto=format", desc: "Dụng cụ thí nghiệm, mô hình vật lí" },
-  { id: "sinh-hoc", group: "Tổ Khoa học tự nhiên", name: "Sinh học", color: "#16a34a", img: "https://images.unsplash.com/photo-1614308459036-779d0dfe51ff?w=600&h=400&fit=crop&auto=format", desc: "Kính hiển vi, tiêu bản sinh học, mô hình" },
-  { id: "cong-nghe", group: "Tổ Khoa học tự nhiên", name: "Công nghệ", color: "#7c3aed", img: "https://images.unsplash.com/photo-1509062522246-3755977927d7?w=600&h=400&fit=crop&auto=format", desc: "Thiết bị công nghệ, máy tính, công cụ kỹ thuật" },
-  { id: "toan-hoc", group: "Tổ Toán – Tin", name: "Toán học", color: "#dc2626", img: "https://images.unsplash.com/photo-1635372722656-389f87a941b7?w=600&h=400&fit=crop&auto=format", desc: "Bộ đồ dùng hình học, thước, compa, mô hình" },
-  { id: "lich-su-dia-li", group: "Tổ Khoa học xã hội", name: "Lịch Sử - Địa lí", color: "#d97706", img: "https://images.unsplash.com/photo-1521295121783-8a321d551ad2?w=600&h=400&fit=crop&auto=format", desc: "Bản đồ, quả địa cầu, tranh ảnh lịch sử" },
-  { id: "gdtc", group: "Tổ Nghệ thuật – Thể chất", name: "GDTC", color: "#0891b2", img: "https://images.unsplash.com/photo-1559369064-c4d65141e408?w=600&h=400&fit=crop&auto=format", desc: "Dụng cụ thể dục thể thao, bóng, lưới" },
-  { id: "ngu-van-gdcd", group: "Tổ Khoa học xã hội", name: "Ngữ văn - GDCD", color: "#be185d", img: "https://images.unsplash.com/photo-1604866830893-c13cafa515d5?w=600&h=400&fit=crop&auto=format", desc: "Sách tham khảo, tranh ảnh minh họa, đồ dùng" },
-  { id: "tieng-anh", group: "Tổ Ngoại ngữ", name: "Tiếng Anh", color: "#0e7490", img: "https://images.unsplash.com/photo-1543109740-4bdb38fda756?w=600&h=400&fit=crop&auto=format", desc: "Sách giáo khoa, thiết bị nghe nhìn, flash cards" },
-]
 
 // ============ TIỆN ÍCH NGÀY THÁNG ============
 /** "DD/MM/YYYY" -> Date (00:00 giờ máy) hoặc null */
@@ -150,16 +133,16 @@ function Sidebar({ page, setPage }: { page: Page; setPage: (p: Page) => void }) 
               {user?.isHead && item("to-truong", `Tổ trưởng – ${user.group?.replace(/^Tổ /, "") || "tổ"}`, page === "to-truong", () => go("to-truong"), "#9FD3B5")}
               {user?.isSysadmin && item("qtht", "Quản trị hệ thống", false, () => go("admin/nguoi-dung"), "#C4B5FD")}
             </>}
-            {groupTitle("Tổng quan")}
-            {item("home", "Trang chủ", page === "home", () => go("home"), "")}
+            {groupTitle(user ? "Thiết bị" : "Tra cứu")}
+            {item("home", user ? "Lịch mượn của tôi" : "Trang chủ", page === "home", () => go("home"), "")}
+            {user && item("muon", "Đăng ký mượn", page === "muon", () => go("muon"), "#F5B841")}
             {user && item("mine", "Phiếu của tôi", page === "mine", () => go("mine"), "#9FD3B5")}
-            {user && item("ho-so", "Hồ sơ của tôi", page === "ho-so", () => go("ho-so"), "#C4B5FD")}
+            {item("mon-hoc", "Thiết bị theo môn", page === "mon-hoc" || SUBJECTS.some((s) => s.id === page), () => go("mon-hoc"), "#93C5FD")}
+            {groupTitle("Thư viện")}
+            {item("tra-cuu-sach", "Tra cứu sách", page === "tra-cuu-sach", () => go("tra-cuu-sach"), "#7DD3FC")}
             {!user && item("khach", "Đăng ký khách đến trường", page === "khach", () => go("khach"), "#F5B841")}
-            {item("tra-cuu-sach", "Tra cứu sách thư viện", page === "tra-cuu-sach", () => go("tra-cuu-sach"), "#7DD3FC")}
-            {item("noiquy", "Nội quy", page === "noiquy", () => go("noiquy"), "#CBD5E1")}
-            {item("bao-mat", "Dữ liệu cá nhân", page === "bao-mat", () => go("bao-mat"), "#CBD5E1")}
-            {groupTitle("Môn học")}
-            {SUBJECTS.map((s) => item(s.id, s.name, page === s.id, () => go(s.id), s.color))}
+            {groupTitle("Khác")}
+            {item("thong-tin", "Thông tin thêm", page === "thong-tin" || page === "noiquy", () => go("thong-tin"), "#CBD5E1")}
           </>
         )}
       </nav>
@@ -177,7 +160,7 @@ function Sidebar({ page, setPage }: { page: Page; setPage: (p: Page) => void }) 
         {user ? (
           <div className="flex items-center gap-2.5 px-2 py-1.5">
             {user.avatar ? <img src={user.avatar} alt="" className="w-8 h-8 rounded-full" /> : <span className="w-8 h-8 rounded-full bg-white/15 text-white text-sm font-bold flex items-center justify-center">{user.name.trim().split(/\s+/).pop()?.[0]?.toUpperCase()}</span>}
-            <span className="flex-1 min-w-0"><span className="block text-sm text-white font-medium truncate">{user.name}</span><span className="block text-xs text-white/50 truncate">{user.isSysadmin ? "Quản trị hệ thống" : user.isPrincipal ? "Ban giám hiệu" : user.isEquipment ? "Nhân viên thiết bị" : user.isLibrarian ? "Nhân viên thư viện" : user.isHead ? "Tổ trưởng" : "Giáo viên"}{user.test ? " · thử nghiệm" : ""}</span></span>
+            <button onClick={() => go("ho-so")} title="Hồ sơ của tôi" className="flex-1 min-w-0 text-left"><span className="block text-sm text-white font-medium truncate">{user.name}</span><span className="block text-xs text-white/50 truncate">{user.isSysadmin ? "Quản trị hệ thống" : user.isPrincipal ? "Ban giám hiệu" : user.isEquipment ? "Nhân viên thiết bị" : user.isLibrarian ? "Nhân viên thư viện" : user.isHead ? "Tổ trưởng" : "Giáo viên"}{user.test ? " · thử nghiệm" : ""} · Hồ sơ</span></button>
             <button onClick={logout} className="text-xs text-white/70 hover:text-white px-2 py-1 rounded-lg hover:bg-white/10">Đăng xuất</button>
           </div>
         ) : (
@@ -227,16 +210,10 @@ function PageHeader({ kicker, title, right, back }: { kicker?: React.ReactNode; 
 }
 
 // ============ NỘI QUY PAGE ============
-function NoiQuyPage() {
+/** Nội quy mượn – trả thiết bị: hiển thị trong mục Thông tin thêm */
+function NoiQuyContent() {
   return (
-    <main className="pt-20 lg:pt-10 pb-24 px-4 lg:px-10">
-      <div className="max-w-3xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="bg-[#1a3670] text-white px-8 py-6">
-            <h1 className="text-2xl font-extrabold">Nội Quy & Quy Chế Mượn Thiết Bị</h1>
-            <p className="text-white/70 text-sm mt-1">Trường THCS Lê Độ - Áp dụng từ năm học 2024-2025</p>
-          </div>
-          <div className="px-8 py-8 space-y-8 text-sm text-gray-700 leading-relaxed">
+    <div className="space-y-6 text-sm text-gray-700 leading-relaxed">
 
             <section>
               <h2 className="text-lg font-bold text-[#1a3670] mb-3 flex items-center gap-2">
@@ -299,10 +276,7 @@ function NoiQuyPage() {
                 Phải đăng ký mượn <strong>trước ít nhất 24 giờ</strong>. Hệ thống sẽ không chấp nhận đăng ký nếu ngày mượn cách thời điểm hiện tại chưa đủ 24 giờ.
               </p>
             </div>
-          </div>
-        </div>
-      </div>
-    </main>
+    </div>
   )
 }
 
@@ -451,337 +425,7 @@ function HomePage({ setPage, onQuick }: { setPage: (p: Page) => void; onQuick: (
   )
 }
 
-// ============ BORROW FORM ============
-interface FormState {
-  teacherName: string
-  className: string
-  borrowDate: string
-  period: string
-  periodPPCT: string
-  equipment: string
-  returnDate: string
-  notes: string
-}
-
-const EMPTY_FORM: FormState = { teacherName: "", className: "", borrowDate: "", period: "", periodPPCT: "", equipment: "", returnDate: "", notes: "" }
-
-function BorrowForm({ subjectId, subjectName, onCreated, prefill, onPrefillUsed }: {
-  subjectId: string
-  subjectName: string
-  onCreated?: () => void
-  prefill?: Prefill
-  onPrefillUsed?: () => void
-}) {
-  const { user, login } = useAuth()
-  // Họ tên mặc định lấy từ tài khoản Google, giáo viên vẫn sửa được
-  const blankForm = (): FormState => ({ ...EMPTY_FORM, teacherName: user?.name || "" })
-  const [form, setForm] = useState<FormState>(blankForm)
-  useEffect(() => { if (user?.name) setForm((f) => (f.teacherName ? f : { ...f, teacherName: user.name })) }, [user?.name])
-  const [submitted, setSubmitted] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-  // Danh sách mã thiết bị do chatbot chọn (để server kiểm tra tồn kho chính xác)
-  // Thiết bị chọn từ danh mục của môn (máy chủ kiểm tra tồn kho theo mã) + đồ dùng khác ghi tay
-  const [picked, setPicked] = useState<BorrowItem[]>([])
-  const [otherEquip, setOtherEquip] = useState("")
-  const [available, setAvailable] = useState<AvailableItem[] | null>(null)
-  const [eqQuery, setEqQuery] = useState("")
-  // Tiết sử dụng (S1..S5 sáng, C1..C5 chiều), bài dạy, loại tiết, phòng bộ môn
-  const [slots, setSlots] = useState<string[]>([])
-  const [lessonName, setLessonName] = useState("")
-  const [usageType, setUsageType] = useState("Biểu diễn")
-  const [roomId, setRoomId] = useState("")
-  const [rooms, setRooms] = useState<Room[]>([])
-  const [step, setStep] = useState(0)
-  const formRef = useRef<HTMLFormElement>(null)
-  const [fromChat, setFromChat] = useState(false)
-
-  // Nhận bản nháp từ Trợ lý thiết bị -> điền sẵn vào form để giáo viên kiểm tra
-  useEffect(() => {
-    if (!prefill) return
-    const d = prefill.draft
-    setForm({
-      teacherName: d.teacherName || user?.name || "",
-      className: d.className || "",
-      borrowDate: vnToIso(d.borrowDate || ""),
-      period: d.period || "",
-      periodPPCT: d.periodPPCT || "",
-      equipment: d.equipment || "",
-      returnDate: vnToIso(d.returnDate || d.borrowDate || ""),
-      notes: d.notes || "",
-    })
-    setPicked(d.items?.length ? d.items.map((it) => ({ equipmentId: it.equipmentId, quantity: it.quantity })) : [])
-    setSlots(d.periods?.length ? d.periods : d.period ? [`S${d.period.replace(/\D/g, "")}`] : [])
-    setOtherEquip(d.items?.length ? "" : d.equipment || "")
-    setFromChat(true)
-    setStep(0)
-    setSubmitted(false)
-    setError("")
-    onPrefillUsed?.()
-    // Chờ form hiện ra rồi cuộn tới
-    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }))
-  }, [prefill?.key])
-
-  // Số thiết bị còn trống theo ngày mượn – trả đang chọn
-  useEffect(() => {
-    if (!user) return
-    let stop = false
-    const from = form.borrowDate ? isoToVn(form.borrowDate) : ""
-    const to = form.returnDate ? isoToVn(form.returnDate) : from
-    const t = setTimeout(() => {
-      fetchAvailable(subjectId, from, to, slots).then((l) => { if (!stop) setAvailable(l) }).catch(() => { if (!stop) setAvailable([]) })
-      fetchRoomsAvailability(from, to, slots).then((l) => { if (!stop) setRooms(l) }).catch(() => {})
-    }, 250)
-    return () => { stop = true; clearTimeout(t) }
-  }, [subjectId, form.borrowDate, form.returnDate, slots.join(","), user])
-
-  // Chưa đăng nhập
-  if (!user) {
-    return (
-      <div className="text-center py-10">
-        <div className="w-14 h-14 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
-          <svg className="w-7 h-7 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-        </div>
-        <h3 className="text-base font-bold text-gray-800 mb-1">Đăng nhập để gửi yêu cầu mượn</h3>
-        <p className="text-sm text-gray-500 mb-5">Vui lòng đăng nhập bằng Google để gửi yêu cầu mượn thiết bị. Admin sẽ duyệt yêu cầu của bạn.</p>
-        <button onClick={login} className="px-6 py-3 rounded-xl bg-white border-2 border-gray-200 hover:border-[#1a3670] text-gray-700 hover:text-[#1a3670] font-semibold text-sm transition-colors">
-          Đăng nhập bằng Google
-        </button>
-      </div>
-    )
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-
-    if (!slots.length) { setError("Chọn ít nhất một tiết dạy"); return }
-    if (!picked.length && !otherEquip.trim()) { setError("Chọn ít nhất một thiết bị trong danh sách hoặc ghi đồ dùng khác"); return }
-    if (roomId && rooms.find((r) => r.id === roomId)?.busy) { setError("Phòng đã chọn đang bận ở tiết này, hãy chọn phòng hoặc tiết khác"); return }
-    const nameOf = (id: string) => available?.find((a) => a.id === id)?.name || id
-    const over = picked.find((p) => { const a = available?.find((x) => x.id === p.equipmentId); return a && p.quantity > a.available })
-    if (over) { setError(`“${nameOf(over.equipmentId)}” chỉ còn ${available?.find((x) => x.id === over.equipmentId)?.available} trong những ngày này`); return }
-    const equipment = [...picked.map((p) => `${nameOf(p.equipmentId)} (x${p.quantity})`), otherEquip.trim()].filter(Boolean).join(", ")
-
-    setLoading(true)
-    try {
-      // Ô chọn ngày dùng YYYY-MM-DD, máy chủ nhận DD/MM/YYYY
-      await createRecord({ subjectId, subjectName, ...form, equipment, periods: slots, lessonName, usageType, roomId: roomId || undefined,
-        borrowDate: isoToVn(form.borrowDate), returnDate: isoToVn(form.returnDate), items: picked.length ? picked : undefined })
-      setSubmitted(true)
-      setPicked([])
-      setOtherEquip("")
-      setSlots([]); setLessonName(""); setRoomId(""); setStep(0)
-      setFromChat(false)
-      onCreated?.()
-      setTimeout(() => { setSubmitted(false); setForm(blankForm()) }, 3500)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Có lỗi xảy ra")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fieldCls = "w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#1a3670]/25 focus:border-[#1a3670] bg-white transition-all placeholder:text-gray-400"
-  const labelCls = "block text-sm font-semibold text-gray-700 mb-1.5"
-
-  if (submitted) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-          <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-        </div>
-        <h3 className="text-lg font-bold text-gray-900 mb-1">Gửi yêu cầu thành công!</h3>
-        <p className="text-gray-500 text-sm">Yêu cầu mượn thiết bị đã được gửi. Vui lòng chờ admin duyệt.</p>
-      </div>
-    )
-  }
-
-  const slotText = (sl: string[]) => [["S", "Sáng"], ["C", "Chiều"]].map(([k, n]) => { const t = sl.filter((x) => x[0] === k).map((x) => x.slice(1)).sort(); return t.length ? `${n}: tiết ${t.join(", ")}` : "" }).filter(Boolean).join(" · ")
-  const nameOfEq = (id: string) => available?.find((a) => a.id === id)?.name || id
-  const bdDate = parseVN(isoToVn(form.borrowDate)), rdDate = parseVN(isoToVn(form.returnDate))
-  const STEPS = ["Thời gian & lớp", "Thiết bị & phòng", "Xem lại & gửi"]
-  const next = () => {
-    setError("")
-    if (step === 0) {
-      if (!form.teacherName.trim() || !form.className.trim()) return setError("Nhập họ tên giáo viên và lớp dạy")
-      if (!form.borrowDate || !form.returnDate) return setError("Chọn ngày mượn và ngày trả")
-      if (!slots.length) return setError("Chọn ít nhất một tiết sử dụng thiết bị")
-    }
-    if (step === 1) {
-      if (!picked.length && !otherEquip.trim()) return setError("Chọn ít nhất một thiết bị trong danh sách hoặc ghi đồ dùng khác")
-      const over = picked.find((p) => { const a = available?.find((x) => x.id === p.equipmentId); return a && p.quantity > a.available })
-      if (over) return setError(`“${nameOfEq(over.equipmentId)}” chỉ còn ${available?.find((x) => x.id === over.equipmentId)?.available} ở thời gian đã chọn`)
-      if (roomId && rooms.find((r) => r.id === roomId)?.busy) return setError("Phòng đã chọn đang bận ở tiết này")
-    }
-    setStep(step + 1)
-    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }))
-  }
-  const summaryRow = (label: string, value: React.ReactNode) => (
-    <div><dt className="text-xs text-gray-500">{label}</dt><dd className="text-sm font-semibold text-gray-900 mt-0.5">{value || <span className="font-normal text-gray-400">Chưa chọn</span>}</dd></div>
-  )
-
-  return (
-    <form ref={formRef} onSubmit={(e) => { if (step < 2) { e.preventDefault(); next() } else handleSubmit(e) }} className="scroll-mt-24 grid gap-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
-      <div className="min-w-0">
-        {/* Thanh bước */}
-        <ol className="grid grid-cols-3 gap-3 mb-6" aria-label="Các bước đăng ký">
-          {STEPS.map((t, i) => (
-            <li key={t}>
-              <button type="button" disabled={i > step} onClick={() => setStep(i)} className="w-full text-left disabled:cursor-default" aria-current={i === step ? "step" : undefined}>
-                <span className={`block h-1.5 rounded-full mb-2 ${i <= step ? "bg-[#1a3670]" : "bg-gray-200"}`} />
-                <span className={`text-sm font-semibold ${i === step ? "text-[#1a3670]" : i < step ? "text-gray-700" : "text-gray-400"}`}>{i + 1}. {t}</span>
-              </button>
-            </li>
-          ))}
-        </ol>
-
-        {fromChat && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-800 flex items-start justify-between gap-3 mb-4">
-            <span>Một số thông tin đã được điền sẵn. Kiểm tra lại từng bước trước khi gửi.</span>
-            <button type="button" onClick={() => { setFromChat(false); setPicked([]); setOtherEquip(""); setSlots([]); setForm(blankForm()); setStep(0) }} className="shrink-0 text-xs font-semibold text-emerald-700 hover:underline">Xóa</button>
-          </div>
-        )}
-        {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm font-medium mb-4">{error}</div>}
-
-        {step === 0 && (
-          <div className="space-y-5">
-            <div><h3 className="text-lg font-bold text-gray-900">Thời gian và lớp học</h3><p className="text-sm text-gray-500">Ai sử dụng thiết bị, cho lớp nào và vào tiết nào.</p></div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div><label className={labelCls} htmlFor="teacherName">Họ tên giáo viên <span className="text-red-500">*</span></label><input id="teacherName" className={fieldCls} placeholder="Nguyễn Văn A" value={form.teacherName} onChange={(e) => setForm({ ...form, teacherName: e.target.value })} /></div>
-              <div><label className={labelCls} htmlFor="className">Lớp dạy <span className="text-red-500">*</span></label><input id="className" className={fieldCls} placeholder="8A1" value={form.className} onChange={(e) => setForm({ ...form, className: e.target.value })} /></div>
-              <div>
-                <label className={labelCls} htmlFor="borrowDate">Ngày mượn <span className="text-red-500">*</span></label>
-                <input id="borrowDate" type="date" className={fieldCls} min={user.isAdmin ? undefined : vnToIso(tomorrowVN())} value={form.borrowDate}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    const complete = /^[1-9]\d{3}-\d{2}-\d{2}$/.test(v)
-                    const follow = complete && (!form.returnDate || form.returnDate < v)
-                    setForm({ ...form, borrowDate: v, returnDate: follow ? v : form.returnDate })
-                  }} />
-                <p className="text-xs text-gray-500 mt-1">{bdDate ? dayLabel(bdDate) : "Đăng ký trước giờ dạy ít nhất 24 giờ"}</p>
-              </div>
-              <div>
-                <label className={labelCls} htmlFor="returnDate">Ngày trả dự kiến <span className="text-red-500">*</span></label>
-                <input id="returnDate" type="date" className={fieldCls} min={form.borrowDate || undefined} value={form.returnDate} onChange={(e) => setForm({ ...form, returnDate: e.target.value })} />
-                <p className="text-xs text-gray-500 mt-1">{rdDate ? dayLabel(rdDate) : "Chưa chọn"}</p>
-              </div>
-            </div>
-            <div>
-              <span className={labelCls}>Tiết sử dụng thiết bị <span className="text-red-500">*</span> <span className="font-normal text-gray-500 text-xs">(chọn một hoặc nhiều tiết)</span></span>
-              <div className="space-y-2">
-                {([["S", "Sáng"], ["C", "Chiều"]] as const).map(([k, name]) => (
-                  <div key={k} className="flex items-center gap-2">
-                    <span className="w-12 text-sm font-medium text-gray-500">{name}</span>
-                    <div className="grid grid-cols-5 gap-1.5 flex-1">
-                      {[1, 2, 3, 4, 5].map((n) => {
-                        const code = `${k}${n}`, on = slots.includes(code)
-                        return (
-                          <button type="button" key={code} aria-pressed={on} onClick={() => setSlots((prev) => (prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code]))}
-                            className={`py-2.5 rounded-xl border text-sm font-medium transition-colors ${on ? "bg-[#1a3670] border-[#1a3670] text-white" : "bg-white border-gray-200 text-gray-600 hover:border-gray-400"}`}>
-                            Tiết {n}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {form.borrowDate && form.returnDate && form.borrowDate !== form.returnDate && <p className="text-xs text-amber-700 mt-1.5">Mượn nhiều ngày: thiết bị được tính là đang ở chỗ thầy/cô từ tiết đầu của ngày mượn đến tiết cuối của ngày trả, nên lớp khác không mượn được trong khoảng đó. Nếu chỉ dùng trong một ngày, hãy chọn ngày trả bằng ngày mượn.</p>}
-            </div>
-          </div>
-        )}
-
-        {step === 1 && (
-          <div className="space-y-5">
-            <div><h3 className="text-lg font-bold text-gray-900">Thiết bị và phòng</h3><p className="text-sm text-gray-500">Số “Còn” tính theo ngày và tiết đã chọn ở bước 1.</p></div>
-            <div className="border border-gray-200 rounded-xl overflow-hidden">
-              {available && available.length > 8 && (
-                <div className="p-2 border-b border-gray-100 bg-gray-50"><input type="search" aria-label="Tìm thiết bị" className={fieldCls} placeholder="Tìm thiết bị…" value={eqQuery} onChange={(e) => setEqQuery(e.target.value)} /></div>
-              )}
-              <ul className="max-h-[26rem] overflow-y-auto divide-y divide-gray-100">
-                {available === null && <li className="px-4 py-3 text-sm text-gray-400">Đang tải danh mục…</li>}
-                {available?.length === 0 && <li className="px-4 py-3 text-sm text-gray-400">Môn này chưa có thiết bị trong danh mục. Ghi đồ dùng ở ô bên dưới.</li>}
-                {available?.filter((a) => !eqQuery || fold(a.name).includes(fold(eqQuery))).map((a) => {
-                  const qty = picked.find((p) => p.equipmentId === a.id)?.quantity || 0
-                  const setQty = (n: number) => setPicked((prev) => (n <= 0 ? prev.filter((p) => p.equipmentId !== a.id) : prev.some((p) => p.equipmentId === a.id) ? prev.map((p) => (p.equipmentId === a.id ? { ...p, quantity: n } : p)) : [...prev, { equipmentId: a.id, quantity: n }]))
-                  return (
-                    <li key={a.id} className={`px-4 py-3 flex items-center gap-3 ${qty ? "bg-[#1a3670]/[.04]" : ""}`}>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[15px] font-medium text-gray-900">{a.name}</div>
-                        <div className="text-xs text-gray-500">{a.grades.length ? `Lớp ${a.grades.join(", ")} · ` : ""}{a.location}</div>
-                      </div>
-                      <span className={`text-sm font-semibold whitespace-nowrap ${a.available === 0 ? "text-red-600" : "text-emerald-700"}`}>{a.available === 0 ? "Hết" : `Còn ${a.available}`}</span>
-                      <div className="flex items-center gap-1">
-                        <button type="button" aria-label={`Bớt ${a.name}`} disabled={!qty} onClick={() => setQty(qty - 1)} className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30 font-bold">−</button>
-                        <span className="w-7 text-center font-semibold tabular-nums" aria-live="polite">{qty}</span>
-                        <button type="button" aria-label={`Thêm ${a.name}`} disabled={qty >= a.available} onClick={() => setQty(qty + 1)} className="w-8 h-8 rounded-lg bg-[#1a3670] text-white hover:bg-[#132d5e] disabled:opacity-30 font-bold">+</button>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
-            <div><label className={labelCls} htmlFor="otherEquip">Đồ dùng khác (không có trong danh sách)</label><input id="otherEquip" className={fieldCls} placeholder="Ghi thêm nếu có…" value={otherEquip} onChange={(e) => setOtherEquip(e.target.value)} /></div>
-            {rooms.length > 0 && (
-              <div>
-                <label className={labelCls} htmlFor="roomId">Phòng bộ môn</label>
-                <select id="roomId" className={fieldCls} value={roomId} onChange={(e) => setRoomId(e.target.value)}>
-                  <option value="">Không mượn phòng (dạy tại lớp)</option>
-                  {rooms.map((r) => <option key={r.id} value={r.id} disabled={r.busy}>{r.name}{r.busy ? ` – đang bận: ${r.busyBy}` : ""}</option>)}
-                </select>
-              </div>
-            )}
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="space-y-5">
-            <div><h3 className="text-lg font-bold text-gray-900">Bài dạy và xác nhận</h3><p className="text-sm text-gray-500">Thông tin này được ghi vào sổ mượn trả thiết bị.</p></div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div><label className={labelCls} htmlFor="lessonName">Tên bài dạy</label><input id="lessonName" className={fieldCls} placeholder="VD: Bài 8 – Áp suất chất lỏng" value={lessonName} onChange={(e) => setLessonName(e.target.value)} /></div>
-              <div><label className={labelCls} htmlFor="ppct">Tiết theo PPCT <span className="text-red-500">*</span></label><input id="ppct" required className={fieldCls} placeholder="VD: Tiết 25" value={form.periodPPCT} onChange={(e) => setForm({ ...form, periodPPCT: e.target.value })} /></div>
-            </div>
-            <div>
-              <span className={labelCls}>Loại tiết</span>
-              <div className="flex gap-2 max-w-sm">
-                {["Biểu diễn", "Thực hành"].map((t) => (
-                  <button type="button" key={t} aria-pressed={usageType === t} onClick={() => setUsageType(t)} className={`flex-1 py-2.5 rounded-xl border text-sm font-medium ${usageType === t ? "bg-[#1a3670] border-[#1a3670] text-white" : "bg-white border-gray-200 text-gray-600 hover:border-gray-400"}`}>{t}</button>
-                ))}
-              </div>
-            </div>
-            <div><label className={labelCls} htmlFor="notes">Ghi chú</label><textarea id="notes" rows={2} className={fieldCls} placeholder="Ghi chú thêm nếu có…" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
-            <p className="text-sm text-gray-600 bg-[#F6F7F9] rounded-xl px-4 py-3">Phiếu được gửi đến phòng thiết bị để duyệt. Thầy/cô nhận email khi phiếu được duyệt hoặc từ chối và theo dõi tại “Phiếu của tôi”.</p>
-          </div>
-        )}
-
-        <div className="flex items-center justify-between gap-3 mt-7 pt-5 border-t border-gray-100">
-          {step > 0 ? <button type="button" onClick={() => { setError(""); setStep(step - 1) }} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200">Quay lại</button> : <span />}
-          <button type="submit" disabled={loading} className="px-6 py-2.5 rounded-xl bg-[#1a3670] hover:bg-[#132d5e] text-white font-semibold text-sm disabled:opacity-60">
-            {step < 2 ? "Tiếp tục" : loading ? "Đang gửi…" : "Gửi yêu cầu mượn"}
-          </button>
-        </div>
-      </div>
-
-      {/* Tóm tắt phiếu */}
-      <aside className="lg:sticky lg:top-8 self-start">
-        <div className="rounded-2xl bg-[#F6F7F9] border border-gray-200/80 p-5">
-          <h3 className="font-semibold text-gray-900 mb-4">Tóm tắt phiếu</h3>
-          <dl className="space-y-3.5">
-            {summaryRow("Môn học", subjectName)}
-            {summaryRow("Thời gian", bdDate ? <>{dayLabel(bdDate)}{rdDate && rdDate.getTime() !== bdDate.getTime() ? ` → ${dayLabel(rdDate)}` : ""}{slots.length ? <span className="block font-normal text-gray-600">{slotText(slots)}</span> : null}</> : null)}
-            {summaryRow("Lớp", form.className)}
-            {summaryRow("Thiết bị", picked.length || otherEquip ? <ul className="space-y-0.5">{picked.map((p) => <li key={p.equipmentId}>{nameOfEq(p.equipmentId)} <span className="text-gray-500">×{p.quantity}</span></li>)}{otherEquip && <li>{otherEquip}</li>}</ul> : null)}
-            {roomId && summaryRow("Phòng", rooms.find((r) => r.id === roomId)?.name)}
-          </dl>
-        </div>
-      </aside>
-    </form>
-  )
-}
-
-// ============ SUBJECT PAGE ============
-type Prefill = { draft: BorrowDraft; key: number } | null
+// ============ TRANG MÔN HỌC ============
 
 /** Các tiết một phiếu chiếm (phiếu cũ "Tiết n" = buổi sáng) */
 const recSlots = (r: BorrowRecord) => (r.periods?.length ? r.periods : /^Tiết (\d)$/.test(r.period || "") ? [`S${r.period!.slice(-1)}`] : [])
@@ -883,18 +527,16 @@ function WeekGrid({ records }: { records: BorrowRecord[] }) {
   )
 }
 
-function SubjectPage({ subjectId, setPage, refreshKey = 0, prefill = null, onPrefillUsed }: {
+function SubjectPage({ subjectId, setPage, refreshKey = 0, onBorrow }: {
+  onBorrow: (subjectId: string) => void
   subjectId: string
   setPage: (p: Page) => void
   refreshKey?: number
-  prefill?: Prefill
-  onPrefillUsed?: () => void
 }) {
   const subject = SUBJECTS.find((s) => s.id === subjectId)!
   const [records, setRecords] = useState<BorrowRecord[]>([])
   const [eqCount, setEqCount] = useState<number | null>(null)
   const [shown, setShown] = useState(8)
-  const formBox = useRef<HTMLElement>(null)
   const { user } = useAuth()
 
   const loadData = useCallback(() => { fetchRecords({ subjectId }).then(setRecords).catch(console.error) }, [subjectId])
@@ -904,22 +546,13 @@ function SubjectPage({ subjectId, setPage, refreshKey = 0, prefill = null, onPre
   return (
     <main className="pt-20 lg:pt-10 pb-24 px-4 lg:px-10">
       <div className="max-w-6xl">
-        <PageHeader back={{ label: "Trang chủ", onClick: () => setPage("home") }}
+        <PageHeader back={{ label: "Thiết bị theo môn", onClick: () => setPage("mon-hoc") }}
           kicker={<span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: subject.color }} />{subject.group}{eqCount !== null ? ` · ${eqCount} loại thiết bị` : ""}</span>}
           title={subject.name}
-          right={<button onClick={() => formBox.current?.scrollIntoView({ behavior: "smooth", block: "start" })} className="px-5 py-3 rounded-xl bg-[#1a3670] hover:bg-[#132d5e] text-white font-semibold text-[15px]">+ Đăng ký mượn</button>} />
+          right={<button onClick={() => onBorrow(subjectId)} className="px-5 py-3 rounded-xl bg-[#1a3670] hover:bg-[#132d5e] text-white font-semibold text-[15px]">+ Đăng ký mượn</button>} />
 
         <WeekGrid records={records} />
 
-        <section ref={formBox} className="bg-white rounded-2xl border border-gray-200/80 mb-6 scroll-mt-20" aria-labelledby="form-title">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h2 id="form-title" className="font-semibold text-gray-900">Tạo phiếu đăng ký</h2>
-            <p className="text-sm text-gray-500">Hoàn thành 3 bước; thông tin đã nhập luôn hiện ở phần tóm tắt.</p>
-          </div>
-          <div className="p-6">
-            <BorrowForm subjectId={subjectId} subjectName={subject.name} onCreated={loadData} prefill={prefill} onPrefillUsed={onPrefillUsed} />
-          </div>
-        </section>
 
         {records.length > 0 && (
           <section className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden">
@@ -1364,7 +997,7 @@ function MyRecordsPage({ setPage }: { setPage: (p: Page) => void }) {
 }
 
 // ============ MAIN APP ============
-const PAGES = new Set<string>(["home", "noiquy", "admin", "mine", "dang-nhap", "cho-duyet", "bgh", "to-truong", "bao-mat", "ho-so", "khach", "tra-cuu-sach", ...SUBJECTS.map((s) => s.id)])
+const PAGES = new Set<string>(["home", "noiquy", "admin", "mine", "dang-nhap", "cho-duyet", "bgh", "to-truong", "bao-mat", "ho-so", "khach", "tra-cuu-sach", "muon", "mon-hoc", "thong-tin", ...SUBJECTS.map((s) => s.id)])
 function readHash(): Page {
   const h = decodeURIComponent(window.location.hash.replace(/^#\/?/, ""))
   if (/^admin\/[a-z-]+$/.test(h)) return h // các mục trong trang quản trị
@@ -1389,17 +1022,16 @@ function AppContent() {
     window.location.hash = p === "home" ? "" : p
   }, [])
   useEffect(() => {
-    const name = page === "home" ? "" : page === "noiquy" ? "Nội quy" : page.startsWith("admin") ? "Quản trị" : page === "mine" ? "Phiếu của tôi" : page.startsWith("thiet-bi/") ? "Thiết bị" : SUBJECTS.find((s) => s.id === page)?.name
+    const name = page === "home" ? "" : page === "muon" ? "Đăng ký mượn" : page === "thong-tin" || page === "noiquy" ? "Thông tin thêm" : page.startsWith("admin") ? "Quản trị" : page === "mine" ? "Phiếu của tôi" : page.startsWith("thiet-bi/") ? "Thiết bị" : SUBJECTS.find((s) => s.id === page)?.name
     document.title = (name ? `${name} – ` : "") + "Quản lý thiết bị THCS Lê Độ"
   }, [page])
-  // Bản nháp từ chatbot chờ được điền vào form (key để điền lại được nhiều lần)
-  const [prefill, setPrefill] = useState<{ draft: BorrowDraft; key: number } | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  // Mở phiếu đăng ký mượn: theo ngày chọn, nhân bản phiếu cũ, hoặc theo môn
+  const [borrowPreset, setBorrowPreset] = useState<{ date?: string; clone?: BorrowRecord; subjectId?: string; draft?: BorrowDraft; key?: number } | null>(null)
+  const openBorrow = useCallback((o: { date?: string; clone?: BorrowRecord; subjectId?: string; draft?: BorrowDraft }) => { setBorrowPreset({ ...o, key: Date.now() }); setPage("muon") }, [setPage])
 
-  const fillFormFromChat = useCallback((draft: BorrowDraft) => {
-    setPage(draft.subjectId)
-    setPrefill({ draft, key: Date.now() })
-  }, [])
+  // Trợ lý AI, đăng ký nhanh, trang thiết bị: đều mở chung một phiếu đăng ký
+  const fillFormFromChat = useCallback((draft: BorrowDraft) => { setBorrowPreset({ draft, key: Date.now() }); setPage("muon") }, [setPage])
 
   if (loading) {
     return (
@@ -1434,8 +1066,10 @@ function AppContent() {
       {page === "cho-duyet" && <PendingPage />}
       {page === "bgh" && (user?.isPrincipal || user?.isSysadmin ? <PrincipalPage go={setPage} /> : <main className="pt-24 px-6 text-sm text-gray-500">Trang dành cho Ban giám hiệu.</main>)}
       {page === "to-truong" && (user?.isHead || user?.isSysadmin ? <HeadPage WeekGrid={WeekGrid} /> : <main className="pt-24 px-6 text-sm text-gray-500">Trang dành cho tổ trưởng chuyên môn.</main>)}
-      {page === "home" && <HomePage setPage={setPage} onQuick={fillFormFromChat} />}
-      {page === "noiquy" && <NoiQuyPage />}
+      {page === "home" && (user ? <TeacherHome go={setPage} onBorrow={openBorrow} /> : <HomePage setPage={setPage} onQuick={fillFormFromChat} />)}
+      {page === "muon" && <BorrowPage key={borrowPreset?.key || 0} go={setPage} preset={borrowPreset} onDone={() => { setBorrowPreset(null); setPage("home") }} />}
+      {page === "mon-hoc" && <SubjectsPage go={setPage} />}
+      {(page === "thong-tin" || page === "noiquy") && <InfoPage go={setPage} equipmentRules={<NoiQuyContent />} libraryRules={<LibraryRulesNotice />} pointsRules={user ? <PointsRulesText /> : undefined} isLibrarian={!!(user?.isLibrarian || user?.isSysadmin)} />}
       {page.startsWith("admin") && <AdminPage section={page.split("/")[1]} go={(sec) => setPage(`admin/${sec}`)} />}
       {page === "mine" && <MyRecordsPage setPage={setPage} />}
       {/^sach\//i.test(page) && <BookCopyPage key={page} code={page.slice(5).toUpperCase()} />}
@@ -1447,8 +1081,7 @@ function AppContent() {
           subjectId={page}
           setPage={setPage}
           refreshKey={refreshKey}
-          prefill={prefill?.draft.subjectId === page ? prefill : null}
-          onPrefillUsed={() => setPrefill(null)}
+          onBorrow={(sid) => openBorrow({ subjectId: sid })}
         />
       )}
       </>}

@@ -843,13 +843,7 @@ export function LossTab() {
   const src = (r: LossReport) => (r.source === "audit" ? `Kiểm kê: ${r.auditTitle || ""}` : `Phiếu mượn của ${r.teacherName || ""}`)
   return (
     <div className="space-y-4">
-      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-900">
-        Thiết bị báo mất (khi trả hoặc khi kiểm kê thiếu) được giữ ở trạng thái <strong>chờ xác nhận</strong>, không cho mượn nhưng chưa tính là mất.{" "}
-        {d.principalConfigured
-          ? <>Chỉ <strong>Ban giám hiệu</strong> xác nhận mới ghi vào sổ “mất” và trừ điểm thi đua giáo viên (−10 điểm/thiết bị, bồi thường theo đơn giá). Ban giám hiệu nhận <strong>email</strong> mỗi khi có báo mất và có thể xác nhận ngay trong Gmail.</>
-          : <>Khi được xác nhận mới ghi vào sổ “mất” và trừ điểm thi đua giáo viên (−10 điểm/thiết bị, bồi thường theo đơn giá); nếu tìm thấy thì thiết bị quay về nhóm tốt.</>}
-        {d.principalConfigured && !d.canConfirm && <span className="block mt-1">Tài khoản của bạn chỉ xem được; việc xác nhận do Ban giám hiệu thực hiện.</span>}
-      </div>
+      {d.principalConfigured && !d.canConfirm && <p className="text-sm text-gray-500">Việc xác nhận mất do Ban giám hiệu thực hiện; nhân viên thiết bị ghi xác minh và in biên bản.</p>}
       <Err msg={error} />
       <div className={`${card} overflow-hidden`}>
         <div className="px-5 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">Chờ xác nhận ({pending.length})</h3></div>

@@ -73,9 +73,6 @@ export function MinlistTab({ subjects: siteSubjects }: { subjects: { id: string;
 
   return (
     <div className="space-y-4">
-      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-900">
-        Đã nạp đủ danh mục <strong>12 môn và thiết bị dùng chung</strong> theo Thông tư 38/2021 ({d.items.length} dòng). Mỗi dòng cần <strong>liên kết</strong> với thiết bị trong kho để hệ thống đếm số đang có. Môn Ngoại ngữ có 3 phương án trang bị: xóa các dòng của phương án trường không chọn. Môn Giáo dục thể chất: chỉ giữ các môn thể thao tự chọn mà trường dạy.
-      </div>
       {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-sm">{error}</div>}
       {msg && <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 text-sm">{msg}</div>}
 

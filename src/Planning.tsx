@@ -43,10 +43,6 @@ export function ChemicalsTab({ go }: { go: (s: string) => void }) {
   )
   return (
     <div className="space-y-4">
-      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-900">
-        Hóa chất và vật tư tiêu hao được khai báo ở <button onClick={() => go("danh-muc")} className="font-semibold underline">Danh mục thiết bị</button> (chọn loại “Hóa chất” hoặc “Vật tư tiêu hao”, nhập hạn sử dụng, mức tồn tối thiểu).
-        Hóa chất quá hạn tự động <strong>không cho mượn</strong>; khi tiêu hủy, dùng <button onClick={() => go("ghi-giam")} className="font-semibold underline">Ghi giảm</button> với lý do “Tiêu hủy (hóa chất hết hạn)”.
-      </div>
       {al && (
         <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3">
           {box("Đã hết hạn", al.expired, "bg-red-50 border-red-200 text-red-800", (e) => `hạn ${e.expiry}, còn ${e.qtyGood} ${e.unit || ""}`)}

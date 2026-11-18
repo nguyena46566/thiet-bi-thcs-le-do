@@ -365,7 +365,7 @@ export const fetchDisposals = () => call<Disposal[]>("GET", "/api/disposals");
 export const createDisposal = (b: { equipmentId: string; quantity: number; source: string; reason: string; decisionNo: string; note: string; date: string }) => call<Disposal>("POST", "/api/disposals", b);
 
 // ============ THIẾT BỊ CÒN TRỐNG (form đăng ký), BÁO MẤT ============
-export interface AvailableItem { id: string; name: string; grades: number[]; unit: string; location: string; good: number; available: number }
+export interface AvailableItem { id: string; name: string; subjectId?: string; kind?: string; topic?: string; grades: number[]; unit: string; location: string; good: number; available: number }
 export const fetchAvailable = (subjectId: string, from: string, to: string, periods: string[] = []) =>
   call<AvailableItem[]>("GET", `/api/inventory/available?subjectId=${encodeURIComponent(subjectId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&periods=${periods.join(",")}`);
 export interface LossReport { verification?: { searchScope: string; involved: string; findings: string; by: string; at: string }; id: string; status: string; createdAt: string; equipmentId: string; name: string; quantity: number; unitPrice: number; source: "return" | "audit"; recordId?: string; teacherName?: string; auditTitle?: string; note?: string; reportedBy: string; decidedBy?: string; decidedAt?: string; decisionNote?: string }

@@ -4,7 +4,7 @@ import {
   fetchLibRules, saveLibRules, fetchReaders, createReaders, readersFromUsers, updateReader, deleteReader, fetchLoans, lendBooks, returnBook, renewLoan, setCompensation,
   fetchReadingPeriods, createReadingPeriod, updateReadingPeriod, deleteReadingPeriod, searchOpac, fetchStocktakes, createStocktake, scanStocktake, finishStocktake,
   weedCopies, fetchLibStats, fetchCopies, fetchTitles, fetchShelves, fold,
-  type Reader, type BookLoan, type LibRules, type ReadingPeriod, type LibAudit, type OpacResult, type LibStats, type BookCopy, type BookTitle, type Shelf,
+  type Reader, type BookLoan, type LibRules, type LibAudit, type OpacResult, type LibStats, type BookCopy, type BookTitle, type Shelf,
 } from "@/api"
 import { exportExcel, printDoc } from "./Operations"
 import { printHtml, esc, table, dots } from "./printing"
@@ -98,7 +98,7 @@ export function CirculationTab() {
             <div className="flex gap-2">{["Bình thường", "Hỏng", "Mất"].map((c) => <button type="button" key={c} onClick={() => setRet({ ...ret, condition: c })} aria-pressed={ret.condition === c} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${ret.condition === c ? (c === "Bình thường" ? "bg-[#1a3670] text-white" : "bg-red-600 text-white") : "bg-gray-100 text-gray-700"}`}>{c}</button>)}</div>
             <div className="flex justify-end"><button className={btnPrimary}>Nhận trả</button></div>
           </form>
-          {rules && <div className="mt-4 text-xs text-gray-500"><RulesSummary r={rules} /> <button onClick={() => setEditRules(!editRules)} className="font-semibold text-[#1a3670] hover:underline">{editRules ? "Đóng" : "Sửa quy định"}</button></div>}
+          {rules && <div className="mt-4 text-xs"><button onClick={() => setEditRules(!editRules)} className="font-semibold text-[#1a3670] hover:underline">{editRules ? "Đóng quy định mượn sách" : "Quy định mượn sách"}</button></div>}
           {editRules && rules && <RulesEditor rules={rules} setRules={setRules} onSave={() => act(async () => { await saveLibRules(rules); setEditRules(false); return "Đã lưu quy định" })} />}
         </div>
       </div>
@@ -224,7 +224,7 @@ export function ReadingPeriodsTab() {
   return (
     <div className="space-y-4">
       <Err msg={error} /><Ok msg={ok} />
-      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-900">Thông tư 16/2022/TT-BGDĐT: trường trung học tổ chức tiết đọc tại thư viện <strong>tối thiểu {d.min} tiết/học kỳ/lớp</strong>, nội dung do Hiệu trưởng quy định. Danh sách lớp lấy từ bạn đọc học sinh. {lacking ? <strong>{lacking} lớp chưa đủ.</strong> : "Các lớp đã đủ."}</div>
+      {lacking > 0 && <p className="text-sm text-amber-800">{lacking} lớp chưa đủ {d.min} tiết đọc trong học kỳ.</p>}
       <div className={`${card} p-5`}>
         <h3 className="font-bold text-gray-900 mb-3">Xếp tiết đọc</h3>
         <div className="grid sm:grid-cols-6 gap-2">
@@ -395,7 +395,6 @@ export function OpacPage() {
   return (
     <main className="pt-20 lg:pt-10 pb-24 px-4 lg:px-10"><div className="max-w-4xl">
       <div className="mb-6"><div className="text-sm font-semibold text-gray-500 mb-1">Thư viện Trường THCS Lê Độ</div><h1 className="text-[28px] sm:text-3xl font-bold text-[#1F2937] tracking-tight">Tra cứu sách</h1></div>
-      <LibraryRulesNotice />
       <div className="flex flex-wrap gap-2 mb-4">
         <input type="search" autoFocus aria-label="Tìm sách" className="flex-1 min-w-[240px] border border-gray-200 rounded-xl px-4 py-3 text-[15px]" placeholder="Tên sách, tác giả, chủ đề (không cần dấu)…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select aria-label="Loại tài liệu" className="border border-gray-200 rounded-xl px-3 text-sm" value={kind} onChange={(e) => setKind(e.target.value)}><option value="">Mọi loại</option>{Object.entries(d?.kinds || {}).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
@@ -409,7 +408,7 @@ export function OpacPage() {
           </li>
         ))}</ul>
       )}
-      <p className="text-xs text-gray-400 mt-6">Muốn mượn sách: mang thẻ thư viện tới quầy thủ thư. Trang tra cứu không hiển thị thông tin bạn đọc.</p>
+      <p className="text-xs text-gray-400 mt-6">Muốn mượn sách: mang thẻ thư viện tới quầy thủ thư. <a href="#thong-tin" className="underline">Nội quy thư viện</a></p>
     </div></main>
   )
 }
@@ -432,9 +431,6 @@ export function MyLibraryLoans() {
 
 const KIND_NAMES: Record<string, string> = { SGK: "Sách giáo khoa", STK: "Sách tham khảo", STN: "Sách thiếu nhi, truyện", SNV: "Sách nghiệp vụ", BTC: "Báo, tạp chí" }
 const MODE_NAMES: Record<string, string> = { loan: "Mượn về nhà có thời hạn", year: "Mượn theo năm học", staff: "Chỉ giáo viên, nhân viên mượn về", inLibrary: "Chỉ đọc tại chỗ" }
-function RulesSummary({ r }: { r: LibRules }) {
-  return <span>Học sinh tối đa {r.student.maxBooks} quyển / {r.student.days} ngày; giáo viên, nhân viên {r.staff.maxBooks} quyển / {r.staff.days} ngày; {r.maxRenewals ? `gia hạn tối đa ${r.maxRenewals} lần, mỗi lần ${r.renewDays} ngày` : "không gia hạn"}; sách giáo khoa mượn theo năm học, báo – tạp chí đọc tại chỗ (theo bảng loại tài liệu).</span>
-}
 function RulesEditor({ rules, setRules, onSave }: { rules: LibRules; setRules: (r: LibRules) => void; onSave: () => void }) {
   const num = (v: string) => Math.max(0, Math.floor(Number(v) || 0))
   return (
@@ -474,9 +470,6 @@ export function LibraryRulesNotice() {
     "Giữ trật tự, vệ sinh; không viết, vẽ, gấp trang, làm rách sách.",
   ].filter(Boolean)
   return (
-    <details className="bg-white rounded-2xl border border-gray-200/80 px-5 py-3 mb-4">
-      <summary className="font-semibold text-gray-900 cursor-pointer">Nội quy mượn sách</summary>
-      <ol className="list-decimal pl-5 space-y-1 text-sm text-gray-700 mt-2">{items.map((t) => <li key={t}>{t}</li>)}</ol>
-    </details>
+    <ol className="list-decimal pl-5 space-y-1">{items.map((t) => <li key={t}>{t}</li>)}</ol>
   )
 }

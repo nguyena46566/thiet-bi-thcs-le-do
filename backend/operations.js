@@ -503,7 +503,7 @@ export function registerOperationRoutes(app, { requireAuth, requireAdmin, wrap }
     const active = await db.records.findActive();
     const slots = normalizeSlots(String(req.query.periods || "").split(","));
     const list = (await refreshCache()).filter((e) => !req.query.subjectId || e.subjectId === req.query.subjectId)
-      .map((e) => ({ id: e.id, name: e.name, grades: e.grades || [], unit: e.unit || "", location: e.location || "", good: e.qtyGood,
+      .map((e) => ({ id: e.id, name: e.name, subjectId: e.subjectId, kind: e.kind || "Thiết bị", topic: e.topic || "", grades: e.grades || [], unit: e.unit || "", location: e.location || "", good: e.qtyGood,
         available: availabilityOf(e, from, to < from ? from : to, active, slots).available }));
     res.json(list);
   }));
