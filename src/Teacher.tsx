@@ -7,7 +7,7 @@ import { useAuth } from "./AuthContext"
 import { SUBJECTS } from "./subjects"
 
 const card = "bg-white rounded-2xl border border-gray-200/80"
-const field = "w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#1a3670]/20 focus:border-[#1a3670] bg-white"
+const field = "w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#1a3670]/50 focus:border-[#1a3670] bg-white"
 const label = "block text-sm font-semibold text-gray-700 mb-1.5"
 const btnPrimary = "px-5 py-2.5 rounded-xl bg-[#1a3670] hover:bg-[#132d5e] text-white text-sm font-semibold disabled:opacity-50"
 const btnGhost = "px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold disabled:opacity-50"
@@ -95,7 +95,7 @@ export function TeacherHome({ go, onBorrow }: { go: (p: string) => void; onBorro
             <h2 className="font-semibold text-gray-900">{WD[day.getDay()]}, {day.toLocaleDateString("vi-VN")}</h2>
             {day >= firstBookable() && <button onClick={() => onBorrow({ date: iso(day) })} className="text-sm font-semibold text-[#1a3670] hover:underline">＋ Mượn cho ngày này</button>}
           </div>
-          {list === null ? <p className="p-6 text-sm text-gray-400">Đang tải…</p> : ofDay.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Không có phiếu mượn trong ngày này.</p> : (
+          {list === null ? <p className="p-6 text-sm text-gray-500">Đang tải…</p> : ofDay.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Không có phiếu mượn trong ngày này.</p> : (
             <ul className="divide-y divide-gray-100">{ofDay.map((r) => {
               const [st, cls] = statusOf(r)
               return (
@@ -230,10 +230,10 @@ export function BorrowPage({ go, preset, onDone }: { go: (p: string) => void; pr
   return (
     <main className="pt-20 lg:pt-10 pb-28 px-4 lg:px-10">
       <div className="max-w-5xl">
-        <div className="flex items-center gap-3 mb-5"><button onClick={() => go("home")} className="text-sm text-gray-500 hover:text-gray-800">← Lịch của tôi</button></div>
+        <div className="flex items-center gap-3 mb-5"><button onClick={() => go("home")} className="inline-flex items-center min-h-[40px] pr-3 text-sm text-gray-600 hover:text-gray-900">← Lịch của tôi</button></div>
         <h1 className="text-[28px] font-bold text-[#1F2937] tracking-tight mb-5">{preset?.clone ? "Nhân bản phiếu mượn" : "Đăng ký mượn thiết bị"}</h1>
         <div className="grid lg:grid-cols-5 gap-5 items-start">
-          <div className="lg:col-span-3 space-y-5">
+          <div className="lg:col-span-3 min-w-0 space-y-5">
             <section className={`${card} p-5`}>
               <div className="flex gap-2 mb-4">{([["day", "Mượn theo tiết"], ["long", "Mượn dài hạn"]] as const).map(([k, l]) => <button key={k} onClick={() => setMode(k)} aria-pressed={mode === k} className={`px-4 py-2 rounded-xl text-sm font-semibold ${mode === k ? "bg-[#1a3670] text-white" : "bg-gray-100 text-gray-700"}`}>{l}</button>)}</div>
               <div className="grid sm:grid-cols-2 gap-3">
@@ -241,8 +241,8 @@ export function BorrowPage({ go, preset, onDone }: { go: (p: string) => void; pr
                 {mode === "long" ? <div><label className={label} htmlFor="b-to">Đến ngày</label><input id="b-to" type="date" className={field} value={longTo} onChange={(e) => setLongTo(e.target.value)} />
                   <div className="flex gap-1.5 mt-1.5">{([["week", "Hết tuần"], ["month", "Hết tháng"], ["term", "Hết học kỳ"]] as const).map(([k, l]) => <button key={k} type="button" onClick={() => preset2(k)} className="px-2 py-1 rounded-md bg-gray-100 text-xs font-medium hover:bg-gray-200">{l}</button>)}</div></div>
                   : <div><span className={label}>Tiết</span>
-                    <div className="space-y-1.5"><div className="flex items-center gap-1.5"><span className="w-12 text-xs text-gray-500">Sáng</span>{MORNING.map((s) => <SlotBtn key={s} s={s} />)}</div>
-                      <div className="flex items-center gap-1.5"><span className="w-12 text-xs text-gray-500">Chiều</span>{AFTERNOON.map((s) => <SlotBtn key={s} s={s} />)}</div></div></div>}
+                    <div className="space-y-1.5"><div className="flex flex-wrap items-center gap-1.5"><span className="w-12 text-xs text-gray-500">Sáng</span>{MORNING.map((s) => <SlotBtn key={s} s={s} />)}</div>
+                      <div className="flex flex-wrap items-center gap-1.5"><span className="w-12 text-xs text-gray-500">Chiều</span>{AFTERNOON.map((s) => <SlotBtn key={s} s={s} />)}</div></div></div>}
                 <div><label className={label} htmlFor="b-subject">Môn</label><select id="b-subject" className={field} value={subjectId} onChange={(e) => setSubjectId(e.target.value)}><option value="">Chọn môn…</option>{SUBJECTS.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
                 <div><label className={label} htmlFor="b-class">Lớp</label><input id="b-class" className={field} value={className} placeholder="VD: 8A1" onChange={(e) => setClassName(e.target.value)} /></div>
                 <div><label className={label} htmlFor="b-ppct">Tiết PPCT (không bắt buộc)</label><input id="b-ppct" className={field} value={periodPPCT} placeholder="VD: Tiết 24" onChange={(e) => setPeriodPPCT(e.target.value)} /></div>
@@ -257,11 +257,11 @@ export function BorrowPage({ go, preset, onDone }: { go: (p: string) => void; pr
                 <h2 className="font-semibold text-gray-900">Chọn thiết bị</h2>
                 <div className="flex flex-wrap gap-2">
                   <input type="search" aria-label="Tìm thiết bị" className={`${field} flex-1 min-w-[200px] py-2`} placeholder="Tìm tên thiết bị (không cần dấu)…" value={q} onChange={(e) => setQ(e.target.value)} />
-                  <select aria-label="Lọc theo môn" className="border border-gray-200 rounded-xl px-3 text-sm" value={filter} onChange={(e) => setFilter(e.target.value)}><option value="subject">Môn của phiếu</option><option value="all">Tất cả môn</option></select>
+                  <select aria-label="Lọc theo môn" className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm" value={filter} onChange={(e) => setFilter(e.target.value)}><option value="subject">Môn của phiếu</option><option value="all">Tất cả môn</option></select>
                 </div>
                 {mode === "day" && !slots.length && <p className="text-xs text-amber-700">Chọn tiết để thấy số lượng còn trống chính xác.</p>}
               </div>
-              {avail === null ? <p className="p-6 text-sm text-gray-400">Đang tải…</p> : shown.length === 0 ? <p className="p-6 text-sm text-gray-500">{subjectId || q ? "Không tìm thấy thiết bị." : "Chọn môn hoặc gõ tên thiết bị để tìm."}</p> : (
+              {avail === null ? <p className="p-6 text-sm text-gray-500">Đang tải…</p> : shown.length === 0 ? <p className="p-6 text-sm text-gray-500">{subjectId || q ? "Không tìm thấy thiết bị." : "Chọn môn hoặc gõ tên thiết bị để tìm."}</p> : (
                 <ul className="divide-y divide-gray-50 max-h-[28rem] overflow-y-auto">{shown.map((e) => {
                   const n = qty[e.id] || 0, out = e.available <= 0
                   return (
@@ -278,7 +278,7 @@ export function BorrowPage({ go, preset, onDone }: { go: (p: string) => void; pr
             </section>
           </div>
 
-          <aside className="lg:col-span-2 lg:sticky lg:top-6 space-y-4">
+          <aside aria-label="Phiếu mượn" className="lg:col-span-2 min-w-0 lg:sticky lg:top-6 space-y-4">
             <section className={`${card} p-5`}>
               <h2 className="font-semibold text-gray-900 mb-3">Phiếu mượn</h2>
               <dl className="text-sm space-y-1 mb-3">
@@ -286,8 +286,8 @@ export function BorrowPage({ go, preset, onDone }: { go: (p: string) => void; pr
                 <div className="flex justify-between gap-2"><dt className="text-gray-500">Tiết</dt><dd className="text-right font-medium">{mode === "long" ? "Cả ngày" : slotText(slots) || "—"}</dd></div>
                 <div className="flex justify-between gap-2"><dt className="text-gray-500">Lớp, môn</dt><dd className="text-right font-medium">{className || "—"} · {SUBJECTS.find((s) => s.id === subjectId)?.name || "—"}</dd></div>
               </dl>
-              {picked.length === 0 ? <p className="text-sm text-gray-400 border-t border-gray-100 pt-3">Chưa chọn thiết bị</p> : (
-                <ul className="border-t border-gray-100 pt-2 space-y-1.5">{picked.map(([id, n]) => <li key={id} className="flex items-center justify-between gap-2 text-sm"><span className="min-w-0 truncate">{nameOf(id)}</span><span className="flex items-center gap-2 shrink-0"><strong>×{n}</strong><button onClick={() => setN(id, 0)} aria-label={`Bỏ ${nameOf(id)}`} className="text-gray-400 hover:text-red-600">✕</button></span></li>)}</ul>
+              {picked.length === 0 ? <p className="text-sm text-gray-500 border-t border-gray-100 pt-3">Chưa chọn thiết bị</p> : (
+                <ul className="border-t border-gray-100 pt-2 space-y-1.5">{picked.map(([id, n]) => <li key={id} className="flex items-center justify-between gap-2 text-sm"><span className="min-w-0 truncate">{nameOf(id)}</span><span className="flex items-center gap-2 shrink-0"><strong>×{n}</strong><button onClick={() => setN(id, 0)} aria-label={`Bỏ ${nameOf(id)}`} className="text-gray-500 hover:text-red-600">✕</button></span></li>)}</ul>
               )}
               <label className="block mt-3"><span className="sr-only">Ghi chú</span><input className={`${field} py-2 text-sm`} placeholder="Ghi chú cho phòng thiết bị (nếu có)" value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
               {error && <div role="alert" className="mt-3 rounded-lg bg-red-50 border border-red-200 text-red-700 px-3 py-2 text-sm">{error}</div>}
@@ -352,6 +352,7 @@ export function InfoPage({ equipmentRules, libraryRules, pointsRules, isLibraria
         <Sec t="Nội quy mượn – trả thiết bị">{equipmentRules}</Sec>
         {pointsRules && <Sec t="Quy chế điểm thi đua">{pointsRules}</Sec>}
         <Sec t="Nội quy thư viện">{libraryRules}{isLibrarian && <p className="text-sm"><button onClick={() => go("admin/muon-tra-sach")} className="font-semibold text-[#1a3670] hover:underline">Sửa quy định mượn sách →</button></p>}</Sec>
+        <Sec t="Phân công và quyền hạn"><RolesMatrix /></Sec>
         <Sec t="Bảo vệ dữ liệu cá nhân"><p>Website chỉ thu thập thông tin cần cho việc mượn – trả thiết bị và thư viện. Thầy cô xem, tải hoặc yêu cầu sửa, xóa dữ liệu của mình ở mục Hồ sơ.</p><p><button onClick={() => go("bao-mat")} className="font-semibold text-[#1a3670] hover:underline">Đọc toàn văn thông báo xử lý dữ liệu cá nhân →</button></p></Sec>
         <Sec t="Căn cứ pháp lý">
           <ul className="list-disc pl-5 space-y-1 text-sm">
@@ -366,5 +367,45 @@ export function InfoPage({ equipmentRules, libraryRules, pointsRules, isLibraria
         <Sec t="Cần hỗ trợ?"><p>Liên hệ phòng thiết bị hoặc thư viện của trường. Lỗi tài khoản, quên mật khẩu: liên hệ quản trị hệ thống.</p></Sec>
       </div>
     </main>
+  )
+}
+
+// ===================================================================
+// BẢNG PHÂN CÔNG – QUYỀN HẠN THEO VAI TRÒ (khớp với phân quyền ở máy chủ)
+// ===================================================================
+const ROLE_COLS = ["Giáo viên", "Tổ trưởng", "NV thiết bị", "Thủ thư", "Ban giám hiệu", "Quản trị hệ thống"]
+// L = thực hiện · D = duyệt, quyết định · X = chỉ xem · Ý = cho ý kiến · – = không
+const ROLE_ROWS: [string, string[]][] = [
+  ["Đăng ký mượn thiết bị (mọi người dùng đã đăng nhập)", ["L", "L", "L", "L", "L", "L"]],
+  ["Duyệt, từ chối phiếu mượn", ["–", "–", "D", "–", "D", "–"]],
+  ["Nhận trả thiết bị, ghi hỏng, mất", ["–", "–", "L", "–", "–", "–"]],
+  ["Nhập kho, kiểm kê, bảo trì, hóa chất, phòng bộ môn", ["–", "–", "L", "–", "X", "–"]],
+  ["Thanh lý thiết bị", ["–", "–", "Lập đề nghị", "–", "D", "–"]],
+  ["Xác nhận thiết bị bị mất", ["–", "–", "Xác minh", "–", "D", "–"]],
+  ["Mượn nhiều ngày thiết bị giá trị cao", ["–", "–", "–", "–", "D", "–"]],
+  ["Đề xuất mua sắm", ["Đề xuất", "Ý kiến của tổ", "Đánh dấu đã mua", "–", "D", "–"]],
+  ["Kế hoạch năm học, quyết định thành lập tổ", ["–", "–", "Soạn", "–", "D (kế hoạch)", "–"]],
+  ["Điểm thi đua: cộng, trừ, mở khóa", ["–", "–", "X", "–", "D", "–"]],
+  ["Báo cáo, sổ sách, minh chứng kiểm định", ["–", "–", "L", "–", "X", "–"]],
+  ["Thư viện: nhận sách, mượn – trả, tiết đọc, kiểm kê", ["–", "–", "L", "L", "X (thống kê)", "–"]],
+  ["Thanh lọc sách (cần số quyết định), miễn bồi thường sách", ["–", "–", "Thanh lọc", "Thanh lọc", "D (miễn)", "–"]],
+  ["Tài khoản, phân quyền, sao lưu, nhật ký đăng nhập", ["–", "–", "–", "–", "–", "L"]],
+]
+function RolesMatrix() {
+  const cell = (v: string) => (v === "–" ? <span className="text-gray-300">–</span> : <span className={v.startsWith("D") ? "font-semibold text-[#1a3670]" : v === "X" || v.startsWith("X ") ? "text-gray-500" : "text-gray-800"}>{v === "L" ? "Làm" : v === "D" ? "Duyệt" : v.startsWith("D (") ? `Duyệt${v.slice(1)}` : v === "X" ? "Xem" : v.startsWith("X (") ? `Xem${v.slice(1)}` : v}</span>)
+  return (
+    <div>
+      <p className="text-sm text-gray-600 mb-3">Mỗi người chỉ thấy và làm được việc của vai trò mình. Một người có nhiều vai trò (ví dụ nhân viên thiết bị kiêm thủ thư) thì được cộng quyền các vai trò đó.</p>
+      <div className="overflow-x-auto"><table className="w-full text-xs">
+        <thead><tr className="bg-gray-50"><th className="text-left px-2 py-2 font-semibold text-gray-600">Việc</th>{ROLE_COLS.map((c) => <th key={c} className="px-2 py-2 font-semibold text-gray-600 whitespace-nowrap">{c}</th>)}</tr></thead>
+        <tbody className="divide-y divide-gray-100">{ROLE_ROWS.map(([name, v]) => <tr key={name}><td className="px-2 py-1.5 text-gray-800 min-w-[220px]">{name}</td>{v.map((x, i) => <td key={i} className="px-2 py-1.5 text-center whitespace-nowrap">{cell(x)}</td>)}</tr>)}</tbody>
+      </table></div>
+      <ul className="list-disc pl-5 mt-3 text-sm text-gray-700 space-y-1">
+        <li><strong>Người làm không tự duyệt việc của mình:</strong> phiếu mượn của chính mình phải do người khác duyệt; thanh lý, xác nhận mất, mua sắm do Ban giám hiệu duyệt.</li>
+        <li><strong>Ban giám hiệu xem và quyết định,</strong> không tác nghiệp (nhập kho, nhận trả, kiểm kê…).</li>
+        <li><strong>Quản trị hệ thống không làm nghiệp vụ.</strong> Nếu kiêm nhiệm, quản trị gán thêm vai trò tương ứng cho tài khoản đó.</li>
+        <li>Trường chưa có tài khoản Ban giám hiệu thì nhân viên thiết bị tạm thời quyết định thay.</li>
+      </ul>
+    </div>
   )
 }

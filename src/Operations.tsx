@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   fetchAudits, startAudit, fetchAudit, saveAudit, finishAudit, cancelAudit,
   fetchInventory, fetchMaintenance, createMaintenance, completeMaintenance, fetchReport, fetchEquipmentDetail,
-  fetchDisposals, createDisposal, fetchRecords, fetchNotifications, fetchLossReports, confirmLoss, rejectLoss, fetchRooms, fetchRoomLog,
+  fetchDisposals, createDisposal, decideDisposal, fetchCapabilities, type Capabilities, fetchRecords, fetchNotifications, fetchLossReports, confirmLoss, rejectLoss, fetchRooms, fetchRoomLog,
   fetchEquipmentHistory, verifyLoss, fetchAlerts, fetchChanges, type EquipmentHistory,
   type Audit, type AuditItem, type Equipment, type Maintenance, type Report, type BorrowDraft, type Disposal, type BorrowRecord, type Notification, type LossReport, type Room,
 } from "@/api"
@@ -12,13 +12,13 @@ import { printHtml, esc, table, dots } from "./printing"
 import { printSummaryReport } from "./Planning"
 
 const money = (n: number) => `${(n || 0).toLocaleString("vi-VN")} đ`
-const fieldBase = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/20 focus:border-[#1a3670] bg-white"
+const fieldBase = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/50 focus:border-[#1a3670] bg-white"
 const field = `w-full ${fieldBase}`
 const label = "block text-xs font-semibold text-gray-600 mb-1"
 const btnPrimary = "px-4 py-2 rounded-lg bg-[#1a3670] hover:bg-[#132d5e] text-white text-sm font-semibold disabled:opacity-50"
 const btnGhost = "px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold disabled:opacity-50"
 const card = "bg-white rounded-2xl shadow-sm border border-gray-100"
-const th = "px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap"
+const th = "relative px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap"
 const todayIso = () => new Date().toLocaleDateString("sv-SE")
 const isoToVn = (d: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d); return m ? `${m[3]}/${m[2]}/${m[1]}` : "" }
 const fmtTime = (iso?: string) => (iso ? new Date(iso).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" }) : "")
@@ -96,7 +96,7 @@ export function AuditTab({ subjects }: { subjects: Subject[] }) {
         <Err msg={error} />
         <div className={`${card} p-5 mb-4 flex flex-wrap items-center gap-3 justify-between`}>
           <div>
-            <h3 className="font-bold text-gray-900">{current.title} {current.subjectId ? `– ${subjects.find((s) => s.id === current.subjectId)?.name}` : "– tất cả môn"}</h3>
+            <h2 className="font-bold text-gray-900">{current.title} {current.subjectId ? `– ${subjects.find((s) => s.id === current.subjectId)?.name}` : "– tất cả môn"}</h2>
             <p className="text-xs text-gray-500">{done ? `Hoàn tất ${fmtTime(current.finishedAt)}` : `Bắt đầu ${fmtTime(current.createdAt)} · đã đếm ${counted}/${current.items.length} thiết bị`}</p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -120,13 +120,13 @@ export function AuditTab({ subjects }: { subjects: Subject[] }) {
         <label className="flex items-center gap-1.5 text-sm text-gray-600 mb-2"><input type="checkbox" checked={onlyTodo} onChange={(e) => setOnlyTodo(e.target.checked)} />{done ? "Chỉ hiện dòng có chênh lệch" : "Chỉ hiện dòng chưa đếm hoặc có chênh lệch"}</label>
         <div className={`${card} overflow-x-auto`}>
           <table className="w-full text-sm">
-            <thead><tr className="bg-gray-50 border-b border-gray-100">{["Thiết bị", "Tốt (sổ)", "Đang mượn", "Hỏng (sổ)", "Phải có", "Đếm: tốt", "Đếm: hỏng", "Chênh lệch", "Ghi chú"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+            <thead><tr className="bg-gray-50 border-b border-gray-100">{["Thiết bị", "Tốt (sổ)", "Đang mượn", "Hỏng (sổ)", "Phải có", "Đếm: tốt", "Đếm: hỏng", "Chênh lệch", "Ghi chú"].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-50">
               {items.map((i) => {
                 const d = done ? i.diff ?? null : diffOf(i)
                 return (
                   <tr key={i.equipmentId} className={d ? (d < 0 ? "bg-rose-50/60" : "bg-amber-50/60") : ""}>
-                    <td className="px-3 py-2 min-w-[200px]"><div className="font-medium text-gray-900">{i.name}</div><div className="text-[11px] text-gray-400">{i.location}</div></td>
+                    <td className="px-3 py-2 min-w-[200px]"><div className="font-medium text-gray-900">{i.name}</div><div className="text-[11px] text-gray-500">{i.location}</div></td>
                     <td className="px-3 py-2 text-gray-600">{i.sysGood}</td>
                     <td className="px-3 py-2 text-gray-600">{i.out}</td>
                     <td className="px-3 py-2 text-gray-600">{i.sysBroken}</td>
@@ -149,7 +149,7 @@ export function AuditTab({ subjects }: { subjects: Subject[] }) {
     <div className="space-y-4">
       <Err msg={error} />
       <div className={`${card} p-5`}>
-        <h3 className="font-bold text-gray-900 mb-1">Bắt đầu đợt kiểm kê mới</h3>
+        <h2 className="font-bold text-gray-900 mb-1">Bắt đầu đợt kiểm kê mới</h2>
         <p className="text-xs text-gray-500 mb-3">Hệ thống chụp lại số liệu sổ sách hiện tại, sau đó bạn nhập số đếm thực tế từng thiết bị. Có thể lưu nháp và làm tiếp sau.</p>
         <div className="flex flex-wrap gap-3 items-end">
           <div><label className={label} htmlFor="au-sub">Phạm vi</label>
@@ -161,8 +161,8 @@ export function AuditTab({ subjects }: { subjects: Subject[] }) {
         </div>
       </div>
       <div className={`${card} overflow-hidden`}>
-        <div className="px-5 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">Các đợt kiểm kê</h3></div>
-        {list === null ? <p className="p-6 text-sm text-gray-400">Đang tải…</p> : list.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">Chưa có đợt kiểm kê nào</p> : (
+        <div className="px-5 py-4 border-b border-gray-100"><h2 className="font-bold text-gray-900">Các đợt kiểm kê</h2></div>
+        {list === null ? <p className="p-6 text-sm text-gray-500">Đang tải…</p> : list.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Chưa có đợt kiểm kê nào</p> : (
           <ul className="divide-y divide-gray-50">
             {list.map((a) => (
               <li key={a.id} className="px-5 py-3 flex flex-wrap items-center justify-between gap-2">
@@ -218,7 +218,7 @@ export function MaintenanceTab({ subjects }: { subjects: Subject[] }) {
   return (
     <div className="grid lg:grid-cols-5 gap-5 items-start">
       <div className={`lg:col-span-2 ${card} p-5`}>
-        <h3 className="font-bold text-gray-900 mb-1">Gửi bảo trì / bảo dưỡng</h3>
+        <h2 className="font-bold text-gray-900 mb-1">Gửi bảo trì / bảo dưỡng</h2>
         <p className="text-xs text-gray-500 mb-4">Thiết bị gửi đi chuyển sang trạng thái “đang sửa”, không cho mượn được cho đến khi hoàn thành.</p>
         <Err msg={error} />
         {broken.length > 0 && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">Đang có {broken.reduce((s, e) => s + e.qtyBroken, 0)} thiết bị hỏng chờ xử lý ({broken.length} loại).</p>}
@@ -252,8 +252,8 @@ export function MaintenanceTab({ subjects }: { subjects: Subject[] }) {
 
       <div className="lg:col-span-3 space-y-4">
         <div className={`${card} overflow-hidden`}>
-          <div className="px-5 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">Đang thực hiện ({running.length})</h3></div>
-          {running.length === 0 ? <p className="p-6 text-center text-sm text-gray-400">Không có thiết bị nào đang bảo trì</p> : (
+          <div className="px-5 py-4 border-b border-gray-100"><h2 className="font-bold text-gray-900">Đang thực hiện ({running.length})</h2></div>
+          {running.length === 0 ? <p className="p-6 text-center text-sm text-gray-500">Không có thiết bị nào đang bảo trì</p> : (
             <ul className="divide-y divide-gray-50">
               {running.map((m) => (
                 <li key={m.id} className="px-5 py-3 flex flex-wrap items-center justify-between gap-2">
@@ -265,13 +265,13 @@ export function MaintenanceTab({ subjects }: { subjects: Subject[] }) {
           )}
         </div>
         <div className={`${card} overflow-hidden`}>
-          <div className="px-5 py-4 border-b border-gray-100 flex justify-between"><h3 className="font-bold text-gray-900">Đã hoàn thành</h3><span className="text-sm text-gray-500">Tổng chi phí: <strong className="text-gray-800">{money(totalCost)}</strong></span></div>
-          {finished.length === 0 ? <p className="p-6 text-center text-sm text-gray-400">Chưa có</p> : (
+          <div className="px-5 py-4 border-b border-gray-100 flex justify-between"><h2 className="font-bold text-gray-900">Đã hoàn thành</h2><span className="text-sm text-gray-500">Tổng chi phí: <strong className="text-gray-800">{money(totalCost)}</strong></span></div>
+          {finished.length === 0 ? <p className="p-6 text-center text-sm text-gray-500">Chưa có</p> : (
             <div className="overflow-x-auto"><table className="w-full text-sm">
-              <thead><tr className="bg-gray-50">{["Thiết bị", "Loại", "Gửi", "Xong", "Sửa được", "Thanh lý", "Chi phí", ""].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+              <thead><tr className="bg-gray-50">{["Thiết bị", "Loại", "Gửi", "Xong", "Sửa được", "Thanh lý", "Chi phí", ""].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
               <tbody className="divide-y divide-gray-50">{finished.map((m) => (
-                <tr key={m.id}><td className="px-3 py-2 font-medium">{m.name}{m.resultNote && <div className="text-[11px] text-gray-400">{m.resultNote}</div>}</td><td className="px-3 py-2 text-gray-600">{m.kind}</td><td className="px-3 py-2 text-xs text-gray-600">{m.date}</td><td className="px-3 py-2 text-xs text-gray-600">{m.finishedOn}</td>
-                  <td className="px-3 py-2 text-green-700 font-semibold">{m.repaired}</td><td className={`px-3 py-2 ${m.disposed ? "text-rose-600 font-semibold" : "text-gray-400"}`}>{m.disposed}</td><td className="px-3 py-2 whitespace-nowrap">{money(m.cost)}</td><td className="px-3 py-2"><button onClick={() => printDamageMinutes(m, inventory.find((e) => e.id === m.equipmentId))} className="text-xs font-semibold text-[#1a3670] hover:underline whitespace-nowrap">In biên bản</button></td></tr>
+                <tr key={m.id}><td className="px-3 py-2 font-medium">{m.name}{m.resultNote && <div className="text-[11px] text-gray-500">{m.resultNote}</div>}</td><td className="px-3 py-2 text-gray-600">{m.kind}</td><td className="px-3 py-2 text-xs text-gray-600">{m.date}</td><td className="px-3 py-2 text-xs text-gray-600">{m.finishedOn}</td>
+                  <td className="px-3 py-2 text-green-700 font-semibold">{m.repaired}</td><td className={`px-3 py-2 ${m.disposed ? "text-rose-600 font-semibold" : "text-gray-500"}`}>{m.disposed}</td><td className="px-3 py-2 whitespace-nowrap">{money(m.cost)}</td><td className="px-3 py-2"><button onClick={() => printDamageMinutes(m, inventory.find((e) => e.id === m.equipmentId))} className="text-xs font-semibold text-[#1a3670] hover:underline whitespace-nowrap">In biên bản</button></td></tr>
               ))}</tbody>
             </table></div>
           )}
@@ -281,7 +281,7 @@ export function MaintenanceTab({ subjects }: { subjects: Subject[] }) {
       {done && (
         <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-3" onMouseDown={(e) => { if (e.target === e.currentTarget) setDone(null) }}>
           <div role="dialog" aria-modal="true" aria-label="Hoàn thành bảo trì" className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5">
-            <h3 className="font-bold text-gray-900 mb-1">Hoàn thành: {done.name} × {done.quantity}</h3>
+            <h2 className="font-bold text-gray-900 mb-1">Hoàn thành: {done.name} × {done.quantity}</h2>
             <p className="text-xs text-gray-500 mb-4">Thiết bị sửa được quay về nhóm “tốt”; không sửa được thì ghi thanh lý (rời khỏi kho).</p>
             <Err msg={error} />
             <div className="grid grid-cols-3 gap-3 mb-3">
@@ -363,7 +363,7 @@ export function ReportsTab() {
         <button onClick={doExport} disabled={!r || busy} className={`${btnPrimary} ml-auto`}>Xuất Excel</button>
       </div>
       <Err msg={error} />
-      {!r ? <p className="text-sm text-gray-400">Đang tải…</p> : (
+      {!r ? <p className="text-sm text-gray-500">Đang tải…</p> : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
@@ -372,12 +372,12 @@ export function ReportsTab() {
               ["Hỏng / mất khi trả", `${r.summary.damaged} / ${r.summary.lost}`, `bồi thường ${money(r.summary.compensation)}`],
               ["Chi phí", money(r.summary.purchaseTotal + r.summary.maintenanceCost), `mua mới ${money(r.summary.purchaseTotal)} · bảo trì ${money(r.summary.maintenanceCost)}`],
             ].map(([l, v, sub]) => (
-              <div key={String(l)} className="bg-white border border-gray-200 rounded-xl px-4 py-3"><div className="text-xs text-gray-500">{l}</div><div className="text-2xl font-bold text-gray-900 truncate">{v}</div><div className="text-[11px] text-gray-400 truncate" title={String(sub)}>{sub}</div></div>
+              <div key={String(l)} className="bg-white border border-gray-200 rounded-xl px-4 py-3"><div className="text-xs text-gray-500">{l}</div><div className="text-2xl font-bold text-gray-900 truncate">{v}</div><div className="text-[11px] text-gray-500 truncate" title={String(sub)}>{sub}</div></div>
             ))}
           </div>
           <div className="grid lg:grid-cols-2 gap-4">
             <div className={`${card} p-5`}>
-              <h3 className="font-bold text-gray-900 mb-3">Lượt mượn theo môn</h3>
+              <h2 className="font-bold text-gray-900 mb-3">Lượt mượn theo môn</h2>
               <div className="space-y-2">{r.bySubject.map((s: Report) => (
                 <div key={s.subjectId} className="flex items-center gap-3 text-sm">
                   <span className="w-32 shrink-0 text-gray-700">{s.name}</span>
@@ -387,34 +387,34 @@ export function ReportsTab() {
               ))}</div>
             </div>
             <div className={`${card} p-5`}>
-              <h3 className="font-bold text-gray-900 mb-3">Thiết bị được mượn nhiều nhất</h3>
-              {r.byEquipment.length === 0 ? <p className="text-sm text-gray-400">Chưa có dữ liệu (phiếu nhập tay không có mã thiết bị: {r.manualRecords})</p> : (
+              <h2 className="font-bold text-gray-900 mb-3">Thiết bị được mượn nhiều nhất</h2>
+              {r.byEquipment.length === 0 ? <p className="text-sm text-gray-500">Chưa có dữ liệu (phiếu nhập tay không có mã thiết bị: {r.manualRecords})</p> : (
                 <ol className="space-y-1.5 text-sm">{r.byEquipment.slice(0, 8).map((e: Report, i: number) => (
-                  <li key={e.equipmentId} className="flex justify-between gap-3"><span className="text-gray-700"><span className="text-gray-400 mr-2">{i + 1}.</span>{e.name}</span><span className="font-semibold whitespace-nowrap">{e.times} lượt</span></li>
+                  <li key={e.equipmentId} className="flex justify-between gap-3"><span className="text-gray-700"><span className="text-gray-500 mr-2">{i + 1}.</span>{e.name}</span><span className="font-semibold whitespace-nowrap">{e.times} lượt</span></li>
                 ))}</ol>
               )}
               <p className="text-xs text-gray-500 mt-3">{r.unusedEquipment.length} loại thiết bị chưa được mượn lần nào trong kỳ (xem trong file Excel).</p>
             </div>
           </div>
           <div className={`${card} overflow-hidden`}>
-            <div className="px-5 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">Số tiết sử dụng thiết bị: thực hành và biểu diễn</h3></div>
+            <div className="px-5 py-4 border-b border-gray-100"><h2 className="font-bold text-gray-900">Số tiết sử dụng thiết bị: thực hành và biểu diễn</h2></div>
             <div className="overflow-x-auto"><table className="w-full text-sm">
-              <thead><tr className="bg-gray-50">{["Tổ bộ môn", "Môn", "Thực hành", "Biểu diễn", "Tổng"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+              <thead><tr className="bg-gray-50">{["Tổ bộ môn", "Môn", "Thực hành", "Biểu diễn", "Tổng"].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
               <tbody className="divide-y divide-gray-50">{(r.usageBySubject || []).map((u: Report) => <tr key={u.subjectId}><td className="px-3 py-2 text-xs text-gray-500">{u.group}</td><td className="px-3 py-2">{u.name}</td><td className="px-3 py-2 font-semibold">{u.practice}</td><td className="px-3 py-2">{u.demo}</td><td className="px-3 py-2 font-semibold">{u.practice + u.demo}</td></tr>)}</tbody>
             </table></div>
           </div>
           <div className="grid lg:grid-cols-2 gap-4">
             <div className={`${card} overflow-hidden`}>
-              <div className="px-5 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">Theo giáo viên</h3></div>
+              <div className="px-5 py-4 border-b border-gray-100"><h2 className="font-bold text-gray-900">Theo giáo viên</h2></div>
               <div className="overflow-x-auto max-h-80"><table className="w-full text-sm">
-                <thead className="sticky top-0"><tr className="bg-gray-50">{["Giáo viên", "Phiếu", "Trễ", "Hỏng", "Mất"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
-                <tbody className="divide-y divide-gray-50">{r.byTeacher.map((t: Report) => <tr key={t.teacherName}><td className="px-3 py-2">{t.teacherName}</td><td className="px-3 py-2">{t.count}</td><td className={`px-3 py-2 ${t.late ? "text-rose-600 font-semibold" : "text-gray-400"}`}>{t.late}</td><td className="px-3 py-2">{t.damaged}</td><td className="px-3 py-2">{t.lost}</td></tr>)}</tbody>
+                <thead className="sticky top-0"><tr className="bg-gray-50">{["Giáo viên", "Phiếu", "Trễ", "Hỏng", "Mất"].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
+                <tbody className="divide-y divide-gray-50">{r.byTeacher.map((t: Report) => <tr key={t.teacherName}><td className="px-3 py-2">{t.teacherName}</td><td className="px-3 py-2">{t.count}</td><td className={`px-3 py-2 ${t.late ? "text-rose-600 font-semibold" : "text-gray-500"}`}>{t.late}</td><td className="px-3 py-2">{t.damaged}</td><td className="px-3 py-2">{t.lost}</td></tr>)}</tbody>
               </table></div>
             </div>
             <div className={`${card} overflow-hidden`}>
-              <div className="px-5 py-4 border-b border-gray-100 flex justify-between"><h3 className="font-bold text-gray-900">Tình trạng kho hiện tại</h3><span className="text-sm text-gray-500">{money(r.summary.inventoryValue)}</span></div>
+              <div className="px-5 py-4 border-b border-gray-100 flex justify-between"><h2 className="font-bold text-gray-900">Tình trạng kho hiện tại</h2><span className="text-sm text-gray-500">{money(r.summary.inventoryValue)}</span></div>
               <div className="overflow-x-auto"><table className="w-full text-sm">
-                <thead><tr className="bg-gray-50">{["Môn", "Tốt", "Hỏng", "Sửa", "Mất", "Giá trị"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+                <thead><tr className="bg-gray-50">{["Môn", "Tốt", "Hỏng", "Sửa", "Mất", "Giá trị"].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
                 <tbody className="divide-y divide-gray-50">{r.invBySubject.map((s: Report) => <tr key={s.subjectId}><td className="px-3 py-2">{s.name}</td><td className="px-3 py-2 text-green-700">{s.good}</td><td className="px-3 py-2">{s.broken}</td><td className="px-3 py-2">{s.repair}</td><td className="px-3 py-2">{s.lost}</td><td className="px-3 py-2 whitespace-nowrap text-xs">{money(s.value)}</td></tr>)}</tbody>
               </table></div>
             </div>
@@ -460,7 +460,7 @@ export function EquipmentPage({ id, isAdmin, loggedIn, login, onBorrow, goHome }
   const wrap = (children: React.ReactNode) => <main className="pt-20 lg:pt-10 pb-24 px-4 lg:px-10"><div className="max-w-2xl mx-auto">{children}</div></main>
   if (!loggedIn) return wrap(<div className="text-center py-16"><h1 className="text-xl font-bold text-gray-900 mb-2">Đăng nhập để xem thông tin thiết bị</h1><button onClick={login} className={btnPrimary}>Đăng nhập bằng Google</button></div>)
   if (error) return wrap(<div className="text-center py-16"><p className="text-gray-600 mb-3">{error}</p><button onClick={goHome} className={btnGhost}>Về trang chủ</button></div>)
-  if (!d) return wrap(<p className="text-sm text-gray-400">Đang tải…</p>)
+  if (!d) return wrap(<p className="text-sm text-gray-500">Đang tải…</p>)
   const e = d.equipment
   return wrap(
     <>
@@ -484,7 +484,7 @@ export function EquipmentPage({ id, isAdmin, loggedIn, login, onBorrow, goHome }
       {isAdmin && d.history && (
         <div className={`${card} p-5 mb-4`}>
           <h2 className="font-bold text-gray-900 mb-2">Lịch sử mượn gần đây</h2>
-          {d.history.length === 0 ? <p className="text-sm text-gray-400">Chưa có</p> : <ul className="text-sm divide-y divide-gray-50">{d.history.map((h) => <li key={h.id} className="py-1.5 flex justify-between gap-2"><span>{h.teacherName} · {h.className} · ×{h.quantity}</span><span className="text-gray-500 text-xs whitespace-nowrap">{h.borrowDate} · {h.status}</span></li>)}</ul>}
+          {d.history.length === 0 ? <p className="text-sm text-gray-500">Chưa có</p> : <ul className="text-sm divide-y divide-gray-50">{d.history.map((h) => <li key={h.id} className="py-1.5 flex justify-between gap-2"><span>{h.teacherName} · {h.className} · ×{h.quantity}</span><span className="text-gray-500 text-xs whitespace-nowrap">{h.borrowDate} · {h.status}</span></li>)}</ul>}
           {!!d.maintenance?.length && (<><h2 className="font-bold text-gray-900 mt-4 mb-2">Bảo trì</h2><ul className="text-sm divide-y divide-gray-50">{d.maintenance.map((m) => <li key={m.id} className="py-1.5 flex justify-between gap-2"><span>{m.kind} ×{m.quantity}{m.content ? ` · ${m.content}` : ""}</span><span className="text-gray-500 text-xs whitespace-nowrap">{m.date} · {m.status}</span></li>)}</ul></>)}
         </div>
       )}
@@ -550,8 +550,8 @@ export function Dashboard({ go }: { go: (section: string) => void }) {
       </div>
       <div className="grid lg:grid-cols-3 gap-4">
         <div className={`${card} p-5 lg:col-span-2`}>
-          <div className="flex items-center justify-between mb-3"><h3 className="font-bold text-gray-900">Việc cần làm</h3><button onClick={() => go("muon-tra")} className="text-xs font-semibold text-[#1a3670] hover:underline">Mở Mượn – trả</button></div>
-          {pending.length + overdue.length + todayOut.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">Không có việc tồn đọng</p> : (
+          <div className="flex items-center justify-between mb-3"><h2 className="font-bold text-gray-900">Việc cần làm</h2><button onClick={() => go("muon-tra")} className="text-xs font-semibold text-[#1a3670] hover:underline">Mở Mượn – trả</button></div>
+          {pending.length + overdue.length + todayOut.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">Không có việc tồn đọng</p> : (
             <div className="grid md:grid-cols-2 gap-4">
               <div><div className="text-xs font-bold text-amber-700 uppercase mb-1">Chờ duyệt ({pending.length})</div><ul className="divide-y divide-gray-50">{pending.slice(0, 5).map((r) => task(r, `mượn ${r.borrowDate}`))}</ul></div>
               <div><div className="text-xs font-bold text-rose-700 uppercase mb-1">Quá hạn trả ({overdue.length})</div><ul className="divide-y divide-gray-50">{overdue.slice(0, 5).map((r) => task(r, `hạn ${r.returnDate}`))}</ul>
@@ -561,16 +561,16 @@ export function Dashboard({ go }: { go: (section: string) => void }) {
           )}
         </div>
         <div className={`${card} p-5`}>
-          <h3 className="font-bold text-gray-900 mb-3">Hoạt động gần đây</h3>
-          {notifs.length === 0 ? <p className="text-sm text-gray-400">Chưa có</p> : (
-            <ul className="space-y-2.5">{notifs.map((n) => <li key={n.id} className="text-sm"><div className="font-medium text-gray-800">{n.title}</div><div className="text-xs text-gray-500 truncate" title={n.message}>{n.message}</div><div className="text-[10px] text-gray-400">{fmtTime(n.createdAt)}</div></li>)}</ul>
+          <h2 className="font-bold text-gray-900 mb-3">Hoạt động gần đây</h2>
+          {notifs.length === 0 ? <p className="text-sm text-gray-500">Chưa có</p> : (
+            <ul className="space-y-2.5">{notifs.map((n) => <li key={n.id} className="text-sm"><div className="font-medium text-gray-800">{n.title}</div><div className="text-xs text-gray-500 truncate" title={n.message}>{n.message}</div><div className="text-[10px] text-gray-500">{fmtTime(n.createdAt)}</div></li>)}</ul>
           )}
         </div>
       </div>
       <div className="grid lg:grid-cols-3 gap-4">
         <div className={`${card} p-5 lg:col-span-2`}>
-          <h3 className="font-bold text-gray-900 mb-3">Lượt mượn theo tháng – năm học {rep?.schoolYear || ""}</h3>
-          {months.length === 0 ? <p className="text-sm text-gray-400">Chưa có dữ liệu</p> : (
+          <h2 className="font-bold text-gray-900 mb-3">Lượt mượn theo tháng – năm học {rep?.schoolYear || ""}</h2>
+          {months.length === 0 ? <p className="text-sm text-gray-500">Chưa có dữ liệu</p> : (
             <div className="flex items-end gap-3 h-40">{months.map((m: Report) => (
               <div key={m.month} className="flex-1 flex flex-col items-center justify-end h-full min-w-0">
                 <span className="text-xs font-semibold text-gray-700 mb-1">{m.count}</span>
@@ -581,14 +581,14 @@ export function Dashboard({ go }: { go: (section: string) => void }) {
           )}
         </div>
         <div className={`${card} p-5`}>
-          <h3 className="font-bold text-gray-900 mb-3">Năm học này</h3>
+          <h2 className="font-bold text-gray-900 mb-3">Năm học này</h2>
           {rep ? (
             <dl className="text-sm space-y-2">
               {[["Phiếu mượn", rep.summary.records], ["Giáo viên đã mượn", rep.summary.teachers], ["Lần trả trễ", rep.summary.lateReturns], ["Hỏng / mất khi trả", `${rep.summary.damaged} / ${rep.summary.lost}`], ["Chi mua mới", money(rep.summary.purchaseTotal)], ["Chi bảo trì", money(rep.summary.maintenanceCost)], ["Ghi giảm", `${rep.summary.disposedCount || 0} thiết bị`]].map(([k, v]) => (
                 <div key={String(k)} className="flex justify-between gap-3"><dt className="text-gray-500">{k}</dt><dd className="font-semibold text-gray-900">{v}</dd></div>
               ))}
             </dl>
-          ) : <p className="text-sm text-gray-400">Đang tải…</p>}
+          ) : <p className="text-sm text-gray-500">Đang tải…</p>}
         </div>
       </div>
     </div>
@@ -605,21 +605,25 @@ export function DisposalTab({ subjects }: { subjects: Subject[] }) {
   const [error, setError] = useState("")
   const [ok, setOk] = useState("")
   const [busy, setBusy] = useState(false)
+  const [caps, setCaps] = useState<Capabilities | null>(null)
+  useEffect(() => { fetchCapabilities().then(setCaps).catch(() => {}) }, [])
+  // Đã có Ban giám hiệu: nhân viên chỉ lập đề nghị; Ban giám hiệu duyệt (kèm số quyết định) thì mới trừ kho
+  const proposeOnly = !!caps?.principalConfigured && !caps.canDecide
   const load = useCallback(() => { fetchInventory().then(setInventory).catch(() => {}); fetchDisposals().then(setList).catch((e) => setError(e.message)) }, [])
   useEffect(() => { load() }, [load])
   const eq = inventory.find((e) => e.id === f.equipmentId)
   const max = eq ? (f.source === "good" ? eq.qtyGood : f.source === "lost" ? eq.qtyLost : eq.qtyBroken) : 0
   const save = async () => {
     setBusy(true); setError(""); setOk("")
-    try { const d = await createDisposal({ ...f, date: isoToVn(f.date) }); setOk(`Đã ghi giảm ${d.quantity} “${d.name}” (${d.reason}).`); setF({ ...f, equipmentId: "", quantity: 1, decisionNo: "", note: "" }); load() }
+    try { const d = await createDisposal({ ...f, date: isoToVn(f.date) }); setOk(d.status === "Chờ duyệt" ? `Đã gửi đề nghị thanh lý ${d.quantity} “${d.name}”. Kho chưa bị trừ cho đến khi Ban giám hiệu duyệt.` : `Đã ghi giảm ${d.quantity} “${d.name}” (${d.reason}).`); setF({ ...f, equipmentId: "", quantity: 1, decisionNo: "", note: "" }); load() }
     catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } finally { setBusy(false) }
   }
   const total = (list || []).reduce((s, d) => s + d.value, 0)
   return (
     <div className="grid lg:grid-cols-5 gap-5 items-start">
       <div className={`lg:col-span-2 ${card} p-5`}>
-        <h3 className="font-bold text-gray-900 mb-1">Lập chứng từ ghi giảm</h3>
-        <p className="text-xs text-gray-500 mb-4">Dùng khi thanh lý, xác nhận mất, điều chuyển sang đơn vị khác. Thiết bị ghi giảm rời khỏi số liệu kho.</p>
+        <h2 className="font-bold text-gray-900 mb-1">{proposeOnly ? "Lập đề nghị thanh lý" : "Lập chứng từ ghi giảm"}</h2>
+        <p className="text-xs text-gray-500 mb-4">{proposeOnly ? "Đề nghị được gửi Ban giám hiệu. Ban giám hiệu duyệt và ghi số quyết định thì thiết bị mới rời khỏi số liệu kho." : "Dùng khi thanh lý, xác nhận mất, điều chuyển sang đơn vị khác. Thiết bị ghi giảm rời khỏi số liệu kho."}</p>
         <Err msg={error} />
         {ok && <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 text-sm mb-3">{ok}</div>}
         <div className="space-y-3">
@@ -640,17 +644,17 @@ export function DisposalTab({ subjects }: { subjects: Subject[] }) {
           <div><label className={label} htmlFor="d-no">Số quyết định / biên bản</label><input id="d-no" className={field} value={f.decisionNo} onChange={(e) => setF({ ...f, decisionNo: e.target.value })} placeholder="VD: 12/QĐ-THCSLĐ" /></div>
           <div><label className={label} htmlFor="d-note">Ghi chú</label><input id="d-note" className={field} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></div>
         </div>
-        <div className="flex justify-end mt-4"><button onClick={save} disabled={busy || !f.equipmentId || f.quantity > max} className={btnPrimary}>Ghi giảm</button></div>
+        <div className="flex justify-end mt-4"><button onClick={save} disabled={busy || !f.equipmentId || f.quantity > max || (caps?.viewOnlyAdmin ?? false)} className={btnPrimary}>{proposeOnly ? "Gửi đề nghị" : "Ghi giảm"}</button></div>
       </div>
       <div className={`lg:col-span-3 ${card} overflow-hidden`}>
-        <div className="px-5 py-4 border-b border-gray-100 flex justify-between gap-2 flex-wrap"><h3 className="font-bold text-gray-900">Lịch sử ghi giảm</h3>
+        <div className="px-5 py-4 border-b border-gray-100 flex justify-between gap-2 flex-wrap"><h2 className="font-bold text-gray-900">Lịch sử ghi giảm</h2>
           <div className="flex items-center gap-3"><span className="text-sm text-gray-500">Giá trị: <strong className="text-gray-800">{money(total)}</strong></span>
             <button disabled={!list?.length} onClick={() => exportExcel("Ghi-giam-thiet-bi.xlsx", [{ name: "Ghi giảm", rows: (list || []).map((d) => ({ "Ngày": d.date, "Thiết bị": d.name, "Số lượng": d.quantity, "Lý do": d.reason, "Số QĐ/BB": d.decisionNo, "Đơn giá (đ)": d.unitPrice, "Giá trị (đ)": d.value, "Ghi chú": d.note, "Người lập": d.createdBy })) }])} className={btnGhost}>Xuất Excel</button></div>
         </div>
-        {list === null ? <p className="p-6 text-sm text-gray-400">Đang tải…</p> : list.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">Chưa có chứng từ ghi giảm</p> : (
+        {list === null ? <p className="p-6 text-sm text-gray-500">Đang tải…</p> : list.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Chưa có chứng từ ghi giảm</p> : (
           <div className="overflow-x-auto"><table className="w-full text-sm">
-            <thead><tr className="bg-gray-50">{["Ngày", "Thiết bị", "SL", "Lý do", "Số QĐ/BB", "Giá trị", ""].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-50">{list.map((d) => <tr key={d.id}><td className="px-3 py-2 text-xs whitespace-nowrap">{d.date}</td><td className="px-3 py-2">{d.name}{d.note && <div className="text-[11px] text-gray-400">{d.note}</div>}</td><td className="px-3 py-2 font-semibold">{d.quantity}</td><td className="px-3 py-2">{d.reason}</td><td className="px-3 py-2 text-xs">{d.decisionNo}</td><td className="px-3 py-2 whitespace-nowrap text-xs">{money(d.value)}</td><td className="px-3 py-2"><button onClick={() => printDisposalMinutes(d, inventory.find((e) => e.id === d.equipmentId))} className="text-xs font-semibold text-[#1a3670] hover:underline whitespace-nowrap">In biên bản</button></td></tr>)}</tbody>
+            <thead><tr className="bg-gray-50">{["Ngày", "Thiết bị", "SL", "Lý do", "Trạng thái", "Số QĐ/BB", "Giá trị", ""].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
+            <tbody className="divide-y divide-gray-50">{list.map((d) => <tr key={d.id}><td className="px-3 py-2 text-xs whitespace-nowrap">{d.date}</td><td className="px-3 py-2">{d.name}{d.note && <div className="text-[11px] text-gray-500">{d.note}</div>}</td><td className="px-3 py-2 font-semibold">{d.quantity}</td><td className="px-3 py-2">{d.reason}</td><td className="px-3 py-2 text-xs whitespace-nowrap">{d.status === "Chờ duyệt" ? (caps?.canDecide ? <span className="flex gap-1.5"><button onClick={() => { const no = prompt("Số quyết định thanh lý của Hiệu trưởng:", ""); if (no) decideDisposal(d.id, true, no, "").then(load).catch((e) => setError(e.message)) }} className="px-2 py-1 rounded-md bg-[#1a3670] text-white font-semibold">Duyệt</button><button onClick={() => { const n = prompt("Lý do không duyệt:", ""); if (n) decideDisposal(d.id, false, "", n).then(load).catch((e) => setError(e.message)) }} className="px-2 py-1 rounded-md bg-gray-100 font-semibold">Từ chối</button></span> : <span className="text-amber-700 font-semibold">Chờ Ban giám hiệu duyệt</span>) : d.status === "Từ chối" ? <span className="text-red-700 font-semibold" title={d.decisionNote}>Không duyệt</span> : <span className="text-green-700 font-semibold">Đã ghi giảm</span>}</td><td className="px-3 py-2 text-xs">{d.decisionNo}</td><td className="px-3 py-2 whitespace-nowrap text-xs">{money(d.value)}</td><td className="px-3 py-2"><button disabled={d.status === "Chờ duyệt" || d.status === "Từ chối"} onClick={() => printDisposalMinutes(d, inventory.find((e) => e.id === d.equipmentId))} className="text-xs font-semibold text-[#1a3670] hover:underline whitespace-nowrap">In biên bản</button></td></tr>)}</tbody>
           </table></div>
         )}
       </div>
@@ -808,7 +812,7 @@ export function BooksTab({ subjects }: { subjects: Subject[] }) {
       <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
         {books.map(([t, d, fn]) => (
           <div key={t} className={`${card} p-5 flex flex-col`}>
-            <h3 className="font-bold text-gray-900 mb-1">{t}</h3>
+            <h2 className="font-bold text-gray-900 mb-1">{t}</h2>
             <p className="text-xs text-gray-500 flex-1 mb-4">{d}</p>
             <div className="flex gap-2"><button onClick={() => fn(false)} className={btnPrimary}>Xem & in</button><button onClick={() => fn(true)} className={btnGhost}>Xuất Excel</button></div>
           </div>
@@ -837,7 +841,7 @@ export function LossTab() {
     setBusy(r.id); setError("")
     try { await (ok ? confirmLoss : rejectLoss)(r.id, note); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } finally { setBusy("") }
   }
-  if (!d) return <p className="text-sm text-gray-400">{error || "Đang tải…"}</p>
+  if (!d) return <p className="text-sm text-gray-500">{error || "Đang tải…"}</p>
   const pending = d.reports.filter((r) => r.status === "Chờ xác nhận")
   const done = d.reports.filter((r) => r.status !== "Chờ xác nhận")
   const src = (r: LossReport) => (r.source === "audit" ? `Kiểm kê: ${r.auditTitle || ""}` : `Phiếu mượn của ${r.teacherName || ""}`)
@@ -846,8 +850,8 @@ export function LossTab() {
       {d.principalConfigured && !d.canConfirm && <p className="text-sm text-gray-500">Việc xác nhận mất do Ban giám hiệu thực hiện; nhân viên thiết bị ghi xác minh và in biên bản.</p>}
       <Err msg={error} />
       <div className={`${card} overflow-hidden`}>
-        <div className="px-5 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">Chờ xác nhận ({pending.length})</h3></div>
-        {pending.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">Không có báo mất nào đang chờ</p> : (
+        <div className="px-5 py-4 border-b border-gray-100"><h2 className="font-bold text-gray-900">Chờ xác nhận ({pending.length})</h2></div>
+        {pending.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Không có báo mất nào đang chờ</p> : (
           <ul className="divide-y divide-gray-50">{pending.map((r) => (
             <li key={r.id} className="px-5 py-3 flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
@@ -871,12 +875,12 @@ export function LossTab() {
         )}
       </div>
       <div className={`${card} overflow-hidden`}>
-        <div className="px-5 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">Đã xử lý</h3></div>
-        {done.length === 0 ? <p className="p-6 text-center text-sm text-gray-400">Chưa có</p> : (
+        <div className="px-5 py-4 border-b border-gray-100"><h2 className="font-bold text-gray-900">Đã xử lý</h2></div>
+        {done.length === 0 ? <p className="p-6 text-center text-sm text-gray-500">Chưa có</p> : (
           <div className="overflow-x-auto"><table className="w-full text-sm">
-            <thead><tr className="bg-gray-50">{["Thiết bị", "SL", "Nguồn", "Kết quả", "Người xác nhận", "Thời gian"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+            <thead><tr className="bg-gray-50">{["Thiết bị", "SL", "Nguồn", "Kết quả", "Người xác nhận", "Thời gian"].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-50">{done.map((r) => (
-              <tr key={r.id}><td className="px-3 py-2">{r.name}{r.decisionNote && <div className="text-[11px] text-gray-400">{r.decisionNote}</div>}<div className="flex gap-2 mt-1"><button onClick={() => setTraceId(r.equipmentId)} className="text-[11px] font-semibold text-[#1a3670] hover:underline">Truy vết</button><button onClick={() => printLossMinutes(r)} className="text-[11px] font-semibold text-[#1a3670] hover:underline">In biên bản</button></div></td><td className="px-3 py-2">{r.quantity}</td><td className="px-3 py-2 text-xs">{src(r)}</td>
+              <tr key={r.id}><td className="px-3 py-2">{r.name}{r.decisionNote && <div className="text-[11px] text-gray-500">{r.decisionNote}</div>}<div className="flex gap-2 mt-1"><button onClick={() => setTraceId(r.equipmentId)} className="text-[11px] font-semibold text-[#1a3670] hover:underline">Truy vết</button><button onClick={() => printLossMinutes(r)} className="text-[11px] font-semibold text-[#1a3670] hover:underline">In biên bản</button></div></td><td className="px-3 py-2">{r.quantity}</td><td className="px-3 py-2 text-xs">{src(r)}</td>
                 <td className={`px-3 py-2 text-xs font-semibold ${r.status === "Đã xác nhận mất" ? "text-red-600" : "text-green-700"}`}>{r.status}</td><td className="px-3 py-2 text-xs">{r.decidedBy}</td><td className="px-3 py-2 text-xs whitespace-nowrap">{fmtTime(r.decidedAt)}</td></tr>
             ))}</tbody>
           </table></div>
@@ -886,7 +890,7 @@ export function LossTab() {
       {verifying && (
         <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-3" onMouseDown={(e) => { if (e.target === e.currentTarget) setVerifying(null) }}>
           <div role="dialog" aria-modal="true" aria-label="Ghi kết quả xác minh" className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5 space-y-3">
-            <h3 className="font-bold text-gray-900">Xác minh: {verifying.name} × {verifying.quantity}</h3>
+            <h2 className="font-bold text-gray-900">Xác minh: {verifying.name} × {verifying.quantity}</h2>
             <p className="text-xs text-gray-500">Dùng nút “Truy vết” để xem những ai giữ thiết bị kể từ lần cuối còn đủ. Nội dung ghi ở đây được in vào biên bản.</p>
             <div><label className={label} htmlFor="v-scope">Phạm vi đã tìm</label><textarea id="v-scope" rows={2} className={field} value={vf.searchScope} onChange={(e) => setVf({ ...vf, searchScope: e.target.value })} placeholder="VD: phòng KHTN, tủ T1–T3, lớp 8A2, phòng chuẩn bị" /></div>
             <div><label className={label} htmlFor="v-inv">Người liên quan đã làm việc</label><textarea id="v-inv" rows={2} className={field} value={vf.involved} onChange={(e) => setVf({ ...vf, involved: e.target.value })} placeholder="VD: cô Ngọc Hồng (người mượn), lớp trưởng 8A2" /></div>
@@ -926,7 +930,7 @@ export function EquipmentHistoryDialog({ id, onClose }: { id: string; onClose: (
         <div className="flex items-start justify-between gap-3 px-6 py-4 border-b border-gray-100">
           <div className="min-w-0">
             <div className="text-xs text-gray-500 font-mono">{e?.id}</div>
-            <h3 className="font-bold text-gray-900 text-lg">{e?.name || "Đang tải…"}{e?.deleted && <span className="ml-2 text-xs text-red-600">(đã xóa khỏi danh mục)</span>}</h3>
+            <h2 className="font-bold text-gray-900 text-lg">{e?.name || "Đang tải…"}{e?.deleted && <span className="ml-2 text-xs text-red-600">(đã xóa khỏi danh mục)</span>}</h2>
             {e && !e.deleted && <div className="text-sm text-gray-600 mt-0.5">Tốt {e.qtyGood} · Hỏng {e.qtyBroken} · Đang sửa {e.qtyRepair} · Mất {e.qtyLost}{e.qtyLostPending ? ` · chờ xác nhận mất ${e.qtyLostPending}` : ""}{e.location ? ` · ${e.location}` : ""}</div>}
           </div>
           <div className="flex gap-2 shrink-0">
@@ -943,7 +947,7 @@ export function EquipmentHistoryDialog({ id, onClose }: { id: string; onClose: (
           </div>
         </div>
         <div className="px-6 pb-6">
-          {!h ? <p className="text-sm text-gray-400">Đang tải…</p> : tab === "trace" ? (
+          {!h ? <p className="text-sm text-gray-500">Đang tải…</p> : tab === "trace" ? (
             <div className="space-y-4">
               <div className="rounded-xl bg-[#F6F7F9] p-4 text-sm space-y-1.5">
                 <div><span className="text-gray-500">Kiểm kê gần nhất còn đủ:</span> <strong>{h.trace.lastAuditOk ? `${h.trace.lastAuditOk.title} (${vnTime(h.trace.lastAuditOk.at)})` : "chưa có"}</strong></div>

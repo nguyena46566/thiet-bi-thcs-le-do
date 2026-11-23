@@ -9,6 +9,7 @@ import db, { newId } from "./database.js";
 import { serial } from "./inventory.js";
 import { BOOK_KINDS } from "./library.js";
 import { slotLabel } from "./equipment.js";
+import { principalConfigured } from "./auth.js";
 
 const readers = () => db.collection("readers");
 const loans = () => db.collection("bookloans");
@@ -63,10 +64,15 @@ export function registerCirculationRoutes(app, { requireAuth, wrap }) {
   const requireLibrary = (req, res, next) => {
     const u = req.session?.user;
     if (!u) return res.status(401).json({ error: "Vui lòng đăng nhập" });
-    if (!(u.isLibrarian || u.isEquipment || u.isSysadmin || u.isPrincipal || (u.isAdmin && !u.roles))) return res.status(403).json({ error: "Chỉ nhân viên thư viện" });
+    // Thủ thư và nhân viên thiết bị (một người thường kiêm hai việc) được làm thư viện; Ban giám hiệu chỉ xem thống kê; quản trị hệ thống không làm nghiệp vụ
+    const canWrite = u.isLibrarian || u.isEquipment || (u.isAdmin && !u.roles);
+    const canRead = canWrite || u.isPrincipal;
+    if (!(req.method === "GET" || req.method === "HEAD" ? canRead : canWrite)) return res.status(403).json({ error: "Chỉ nhân viên thư viện" });
     next();
   };
 
+  // Riêng việc ghi nhận bồi thường: thủ thư ghi đã đền sách / đã nộp tiền; Ban giám hiệu quyết định miễn
+  const requireLibraryOrPrincipal = (req, res, next) => (req.session?.user?.isPrincipal ? next() : requireLibrary(req, res, next));
   // ---------- Quy định mượn ----------
   // Công khai: trang tra cứu sách hiển thị nội quy mượn sách
   app.get("/api/library/rules", wrap(async (req, res) => res.json({ ...(await getRules()), modes: KIND_MODES })));
@@ -238,12 +244,14 @@ export function registerCirculationRoutes(app, { requireAuth, wrap }) {
     res.json(await loans().update(l.id, { dueDate: addDays(base, rules.renewDays), renewals: (l.renewals || 0) + 1 }));
   }));
   // Ghi nhận bạn đọc đã bồi thường sách mất, hỏng
-  app.patch("/api/library/loans/:id/compensation", requireLibrary, wrap(async (req, res) => {
+  app.patch("/api/library/loans/:id/compensation", requireLibraryOrPrincipal, wrap(async (req, res) => {
     const l = await loans().get(req.params.id);
     if (!l?.compensation) return res.status(404).json({ error: "Lượt mượn này không phải bồi thường" });
     const status = ["Chưa xử lý", "Đã đền sách", "Đã nộp tiền", "Miễn bồi thường"].includes(req.body?.status) ? req.body.status : null;
     if (!status) return res.status(400).json({ error: "Trạng thái không hợp lệ" });
     if (status === "Miễn bồi thường" && !str(req.body?.note, 200)) return res.status(400).json({ error: "Miễn bồi thường cần ghi lý do" });
+    // Miễn bồi thường là quyết định của Ban giám hiệu (khi có), thủ thư chỉ ghi nhận đã đền sách, đã nộp tiền
+    if (status === "Miễn bồi thường" && principalConfigured() && !req.session.user.isPrincipal) return res.status(403).json({ error: "Miễn bồi thường do Ban giám hiệu quyết định" });
     res.json(await loans().update(l.id, { compensation: { ...l.compensation, status, note: str(req.body?.note, 200), handledBy: req.session.user.name, handledAt: new Date().toISOString() } }));
   }));
 
@@ -338,6 +346,8 @@ export function registerCirculationRoutes(app, { requireAuth, wrap }) {
     const reason = ["Hư hỏng", "Nội dung lạc hậu", "Mất", "Khác"].includes(req.body?.reason) ? req.body.reason : null;
     if (!codes.length) return res.status(400).json({ error: "Chọn quyển cần thanh lọc" });
     if (!reason) return res.status(400).json({ error: "Chọn lý do thanh lọc" });
+    // Đưa tài liệu ra khỏi kho phải có quyết định của Hiệu trưởng (căn cứ ghi sổ, biên bản thanh lọc)
+    if (!str(req.body?.decisionNo, 60)) return res.status(400).json({ error: "Thanh lọc cần ghi số quyết định thanh lọc của Hiệu trưởng" });
     const done = [];
     for (const c of codes) {
       const cp = await copies().get(c);

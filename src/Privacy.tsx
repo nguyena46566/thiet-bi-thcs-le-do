@@ -10,11 +10,11 @@ import { ChangePassword } from "./Roles"
 import { exportExcel } from "./Operations"
 
 const card = "bg-white rounded-2xl border border-gray-200/80"
-const field = "w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#1a3670]/20 focus:border-[#1a3670] bg-white"
+const field = "w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#1a3670]/50 focus:border-[#1a3670] bg-white"
 const label = "block text-sm font-semibold text-gray-700 mb-1.5"
 const btnPrimary = "px-4 py-2.5 rounded-xl bg-[#1a3670] hover:bg-[#132d5e] text-white text-sm font-semibold disabled:opacity-50"
 const btnGhost = "px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold disabled:opacity-50"
-const th = "px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap"
+const th = "relative px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap"
 const vnTime = (iso?: string | null) => (iso ? new Date(iso).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" }) : "")
 const Err = ({ msg }: { msg: string }) => (msg ? <div role="alert" className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm mb-3">{msg}</div> : null)
 const Ok = ({ msg }: { msg: string }) => (msg ? <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl px-4 py-3 text-sm mb-3">{msg}</div> : null)
@@ -113,7 +113,7 @@ export function ProfilePage({ go }: { go: (p: string) => void }) {
   const load = useCallback(() => { fetchMyProfile().then((x) => { setP(x); setF({ name: x.user.name, phone: x.user.phone, position: x.user.position }) }).catch((e) => setError(e.message)) }, [])
   useEffect(() => { if (user) load() }, [user, load])
   if (!user) return <Main narrow><div className={`${card} p-6 text-center`}><p className="mb-3">Đăng nhập để xem hồ sơ của bạn</p><button onClick={login} className={btnPrimary}>Đăng nhập</button></div></Main>
-  if (!p) return <Main narrow><p className="text-sm text-gray-400">{error || "Đang tải…"}</p></Main>
+  if (!p) return <Main narrow><p className="text-sm text-gray-500">{error || "Đang tải…"}</p></Main>
   const act = async (fn: () => Promise<unknown>, msg: string) => { setError(""); setOk(""); try { await fn(); setOk(msg); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } }
   const download = async () => {
     const res = await fetch("/api/me/export", { credentials: "include" })
@@ -141,7 +141,7 @@ export function ProfilePage({ go }: { go: (p: string) => void }) {
           </dl>
           <div className="flex justify-end mt-4"><button onClick={() => act(() => updateMyProfile(f), "Đã lưu thông tin")} className={btnPrimary}>Lưu thông tin</button></div>
         </section>
-        <aside className="lg:col-span-2 space-y-5">
+        <aside aria-label="Hoạt động và quyền riêng tư" className="lg:col-span-2 space-y-5">
           <section className={`${card} p-5`}>
             <h2 className="font-semibold text-gray-900 mb-3">Hoạt động</h2>
             <div className="grid grid-cols-2 gap-3 text-center">
@@ -208,7 +208,7 @@ function GuestForm({ meta, onSubmit, submitLabel }: { meta: PrivacyMeta; onSubmi
 export function GuestPage() {
   const meta = useMeta()
   const [slip, setSlip] = useState<{ code: string; name: string; checkInAt: string; purpose: string; place: string } | null>(null)
-  if (!meta) return <Main narrow><p className="text-sm text-gray-400">Đang tải…</p></Main>
+  if (!meta) return <Main narrow><p className="text-sm text-gray-500">Đang tải…</p></Main>
   return (
     <Main narrow>
       <Head kicker="Trường THCS Lê Độ" title={slip ? "Phiếu khách" : "Đăng ký khách đến trường"} />
@@ -252,7 +252,7 @@ export function GuestsTab() {
   const [error, setError] = useState(""), [ok, setOk] = useState("")
   const load = useCallback(() => { fetchGuests(range.from, range.to).then(setD).catch((e) => setError(e.message)) }, [range])
   useEffect(() => { load() }, [load])
-  if (!d || !meta) return <p className="text-sm text-gray-400">{error || "Đang tải…"}</p>
+  if (!d || !meta) return <p className="text-sm text-gray-500">{error || "Đang tải…"}</p>
   const inside = d.guests.filter((g) => !g.checkOutAt).length
   const act = async (fn: () => Promise<unknown>, msg: string) => { setError(""); setOk(""); try { await fn(); setOk(msg); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } }
   const printPoster = async () => {
@@ -280,9 +280,9 @@ export function GuestsTab() {
       </div>
       {adding && <div className={`${card} p-5 max-w-2xl`}><GuestForm meta={meta} submitLabel="Ghi vào sổ" onSubmit={async (g) => { await addGuest(g); setAdding(false); setOk("Đã ghi khách"); load() }} /></div>}
       <div className={`${card} overflow-hidden`}>
-        {d.guests.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">Chưa có khách trong khoảng ngày này</p> : (
+        {d.guests.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Chưa có khách trong khoảng ngày này</p> : (
           <div className="overflow-x-auto"><table className="w-full text-sm">
-            <thead><tr className="bg-gray-50">{["Mã", "Khách", "Mục đích", "Vào", "Ra", ""].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+            <thead><tr className="bg-gray-50">{["Mã", "Khách", "Mục đích", "Vào", "Ra", ""].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-50">{d.guests.map((g) => (
               <tr key={g.id} className={g.anonymized ? "opacity-60" : ""}>
                 <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{g.code}</td>
@@ -290,7 +290,7 @@ export function GuestsTab() {
                 <td className="px-3 py-2 text-xs">{g.purpose}{g.place ? ` · ${g.place}` : ""}</td>
                 <td className="px-3 py-2 text-xs whitespace-nowrap">{vnTime(g.checkInAt)}</td>
                 <td className="px-3 py-2 text-xs whitespace-nowrap">{g.checkOutAt ? vnTime(g.checkOutAt) : <button onClick={() => act(() => checkoutGuest(g.id), `${g.code} đã ra về`)} className="px-2.5 py-1 rounded-lg bg-[#1a3670] text-white text-xs font-semibold">Ra về</button>}</td>
-                <td className="px-3 py-2 text-right">{!g.anonymized && <button onClick={() => { if (confirm(`Xóa thông tin cá nhân của ${g.name}? (giữ lại số liệu thống kê)`)) act(() => anonymizeGuest(g.id), "Đã ẩn danh") }} className="text-xs text-gray-400 hover:text-red-600">Xóa thông tin</button>}</td>
+                <td className="px-3 py-2 text-right">{!g.anonymized && <button onClick={() => { if (confirm(`Xóa thông tin cá nhân của ${g.name}? (giữ lại số liệu thống kê)`)) act(() => anonymizeGuest(g.id), "Đã ẩn danh") }} className="text-xs text-gray-500 hover:text-red-600">Xóa thông tin</button>}</td>
               </tr>
             ))}</tbody>
           </table></div>
@@ -309,14 +309,14 @@ export function DataRequestsTab() {
   const [error, setError] = useState("")
   const load = useCallback(() => { fetchDataRequests().then(setList).catch((e) => setError(e.message)) }, [])
   useEffect(() => { load() }, [load])
-  if (!list) return <p className="text-sm text-gray-400">{error || "Đang tải…"}</p>
+  if (!list) return <p className="text-sm text-gray-500">{error || "Đang tải…"}</p>
   const act = async (id: string, status: string) => { const resp = prompt(status === "Từ chối" ? "Lý do từ chối (bắt buộc):" : "Phản hồi cho người yêu cầu:", "") ?? ""; if (status === "Từ chối" && !resp) return; try { await handleDataRequest(id, status, resp); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } }
   return (
     <div className="space-y-4">
       <Err msg={error} />
       <p className="text-sm text-gray-600">Yêu cầu sửa, xóa dữ liệu, rút lại đồng ý của người dùng. Sửa thông tin tài khoản tại “Người dùng và phân quyền”; dữ liệu nhà trường phải lưu theo quy định (sổ mượn trả, biên bản tài sản) thì giải thích khi từ chối.</p>
       <div className={`${card} overflow-hidden`}>
-        {list.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">Chưa có yêu cầu</p> : (
+        {list.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Chưa có yêu cầu</p> : (
           <ul className="divide-y divide-gray-50">{list.map((r) => (
             <li key={r.id} className="px-5 py-3 flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0"><div className="font-medium text-gray-900">{r.userName} · {r.type}</div><div className="text-xs text-gray-500">{vnTime(r.createdAt)} · {r.email}{r.content ? ` · ${r.content}` : ""}</div>{r.response && <div className="text-xs text-gray-600">Phản hồi ({r.handledBy}): {r.response}</div>}</div>

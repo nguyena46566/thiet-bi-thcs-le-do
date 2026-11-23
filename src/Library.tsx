@@ -10,11 +10,11 @@ import { printHtml, esc, table, dots } from "./printing"
 import { useAuth } from "./AuthContext"
 
 const card = "bg-white rounded-2xl shadow-sm border border-gray-100"
-const field = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/20 focus:border-[#1a3670] bg-white"
+const field = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/50 focus:border-[#1a3670] bg-white"
 const label = "block text-xs font-semibold text-gray-600 mb-1"
 const btnPrimary = "px-4 py-2 rounded-lg bg-[#1a3670] hover:bg-[#132d5e] text-white text-sm font-semibold disabled:opacity-50"
 const btnGhost = "px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold disabled:opacity-50"
-const th = "px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap"
+const th = "relative px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap"
 const money = (n: number) => `${(n || 0).toLocaleString("vi-VN")} đ`
 const isoToVn = (d: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || ""); return m ? `${m[3]}/${m[2]}/${m[1]}` : "" }
 const Err = ({ msg }: { msg: string }) => (msg ? <div role="alert" className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-sm mb-3">{msg}</div> : null)
@@ -97,7 +97,7 @@ export function ReceiptsTab() {
   useEffect(() => { load() }, [load])
   const openReceipt = async (id: string) => { const r = await fetchReceipt(id); setOpen(r); setCount(Object.fromEntries(r.lines.map((l) => [l.id, l.receivedQty === null ? "" : String(l.receivedQty)]))); setShelf(r.defaultShelf || ""); setCountNote(r.countNote || "") }
   const act = async (fn: () => Promise<unknown>, msg = "") => { setError(""); setOk(""); try { await fn(); setOk(msg); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } }
-  if (!meta || !list) return <p className="text-sm text-gray-400">{error || "Đang tải…"}</p>
+  if (!meta || !list) return <p className="text-sm text-gray-500">{error || "Đang tải…"}</p>
   const kinds = meta.kinds
 
   // ---- Lập / sửa phiếu theo hóa đơn ----
@@ -110,7 +110,7 @@ export function ReceiptsTab() {
       <div className="space-y-4">
         <Err msg={error} />
         <div className={`${card} p-5`}>
-          <h3 className="font-bold text-gray-900 mb-1">{edit.id ? "Sửa phiếu nhận" : "Bước 1 – Lập phiếu nhận theo hóa đơn"}</h3>
+          <h2 className="font-bold text-gray-900 mb-1">{edit.id ? "Sửa phiếu nhận" : "Bước 1 – Lập phiếu nhận theo hóa đơn"}</h2>
           <p className="text-xs text-gray-500 mb-4">Chép các dòng trên hóa đơn (hoặc phiếu cấp phát): tên tài liệu, số lượng, đơn giá. Số thực nhận sẽ nhập ở bước kiểm đếm.</p>
           <div className="grid sm:grid-cols-5 gap-3">
             <div><label className={label}>Số hóa đơn *</label><input className={field} value={edit.invoiceNo || ""} onChange={(e) => setEdit({ ...edit, invoiceNo: e.target.value })} /></div>
@@ -122,10 +122,10 @@ export function ReceiptsTab() {
         <div className={`${card} overflow-hidden`}>
           <datalist id="dl-titles">{titles.map((t) => <option key={t.id} value={t.title} />)}</datalist>
           <div className="overflow-x-auto"><table className="w-full text-sm">
-            <thead><tr className="bg-gray-50">{["#", "Tên tài liệu *", "Tác giả", "NXB", "Năm", "Loại", "Khối", "SL hóa đơn", "Đơn giá (đ)", "Thành tiền", ""].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+            <thead><tr className="bg-gray-50">{["#", "Tên tài liệu *", "Tác giả", "NXB", "Năm", "Loại", "Khối", "SL hóa đơn", "Đơn giá (đ)", "Thành tiền", ""].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-50">{lines.map((l, i) => (
               <tr key={l.id}>
-                <td className="px-2 py-1.5 text-xs text-gray-400">{i + 1}</td>
+                <td className="px-2 py-1.5 text-xs text-gray-500">{i + 1}</td>
                 <td className="px-2 py-1.5 min-w-[220px]"><input list="dl-titles" aria-label="Tên tài liệu" className={field} value={l.title} onChange={(e) => pick(i, e.target.value)} /></td>
                 <td className="px-2 py-1.5 min-w-[120px]"><input aria-label="Tác giả" className={field} value={l.author} onChange={(e) => setL(i, { author: e.target.value })} /></td>
                 <td className="px-2 py-1.5 min-w-[110px]"><input aria-label="Nhà xuất bản" className={field} value={l.publisher} onChange={(e) => setL(i, { publisher: e.target.value })} /></td>
@@ -135,7 +135,7 @@ export function ReceiptsTab() {
                 <td className="px-2 py-1.5 w-24"><input type="number" min={1} aria-label="Số lượng hóa đơn" className={field} value={l.invoiceQty} onChange={(e) => setL(i, { invoiceQty: Math.max(1, Math.floor(Number(e.target.value) || 1)) })} /></td>
                 <td className="px-2 py-1.5 w-32"><input type="number" min={0} aria-label="Đơn giá" className={field} value={l.price} onChange={(e) => setL(i, { price: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} /></td>
                 <td className="px-2 py-1.5 text-right whitespace-nowrap font-semibold">{money(l.invoiceQty * l.price)}</td>
-                <td className="px-2 py-1.5"><button onClick={() => setEdit({ ...edit, lines: lines.filter((_, j) => j !== i) })} className="text-gray-400 hover:text-red-600" aria-label="Xóa dòng">✕</button></td>
+                <td className="px-2 py-1.5"><button onClick={() => setEdit({ ...edit, lines: lines.filter((_, j) => j !== i) })} className="text-gray-500 hover:text-red-600" aria-label="Xóa dòng">✕</button></td>
               </tr>
             ))}</tbody>
           </table></div>
@@ -161,7 +161,7 @@ export function ReceiptsTab() {
         <Err msg={error} /><Ok msg={ok} />
         <div className={`${card} p-5 flex flex-wrap items-start justify-between gap-3`}>
           <div><div className="text-xs text-gray-500">{open.source} · lập bởi {open.createdBy}</div>
-            <h3 className="font-bold text-gray-900">Hóa đơn {open.invoiceNo}{open.invoiceDate ? ` · ${isoToVn(open.invoiceDate)}` : ""} · {open.supplier}</h3>
+            <h2 className="font-bold text-gray-900">Hóa đơn {open.invoiceNo}{open.invoiceDate ? ` · ${isoToVn(open.invoiceDate)}` : ""} · {open.supplier}</h2>
             <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-bold ${ST_CLS[open.status] || ""}`}>{open.status}</span></div>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => { setOpen(null); load() }} className={btnGhost}>Đóng</button>
@@ -172,12 +172,12 @@ export function ReceiptsTab() {
         {!done && <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-900"><strong>Bước 2 – Kiểm đếm:</strong> đếm từng đầu tài liệu thực nhận và nhập vào cột “Thực nhận”. Dòng chênh lệch sẽ tô đỏ. Khi xác nhận, hệ thống cấp cho mỗi quyển một số đăng ký cá biệt (ĐKCB) và lập phụ lục.</div>}
         <div className={`${card} overflow-hidden`}>
           <div className="overflow-x-auto"><table className="w-full text-sm">
-            <thead><tr className="bg-gray-50">{["#", "Tên tài liệu", "Loại", "Đơn giá", "SL hóa đơn", "Thực nhận", "Chênh lệch", "Thành tiền thực nhận", done ? "Số ĐKCB" : ""].map((h, i) => <th key={i} className={th}>{h}</th>)}</tr></thead>
+            <thead><tr className="bg-gray-50">{["#", "Tên tài liệu", "Loại", "Đơn giá", "SL hóa đơn", "Thực nhận", "Chênh lệch", "Thành tiền thực nhận", done ? "Số ĐKCB" : ""].map((h, i) => <th key={i} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-50">{open.lines.map((l, i) => {
               const got = n(l), diff = got === null ? null : got - l.invoiceQty
               return (
                 <tr key={l.id} className={diff ? "bg-red-50/60" : ""}>
-                  <td className="px-3 py-2 text-xs text-gray-400">{i + 1}</td>
+                  <td className="px-3 py-2 text-xs text-gray-500">{i + 1}</td>
                   <td className="px-3 py-2"><div className="font-medium text-gray-900">{l.title}</div><div className="text-xs text-gray-500">{[l.author, l.publisher, l.year, l.grade && `khối ${l.grade}`].filter(Boolean).join(" · ")}</div></td>
                   <td className="px-3 py-2 text-xs">{kinds[l.kind]}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{money(l.price)}</td>
@@ -215,14 +215,14 @@ export function ReceiptsTab() {
         <button onClick={() => setEdit({ source: "Mua sắm", lines: [emptyLine()] })} className={btnPrimary}>+ Lập phiếu nhận</button>
       </div>
       <div className={`${card} overflow-hidden`}>
-        {list.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">Chưa có phiếu nhận</p> : (
-          <table className="w-full text-sm"><thead><tr className="bg-gray-50">{["Hóa đơn", "Nhà cung cấp", "Nguồn", "Đầu sách", "Giá trị hóa đơn", "Trạng thái", ""].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+        {list.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Chưa có phiếu nhận</p> : (
+          <table className="w-full text-sm"><thead><tr className="bg-gray-50">{["Hóa đơn", "Nhà cung cấp", "Nguồn", "Đầu sách", "Giá trị hóa đơn", "Trạng thái", ""].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-50">{list.map((r) => (
               <tr key={r.id}><td className="px-3 py-2.5"><div className="font-medium">{r.invoiceNo}</div><div className="text-xs text-gray-500">{isoToVn(r.invoiceDate)}</div></td><td className="px-3 py-2.5">{r.supplier}</td><td className="px-3 py-2.5 text-xs">{r.source}</td>
                 <td className="px-3 py-2.5">{r.lines.length} đầu · {r.receivedCopies ?? r.lines.reduce((a, l) => a + l.invoiceQty, 0)} bản</td><td className="px-3 py-2.5 whitespace-nowrap">{money(r.invoiceTotal)}</td>
                 <td className="px-3 py-2.5"><span className={`px-2 py-0.5 rounded-full text-xs font-bold ${ST_CLS[r.status] || ""}`}>{r.status}</span></td>
                 <td className="px-3 py-2.5 whitespace-nowrap text-right"><button onClick={() => openReceipt(r.id)} className={btnGhost}>{r.status === "Chờ kiểm đếm" ? "Kiểm đếm" : "Mở"}</button>
-                  {r.status === "Chờ kiểm đếm" && <button onClick={() => { if (confirm("Xóa phiếu này?")) act(() => deleteReceipt(r.id)) }} className="ml-2 text-xs text-gray-400 hover:text-red-600">Xóa</button>}</td></tr>
+                  {r.status === "Chờ kiểm đếm" && <button onClick={() => { if (confirm("Xóa phiếu này?")) act(() => deleteReceipt(r.id)) }} className="ml-2 text-xs text-gray-500 hover:text-red-600">Xóa</button>}</td></tr>
             ))}</tbody></table>
         )}
       </div>
@@ -243,7 +243,7 @@ export function BooksTab() {
   const load = useCallback(() => { fetchTitles().then(setTitles).catch((e) => setError(e.message)) }, [])
   useEffect(() => { load() }, [load])
   useEffect(() => { if (openId) fetchCopies({ titleId: openId }).then(setCps).catch(() => {}) }, [openId])
-  if (!titles || !meta) return <p className="text-sm text-gray-400">{error || "Đang tải…"}</p>
+  if (!titles || !meta) return <p className="text-sm text-gray-500">{error || "Đang tải…"}</p>
   const shown = titles.filter((t) => (!kind || t.kind === kind) && (!q || fold(`${t.title} ${t.author} ${t.publisher}`).includes(fold(q))))
   const sum = (k: "copies" | "onShelf" | "unshelved") => shown.reduce((a, t) => a + t[k], 0)
   return (
@@ -254,10 +254,10 @@ export function BooksTab() {
       </div>
       <div className={`${card} p-4 flex flex-wrap gap-2`}>
         <input type="search" className="border border-gray-200 rounded-lg px-3 py-2 text-sm flex-1 min-w-[220px]" placeholder="Tìm tên sách, tác giả (không cần dấu)…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="border border-gray-200 rounded-lg px-2 text-sm" value={kind} onChange={(e) => setKind(e.target.value)}><option value="">Mọi loại</option>{Object.entries(meta.kinds).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+        <select aria-label="Loại tài liệu" className="border border-gray-200 rounded-lg px-2 text-sm" value={kind} onChange={(e) => setKind(e.target.value)}><option value="">Mọi loại</option>{Object.entries(meta.kinds).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
       </div>
       <div className={`${card} overflow-hidden`}>
-        {shown.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">Chưa có sách. Nhập sách ở mục “Nhận sách theo hóa đơn”.</p> : (
+        {shown.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Chưa có sách. Nhập sách ở mục “Nhận sách theo hóa đơn”.</p> : (
           <ul className="divide-y divide-gray-50">{shown.map((t) => (
             <li key={t.id}>
               <button onClick={() => setOpenId(openId === t.id ? null : t.id)} aria-expanded={openId === t.id} className="w-full px-5 py-3 flex flex-wrap items-center gap-3 text-left hover:bg-gray-50">
@@ -268,7 +268,7 @@ export function BooksTab() {
                 <div className="px-5 pb-4">
                   <CatalogForm t={t} onSaved={load} />
                   <div className="flex justify-end mb-2"><button onClick={() => printBookLabels(cps.map((c) => ({ ...c, title: t.title })))} className={btnGhost}>In lại nhãn ({cps.length})</button></div>
-                  <table className="w-full text-sm"><thead><tr className="bg-gray-50">{["Số ĐKCB", "Kệ", "Tình trạng", "Giá", "Ngày vào sổ"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+                  <table className="w-full text-sm"><thead><tr className="bg-gray-50">{["Số ĐKCB", "Kệ", "Tình trạng", "Giá", "Ngày vào sổ"].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
                     <tbody className="divide-y divide-gray-50">{cps.map((c) => (
                       <tr key={c.code}><td className="px-3 py-1.5 font-mono text-xs">{c.code}</td><td className="px-3 py-1.5">{c.shelf || "—"}</td>
                         <td className="px-3 py-1.5"><select aria-label={`Tình trạng ${c.code}`} className="border border-gray-200 rounded px-1.5 py-1 text-xs" value={c.status} onChange={async (e) => { await updateCopy(c.code, { status: e.target.value }); fetchCopies({ titleId: t.id }).then(setCps); load() }}>{meta.statuses.map((s) => <option key={s}>{s}</option>)}</select></td>
@@ -298,7 +298,7 @@ export function ShelvesTab() {
   const scanRef = useRef<HTMLInputElement>(null)
   const load = useCallback(() => { fetchShelves().then(setList).catch((e) => setError(e.message)) }, [])
   useEffect(() => { load() }, [load])
-  if (!list || !meta) return <p className="text-sm text-gray-400">{error || "Đang tải…"}</p>
+  if (!list || !meta) return <p className="text-sm text-gray-500">{error || "Đang tải…"}</p>
   // Máy quét mã (hoặc gõ tay): mỗi lần Enter thêm một mã; quét URL nhãn cũng nhận được
   const addScan = () => { const raw = scan.trim(); if (!raw) return; const code = decodeURIComponent(raw.split("#sach/").pop() || raw).toUpperCase(); if (!codes.includes(code)) setCodes([...codes, code]); setScan(""); scanRef.current?.focus() }
   return (
@@ -306,17 +306,17 @@ export function ShelvesTab() {
       <Err msg={error} /><Ok msg={ok} />
       <div className="grid lg:grid-cols-2 gap-4 items-start">
         <div className={`${card} p-5`}>
-          <h3 className="font-bold text-gray-900 mb-1">Xếp sách lên giá</h3>
+          <h2 className="font-bold text-gray-900 mb-1">Xếp sách lên giá</h2>
           <p className="text-xs text-gray-500 mb-3">Cách 1 (điện thoại): quét QR dán trên kệ → bấm “Chọn kệ này”, rồi quét QR từng quyển → bấm “Xếp vào kệ”. Cách 2 (máy tính có máy quét mã): chọn kệ bên dưới, quét lần lượt nhãn các quyển vào ô, bấm “Xếp lên kệ”.</p>
           <div className="flex gap-2 mb-2">
             <select aria-label="Kệ" className={field} value={cur} onChange={(e) => { setCur(e.target.value); try { localStorage.setItem("currentShelf", e.target.value) } catch { /* bỏ qua */ } }}><option value="">Chọn kệ…</option>{list.map((s) => <option key={s.id} value={s.code}>{s.code} – {s.name}</option>)}</select>
           </div>
           <form onSubmit={(e) => { e.preventDefault(); addScan() }} className="flex gap-2"><input ref={scanRef} aria-label="Mã ĐKCB" className={field} placeholder="Quét hoặc gõ số ĐKCB rồi Enter (VD: SGK-00012)" value={scan} onChange={(e) => setScan(e.target.value)} /><button type="submit" className={btnGhost}>Thêm</button></form>
-          {codes.length > 0 && <div className="flex flex-wrap gap-1.5 mt-3">{codes.map((c) => <span key={c} className="px-2 py-1 rounded bg-gray-100 text-xs font-mono">{c} <button onClick={() => setCodes(codes.filter((x) => x !== c))} aria-label={`Bỏ ${c}`} className="text-gray-400">✕</button></span>)}</div>}
+          {codes.length > 0 && <div className="flex flex-wrap gap-1.5 mt-3">{codes.map((c) => <span key={c} className="px-2 py-1 rounded bg-gray-100 text-xs font-mono">{c} <button onClick={() => setCodes(codes.filter((x) => x !== c))} aria-label={`Bỏ ${c}`} className="text-gray-500">✕</button></span>)}</div>}
           <div className="flex justify-end mt-3"><button disabled={!cur || !codes.length} onClick={async () => { setError(""); setOk(""); try { const r = await shelveCopies(cur, codes); setOk(`Đã xếp ${r.done.length} quyển lên kệ ${r.shelf}.${r.notFound.length ? ` Không có mã: ${r.notFound.join(", ")}.` : ""}${r.skipped.length ? ` Bỏ qua: ${r.skipped.join(", ")}.` : ""}`); setCodes([]); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } }} className={btnPrimary}>Xếp {codes.length} quyển lên kệ {cur}</button></div>
         </div>
         <div className={`${card} p-5`}>
-          <h3 className="font-bold text-gray-900 mb-3">Thêm kệ</h3>
+          <h2 className="font-bold text-gray-900 mb-3">Thêm kệ</h2>
           <div className="grid grid-cols-2 gap-2">
             <div><label className={label}>Mã kệ *</label><input className={field} value={f.code} placeholder="K01-T1" onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase() })} /></div>
             <div><label className={label}>Tên kệ</label><input className={field} value={f.name} placeholder="SGK khối 6 – tầng 1" onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
@@ -326,9 +326,9 @@ export function ShelvesTab() {
         </div>
       </div>
       <div className={`${card} overflow-hidden`}>
-        <div className="px-5 py-3.5 border-b border-gray-100 flex justify-between"><h3 className="font-semibold text-gray-900">Kệ sách ({list.length})</h3><button disabled={!list.length} onClick={() => printShelfLabels(list)} className={btnGhost}>In nhãn QR kệ</button></div>
-        {list.length === 0 ? <p className="p-6 text-sm text-gray-400">Chưa có kệ</p> : <ul className="divide-y divide-gray-50">{list.map((s) => (
-          <li key={s.id} className="px-5 py-2.5 flex items-center justify-between gap-2 text-sm"><span><strong className="font-mono">{s.code}</strong> · {s.name} <span className="text-xs text-gray-500">{s.room}</span></span><span className="flex gap-3 items-center"><span className="text-xs text-gray-600">{s.count} quyển</span><a href={`#ke/${s.code}`} className="text-xs font-semibold text-[#1a3670] hover:underline">Xem</a><button onClick={async () => { if (confirm(`Xóa kệ ${s.code}?`)) { try { await deleteShelf(s.id); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } } }} className="text-xs text-gray-400 hover:text-red-600">Xóa</button></span></li>
+        <div className="px-5 py-3.5 border-b border-gray-100 flex justify-between"><h2 className="font-semibold text-gray-900">Kệ sách ({list.length})</h2><button disabled={!list.length} onClick={() => printShelfLabels(list)} className={btnGhost}>In nhãn QR kệ</button></div>
+        {list.length === 0 ? <p className="p-6 text-sm text-gray-500">Chưa có kệ</p> : <ul className="divide-y divide-gray-50">{list.map((s) => (
+          <li key={s.id} className="px-5 py-2.5 flex items-center justify-between gap-2 text-sm"><span><strong className="font-mono">{s.code}</strong> · {s.name} <span className="text-xs text-gray-500">{s.room}</span></span><span className="flex gap-3 items-center"><span className="text-xs text-gray-600">{s.count} quyển</span><a href={`#ke/${s.code}`} className="text-xs font-semibold text-[#1a3670] hover:underline">Xem</a><button onClick={async () => { if (confirm(`Xóa kệ ${s.code}?`)) { try { await deleteShelf(s.id); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } } }} className="text-xs text-gray-500 hover:text-red-600">Xóa</button></span></li>
         ))}</ul>}
       </div>
     </div>
@@ -365,13 +365,13 @@ export function LibraryLedgerTab() {
     else printDoc("SỔ ĐĂNG KÝ CÁ BIỆT", "Mỗi bản tài liệu một số đăng ký cá biệt", head, rows, true, { cover: true })
   }
   const run = (fn: (e: boolean) => Promise<void>, e: boolean) => { setError(""); fn(e).catch((x) => setError(x instanceof Error ? x.message : "Lỗi")) }
-  if (!meta) return <p className="text-sm text-gray-400">Đang tải…</p>
+  if (!meta) return <p className="text-sm text-gray-500">Đang tải…</p>
   return (
     <div className="space-y-4">
       <Err msg={error} />
       <div className="grid md:grid-cols-2 gap-4">
         {([["Sổ đăng ký tổng quát", "Mỗi lần nhập một dòng: ngày vào sổ, số hóa đơn, nguồn, tổng số bản, số bản theo từng loại, tổng tiền, dải số ĐKCB.", general], ["Sổ đăng ký cá biệt", "Mỗi quyển một dòng: số ĐKCB, tên, tác giả, NXB, năm, loại, giá, chứng từ nhập, kệ, tình trạng.", individual]] as const).map(([t, d, fn]) => (
-          <div key={t} className={`${card} p-5`}><h3 className="font-bold text-gray-900">{t}</h3><p className="text-sm text-gray-600 mt-1 mb-4">{d}</p><div className="flex gap-2"><button onClick={() => run(fn, false)} className={btnPrimary}>Xem & in</button><button onClick={() => run(fn, true)} className={btnGhost}>Xuất Excel</button></div></div>
+          <div key={t} className={`${card} p-5`}><h2 className="font-bold text-gray-900">{t}</h2><p className="text-sm text-gray-600 mt-1 mb-4">{d}</p><div className="flex gap-2"><button onClick={() => run(fn, false)} className={btnPrimary}>Xem & in</button><button onClick={() => run(fn, true)} className={btnGhost}>Xuất Excel</button></div></div>
         ))}
       </div>
       <p className="text-xs text-gray-500">Số ĐKCB cấp theo loại: {Object.entries(meta.kinds).map(([k, v]) => `${k} – ${v}`).join("; ")}. Bố cục sổ theo cách ghi chép thư viện trường học thông dụng; nhà trường điều chỉnh cột cho khớp mẫu sổ đang dùng nếu cần.</p>
@@ -422,7 +422,7 @@ export function ShelfPage({ code }: { code: string }) {
       <div className="font-mono text-3xl font-bold text-[#1a3670]">Kệ {code}</div>
       <Err msg={error} />
       <button onClick={() => { try { localStorage.setItem("currentShelf", code) } catch { /* bỏ qua */ } setCur(code) }} className={`${cur === code ? btnGhost : btnPrimary} w-full py-3 text-base`}>{cur === code ? "Đang chọn kệ này – quét QR từng quyển để xếp" : "Chọn kệ này để xếp sách"}</button>
-      {list === null ? <p className="text-sm text-gray-400">Đang tải…</p> : <>
+      {list === null ? <p className="text-sm text-gray-500">Đang tải…</p> : <>
         <p className="text-sm text-gray-600">{list.filter((c) => c.status === "Trên giá").length} quyển trên kệ</p>
         <ul className="divide-y divide-gray-100 text-sm max-h-96 overflow-y-auto">{list.map((c) => <li key={c.code} className="py-1.5 flex justify-between gap-2"><span><span className="font-mono text-xs">{c.code}</span> · {tMap.get(c.titleId)}</span><span className="text-xs text-gray-500">{c.status}</span></li>)}</ul>
       </>}

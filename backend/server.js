@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import compression from "compression";
 import cors from "cors";
 import session from "express-session";
 import path from "path";
@@ -66,6 +67,17 @@ if (db.kind === "postgres") {
 // ============ Middleware ============
 if (isProd) app.set("trust proxy", 1); // Render đứng sau proxy HTTPS
 app.disable("x-powered-by");
+// Nén gzip cho giao diện và API (gói JS 659 KB còn khoảng 170 KB); bản sao lưu đã mã hóa tự được bỏ qua
+app.use(compression());
+// Header bảo mật cơ bản. Chưa bật Content-Security-Policy vì các cửa sổ in dùng lệnh in nhúng trực tiếp trong trang
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (isProd) res.setHeader("Strict-Transport-Security", "max-age=15552000");
+  next();
+});
 app.use(cors({ origin: FRONTEND_URL || true, credentials: true }));
 // Khi CSDL chưa sẵn sàng: API trả 503 thay vì treo; trang giao diện vẫn tải bình thường
 app.use("/api", (req, res, next) => {
@@ -313,6 +325,11 @@ app.patch("/api/records/:id/status", requireAdmin, wrap(async (req, res) => {
   const existing = await db.records.findById(req.params.id);
   if (!existing) return res.status(404).json({ error: "Không tìm thấy" });
 
+  const me = req.session.user;
+  // Ban giám hiệu chỉ duyệt hoặc từ chối phiếu; nhận trả, hoàn tác trả là việc của nhân viên thiết bị
+  if (me.isPrincipal && !me.isEquipment && (status === "Trả" || existing.status === "Trả")) return res.status(403).json({ error: "Nhận trả và hoàn tác trả do nhân viên thiết bị thực hiện" });
+  // Người đăng ký không tự duyệt phiếu của chính mình (nhân viên thiết bị kiêm giáo viên nhờ người khác duyệt)
+  if (existing.status === "Chờ duyệt" && status === "Mượn" && existing.userId && existing.userId === me.id) return res.status(403).json({ error: "Không tự duyệt phiếu mượn của chính mình, hãy nhờ người khác duyệt" });
   const changes = { status, updatedAt: new Date().toISOString() };
   if (status === "Từ chối") changes.adminNote = reason;
   if (status === "Mượn" && existing.status === "Chờ duyệt") {

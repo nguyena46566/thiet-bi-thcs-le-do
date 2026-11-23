@@ -7,7 +7,7 @@ import {
 import type { Subject } from "./Inventory"
 
 const money = (n: number) => `${(n || 0).toLocaleString("vi-VN")} đ`
-const field = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/20 focus:border-[#1a3670] bg-white"
+const field = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/50 focus:border-[#1a3670] bg-white"
 const label = "block text-xs font-semibold text-gray-600 mb-1"
 const btnPrimary = "px-4 py-2 rounded-lg bg-[#1a3670] hover:bg-[#132d5e] text-white text-sm font-semibold disabled:opacity-50"
 const btnGhost = "px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold disabled:opacity-50"
@@ -37,7 +37,7 @@ export function RoomsTab({ subjects }: { subjects: Subject[] }) {
   return (
     <div className="grid lg:grid-cols-5 gap-5 items-start">
       <div className={`lg:col-span-2 ${card} p-5`}>
-        <h3 className="font-bold text-gray-900 mb-1">{f.id ? "Sửa phòng" : "Thêm phòng bộ môn"}</h3>
+        <h2 className="font-bold text-gray-900 mb-1">{f.id ? "Sửa phòng" : "Thêm phòng bộ môn"}</h2>
         <p className="text-xs text-gray-500 mb-4">Giáo viên chọn phòng khi đăng ký mượn; hệ thống không cho hai lớp dùng cùng phòng ở cùng tiết.</p>
         <Err msg={error} />
         <div className="space-y-3">
@@ -56,13 +56,13 @@ export function RoomsTab({ subjects }: { subjects: Subject[] }) {
         </div>
       </div>
       <div className={`lg:col-span-3 ${card} overflow-hidden`}>
-        <div className="px-5 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">Danh sách phòng ({list?.length ?? 0})</h3></div>
-        {list === null ? <p className="p-6 text-sm text-gray-400">Đang tải…</p> : list.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">Chưa có phòng nào</p> : (
+        <div className="px-5 py-4 border-b border-gray-100"><h2 className="font-bold text-gray-900">Danh sách phòng ({list?.length ?? 0})</h2></div>
+        {list === null ? <p className="p-6 text-sm text-gray-500">Đang tải…</p> : list.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Chưa có phòng nào</p> : (
           <ul className="divide-y divide-gray-50">{list.map((r) => (
             <li key={r.id} className="px-5 py-3 flex flex-wrap items-center justify-between gap-2">
               <div><div className="font-medium text-gray-900">{r.name} <span className="text-xs text-gray-500 font-normal">· {r.kind}</span>{r.subjectIds.length > 1 && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-violet-100 text-violet-700" title="Thông tư 23/2024/TT-BGDĐT cho phép ghép phòng học bộ môn có chức năng tương đồng, phải bảo đảm đủ thiết bị và thời gian dạy học">Phòng ghép {r.subjectIds.length} môn</span>}</div>
                 <div className="text-xs text-gray-500">{r.subjectIds.map((id) => subjects.find((s) => s.id === id)?.name).filter(Boolean).join(", ") || "Mọi môn"}{r.note ? ` · ${r.note}` : ""}</div></div>
-              <div className="flex gap-1"><button onClick={() => setF(r)} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200">Sửa</button><button onClick={() => remove(r)} className="px-2.5 py-1 rounded-lg text-xs font-semibold text-gray-400 hover:text-red-600 hover:bg-red-50">Xóa</button></div>
+              <div className="flex gap-1"><button onClick={() => setF(r)} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200">Sửa</button><button onClick={() => remove(r)} className="px-2.5 py-1 rounded-lg text-xs font-semibold text-gray-500 hover:text-red-600 hover:bg-red-50">Xóa</button></div>
             </li>
           ))}</ul>
         )}
@@ -147,7 +147,7 @@ export function ProposalsTab() {
     if (note === null) return
     try { await markProposalPurchased(p.id, note); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
   }
-  if (!d) return <p className="text-sm text-gray-400">{error || "Đang tải…"}</p>
+  if (!d) return <p className="text-sm text-gray-500">{error || "Đang tải…"}</p>
   const shown = d.proposals.filter((p) => !filter || p.status === filter)
   const total = shown.reduce((a, p) => a + p.total, 0)
   return (
@@ -163,7 +163,7 @@ export function ProposalsTab() {
       </div>
       {!d.canDecide && <p className="text-xs text-gray-500">Duyệt hoặc không duyệt do Ban giám hiệu thực hiện. Sau khi mua về, đánh dấu “Đã mua” và lập phiếu Ghi tăng.</p>}
       <div className={`${card} overflow-hidden`}>
-        {shown.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">Không có đề xuất</p> : (
+        {shown.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Không có đề xuất</p> : (
           <ul className="divide-y divide-gray-50">{shown.map((p) => (
             <li key={p.id} className="px-5 py-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
@@ -171,7 +171,7 @@ export function ProposalsTab() {
                 <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${STATUS_CLS[p.status]}`}>{p.status}</span>
               </div>
               <table className="w-full text-sm mt-2"><tbody>{p.items.map((it, i) => (
-                <tr key={i} className="border-t border-gray-50"><td className="py-1.5">{it.name}{it.reason && <span className="block text-[11px] text-gray-400">{it.reason}</span>}</td><td className="py-1.5 text-right whitespace-nowrap">{it.quantity} × {money(it.estPrice)}</td><td className="py-1.5 text-right font-semibold whitespace-nowrap w-32">{money(it.quantity * it.estPrice)}</td></tr>
+                <tr key={i} className="border-t border-gray-50"><td className="py-1.5">{it.name}{it.reason && <span className="block text-[11px] text-gray-500">{it.reason}</span>}</td><td className="py-1.5 text-right whitespace-nowrap">{it.quantity} × {money(it.estPrice)}</td><td className="py-1.5 text-right font-semibold whitespace-nowrap w-32">{money(it.quantity * it.estPrice)}</td></tr>
               ))}</tbody></table>
               <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
                 <span className="text-xs text-gray-500">{p.decidedBy ? `BGH: ${p.decidedBy}${p.decisionNote ? ` – ${p.decisionNote}` : ""}` : ""}{p.purchaseNote ? ` · Mua: ${p.purchaseNote}` : ""}</span>

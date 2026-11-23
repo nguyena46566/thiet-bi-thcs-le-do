@@ -13,6 +13,7 @@ export interface User {
   isEquipment?: boolean;
   isHead?: boolean;
   isLibrarian?: boolean;
+  isStaff?: boolean;
   consentVersion?: string;
   roles?: string[];
   group?: string;
@@ -360,7 +361,7 @@ export const sendRemindersNow = () => call<{ due: number; overdue: number; sent:
 export const fetchEquipmentDetail = (id: string) => call<{ equipment: Equipment; subjectName: string; days: { date: string; available: number }[]; history?: { id: string; teacherName: string; className: string; borrowDate: string; returnDate: string; status: string; quantity: number }[]; maintenance?: Maintenance[] }>("GET", `/api/inventory/equipment/${encodeURIComponent(id)}/detail`);
 
 // ============ GHI GIẢM ============
-export interface Disposal { id: string; equipmentId: string; name: string; subjectId: string; quantity: number; source: "good" | "broken" | "lost"; reason: string; decisionNo: string; note: string; date: string; unitPrice: number; value: number; createdBy: string; createdAt: string }
+export interface Disposal { id: string; equipmentId: string; name: string; subjectId: string; quantity: number; source: "good" | "broken" | "lost"; status?: "Chờ duyệt" | "Đã duyệt" | "Từ chối"; decisionNote?: string; decidedBy?: string; reason: string; decisionNo: string; note: string; date: string; unitPrice: number; value: number; createdBy: string; createdAt: string }
 export const fetchDisposals = () => call<Disposal[]>("GET", "/api/disposals");
 export const createDisposal = (b: { equipmentId: string; quantity: number; source: string; reason: string; decisionNo: string; note: string; date: string }) => call<Disposal>("POST", "/api/disposals", b);
 
@@ -385,7 +386,8 @@ export interface RoomLogEntry { date: string; period: string; className: string;
 export const fetchRoomLog = (id: string, from: string, to: string) => call<{ room: Room; share?: Record<string, number>; entries: RoomLogEntry[] }>("GET", `/api/rooms/${encodeURIComponent(id)}/log?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
 
 export interface ProposalItem { name: string; subjectId: string; equipmentId?: string | null; quantity: number; estPrice: number; reason: string }
-export interface Proposal { id: string; status: "Chờ duyệt" | "Đã duyệt" | "Từ chối" | "Đã mua"; items: ProposalItem[]; total: number; purpose: string; userId: string; userName: string; createdAt: string; decisionNote?: string; decidedBy?: string; purchaseNote?: string }
+export interface Proposal { id: string; status: "Chờ duyệt" | "Đã duyệt" | "Từ chối" | "Đã mua"; items: ProposalItem[]; total: number; purpose: string; userId: string; userName: string; createdAt: string; decisionNote?: string; decidedBy?: string; purchaseNote?: string; headReviews?: HeadReview[] }
+export interface HeadReview { group: string; by: string; opinion: "Đồng ý" | "Không đồng ý"; note: string; at: string }
 export const fetchProposals = (mine = false) => call<{ proposals: Proposal[]; canDecide: boolean }>("GET", `/api/proposals${mine ? "?mine=1" : ""}`);
 export const createProposal = (b: { purpose: string; items: ProposalItem[] }) => call<Proposal>("POST", "/api/proposals", b);
 export const decideProposal = (id: string, approve: boolean, note: string) => call<Proposal>("POST", `/api/proposals/${encodeURIComponent(id)}/decide`, { approve, note });
@@ -450,7 +452,7 @@ export const rejectUser = (id: string) => call<{ ok: boolean }>("POST", `/api/us
 export const updateUser = (id: string, b: Partial<AppUser>) => call<AppUser>("PATCH", `/api/users/${encodeURIComponent(id)}`, b);
 export const createUser = (b: { name: string; username: string; email: string; password: string; roles: string[]; group: string; test?: boolean }) => call<AppUser>("POST", "/api/users", b);
 export const resetUserPassword = (id: string, password: string) => call<{ ok: boolean }>("POST", `/api/users/${encodeURIComponent(id)}/password`, { password });
-export const fetchPrincipalOverview = () => call<{ losses: LossReport[]; proposals: Proposal[]; plans: Plan[]; special: BorrowRecord[]; stats: { monthRecords: number; borrowing: number; overdue: number; pending: number } }>("GET", "/api/principal/overview");
+export const fetchPrincipalOverview = () => call<{ losses: LossReport[]; proposals: Proposal[]; plans: Plan[]; special: BorrowRecord[]; disposals: Disposal[]; directEdits: { id: string; name: string; by: string; createdAt: string; diff: Record<string, number>; note: string }[]; stats: { monthRecords: number; borrowing: number; overdue: number; pending: number } }>("GET", "/api/principal/overview");
 export const fetchHeadOverview = (group = "") => call<{ group: string; subjects: { id: string; name: string; group: string }[]; records: BorrowRecord[]; proposals: Proposal[] }>("GET", `/api/head/overview?group=${encodeURIComponent(group)}`);
 
 // ============ THƯ VIỆN ============
@@ -553,3 +555,9 @@ export async function restoreBackup(file: File, dry: boolean) {
 export const fetchDemoStatus = () => call<{ active: boolean; at: string | null; summary: Record<string, number> | null }>("GET", "/api/admin/demo-data");
 export const createDemoData = () => call<{ summary: Record<string, number> }>("POST", "/api/admin/demo-data", {});
 export const removeDemoData = () => call<{ restoredTo: string }>("DELETE", "/api/admin/demo-data");
+
+// ============ PHÂN CÔNG, PHÂN QUYỀN ============
+export interface Capabilities { principalConfigured: boolean; canDecide: boolean; canOperate: boolean; canLibrary: boolean; viewOnlyAdmin: boolean }
+export const fetchCapabilities = () => call<Capabilities>("GET", "/api/me/capabilities");
+export const decideDisposal = (id: string, approve: boolean, decisionNo: string, note: string) => call<Disposal>("POST", `/api/disposals/${encodeURIComponent(id)}/decide`, { approve, decisionNo, note });
+export const reviewProposal = (id: string, opinion: "Đồng ý" | "Không đồng ý", note: string) => call<Proposal>("POST", `/api/proposals/${encodeURIComponent(id)}/review`, { opinion, note });

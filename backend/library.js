@@ -50,7 +50,10 @@ export function registerLibraryRoutes(app, { requireAuth, wrap }) {
   const requireLibrary = (req, res, next) => {
     const u = req.session?.user;
     if (!u) return res.status(401).json({ error: "Vui lòng đăng nhập" });
-    if (!(u.isLibrarian || u.isEquipment || u.isSysadmin || u.isPrincipal || (u.isAdmin && !u.roles))) return res.status(403).json({ error: "Chỉ nhân viên thư viện, thiết bị" });
+    // Thủ thư và nhân viên thiết bị (một người thường kiêm hai việc) được làm thư viện; Ban giám hiệu chỉ xem thống kê; quản trị hệ thống không làm nghiệp vụ
+    const canWrite = u.isLibrarian || u.isEquipment || (u.isAdmin && !u.roles);
+    const canRead = canWrite || u.isPrincipal;
+    if (!(req.method === "GET" || req.method === "HEAD" ? canRead : canWrite)) return res.status(403).json({ error: "Chỉ nhân viên thư viện, thiết bị" });
     next();
   };
 

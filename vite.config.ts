@@ -94,11 +94,11 @@ function figmaSiteConfiguration(config: FigmaSiteConfiguration): Plugin {
     return html.replace(`<!-- ${slotName} -->`, content)
   }
 
-  const title = config.title ?? "Figma Make App"
-  const description = config.description ?? ''
+  const title = config.title ?? "Quản lý thiết bị, thư viện – THCS Lê Độ"
+  const description = config.description ?? 'Website quản lý thiết bị dạy học và thư viện Trường THCS Lê Độ'
   const favicon = config.icons?.icon ?? ''
   const socialImage = config.openGraph?.image ?? ''
-  const language = sanitizeHtmlValue(config.language) || 'en'
+  const language = sanitizeHtmlValue(config.language) || 'vi'
   const googleAnalyticsId = sanitizeHtmlValue(config.analytics?.googleAnalyticsId)
   const headStart = config.customScripts?.headStart ?? ''
   const headEnd = config.customScripts?.headEnd ?? ''

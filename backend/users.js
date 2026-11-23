@@ -7,7 +7,7 @@
  */
 import crypto from "crypto";
 import db, { newId } from "./database.js";
-import { setPrincipalActive } from "./auth.js";
+import { setPrincipalActive, principalConfigured, canDecide } from "./auth.js";
 import { SUBJECTS } from "./chatTools.js";
 import notifications from "./notifications.js";
 import { logLogin } from "./ops.js";
@@ -58,7 +58,9 @@ export function sessionUser(u) {
   const isPrincipal = roles.includes("principal"), isSysadmin = roles.includes("sysadmin"), isEquipment = roles.includes("equipment"), isLibrarian = roles.includes("librarian");
   return {
     id: u.id, email: u.email || "", name: u.name, avatar: u.avatar || null, roles, group: u.group || "",
-    isAdmin: isSysadmin || isEquipment || isPrincipal || isLibrarian, isPrincipal, isSysadmin, isEquipment, isLibrarian, isHead: roles.includes("head"),
+    // isAdmin = quyền vào nghiệp vụ thiết bị: nhân viên thiết bị (làm) và Ban giám hiệu (xem, quyết định).
+    // Quản trị hệ thống chỉ lo tài khoản, sao lưu, nhật ký; thủ thư chỉ làm thư viện: cả hai vào khu quản trị (isStaff) nhưng không có isAdmin.
+    isAdmin: isEquipment || isPrincipal, isStaff: isSysadmin || isEquipment || isPrincipal || isLibrarian, isPrincipal, isSysadmin, isEquipment, isLibrarian, isHead: roles.includes("head"),
     authType: u.authType, test: !!u.test, consentVersion: u.consent?.version || "",
   };
 }
@@ -153,6 +155,12 @@ export function registerUserRoutes(app, { requireAuth, requireAdmin, wrap }) {
     next();
   };
 
+  // Quyền của người đang đăng nhập (giao diện dùng để ẩn, hiện nút cho đúng vai trò)
+  app.get("/api/me/capabilities", (req, res) => {
+    const u = req.session?.user;
+    if (!u) return res.status(401).json({ error: "Vui lòng đăng nhập" });
+    res.json({ principalConfigured: principalConfigured(), canDecide: canDecide(u), canOperate: !!u.isEquipment, canLibrary: !!(u.isLibrarian || u.isEquipment), viewOnlyAdmin: !!(u.isPrincipal && !u.isEquipment) });
+  });
   app.get("/api/auth/options", (req, res) => res.json({
     google: !!process.env.GOOGLE_CLIENT_ID,
     testAccounts: testAccountsEnabled() ? TEST_USERS.map((t) => ({ username: t.username, label: t.roles.map((r) => ROLES[r]).join(" + ") + (t.group ? ` (${t.group})` : "") })) : [],

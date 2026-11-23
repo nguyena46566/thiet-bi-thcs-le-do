@@ -1,10 +1,12 @@
 {
-  "description": "Manage classroom equipment with an intuitive platform for teachers to request and return teaching tools by subject, streamlining resource allocation.",
+  "description": "Website quản lý thiết bị dạy học và thư viện Trường THCS Lê Độ: đăng ký mượn thiết bị theo tiết, kiểm kê, nhận sách theo hóa đơn, mượn – trả sách.",
   "robots": {
     "index": false
   },
   "accessibility": {
     "addBypassLinks": false,
     "ignoreReducedMotion": false
-  }
+  },
+  "title": "Quản lý thiết bị, thư viện – THCS Lê Độ",
+  "language": "vi"
 }

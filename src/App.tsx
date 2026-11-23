@@ -10,7 +10,7 @@ import { LoginPage, PendingPage, PrincipalPage, HeadPage, UsersTab, ChangePasswo
 import { SystemTab, LoginLogTab, CsdlExportTab, EvidenceTab } from "./Ops"
 import { PrivacyPage, ConsentGate, ProfilePage, GuestPage, GuestSlipPage, GuestsTab, DataRequestsTab } from "./Privacy"
 import { CirculationTab, ReadersTab, ReadingPeriodsTab, StocktakeTab, LibraryStatsTab, OpacPage, MyLibraryLoans, LibraryRulesNotice } from "./Circulation"
-import { SUBJECTS } from "./subjects"
+import { SUBJECTS, badgeColor } from "./subjects"
 import { TeacherHome, BorrowPage, SubjectsPage, InfoPage } from "./Teacher"
 import { PointsRulesText } from "./Inventory"
 import { ReceiptsTab, BooksTab as LibBooksTab, ShelvesTab, LibraryLedgerTab, BookCopyPage, ShelfPage } from "./Library"
@@ -102,11 +102,11 @@ function Sidebar({ page, setPage }: { page: Page; setPage: (p: Page) => void }) 
       {extra}
     </button>
   )
-  const groupTitle = (t: string) => <div className="px-3 pt-5 pb-1.5 text-xs font-semibold text-white/50">{t}</div>
+  const groupTitle = (t: string) => <div className="px-3 pt-5 pb-1.5 text-xs font-semibold text-white/70">{t}</div>
 
   const content = (
     <div className="flex flex-col h-full">
-      <button onClick={() => go("home")} className="flex items-center gap-3 px-5 py-5 border-b border-white/10 text-left" aria-label="Trang chủ">
+      <button onClick={() => go("home")} className="flex items-center gap-3 px-5 py-5 border-b border-white/10 text-left" aria-label="Trường THCS Lê Độ – Trang chủ">
         <img src={logoImg} alt="" className="h-11 w-11 rounded-xl object-cover bg-white" />
         <span className="leading-tight">
           <span className="block text-xs font-semibold text-[#9FD3B5]">Trường THCS</span>
@@ -117,10 +117,10 @@ function Sidebar({ page, setPage }: { page: Page; setPage: (p: Page) => void }) 
         {inAdmin ? (
           <>
             <div className="pt-4">{item("back", "← Trang giáo viên", false, () => go("home"))}</div>
-            {ADMIN_MENU.filter((g) => g.items.some((it) => (!["nguoi-dung", "du-lieu-ca-nhan", "nhat-ky-dang-nhap", "he-thong"].includes(it.id) || user?.isSysadmin) && menuAllowed(user, g.group, it.id))).map((g) => (
+            {ADMIN_MENU.filter((g) => g.items.some((it) => menuAllowed(user, g.group, it.id))).map((g) => (
               <div key={g.group || "chung"}>
                 {groupTitle(g.group || "Điều hành")}
-                {g.items.filter((it) => (!["nguoi-dung", "du-lieu-ca-nhan", "nhat-ky-dang-nhap", "he-thong"].includes(it.id) || user?.isSysadmin) && menuAllowed(user, g.group, it.id)).map((it) => item(it.id, it.label, adminSection === it.id, () => go(`admin/${it.id}`), undefined,
+                {g.items.filter((it) => menuAllowed(user, g.group, it.id)).map((it) => item(it.id, it.label, adminSection === it.id, () => go(`admin/${it.id}`), undefined,
                   it.id === "thong-bao" && unreadCount > 0 ? <span className="text-[11px] font-bold rounded-full px-1.5 bg-red-500 text-white">{badge}</span> : null))}
               </div>
             ))}
@@ -160,7 +160,7 @@ function Sidebar({ page, setPage }: { page: Page; setPage: (p: Page) => void }) 
         {user ? (
           <div className="flex items-center gap-2.5 px-2 py-1.5">
             {user.avatar ? <img src={user.avatar} alt="" className="w-8 h-8 rounded-full" /> : <span className="w-8 h-8 rounded-full bg-white/15 text-white text-sm font-bold flex items-center justify-center">{user.name.trim().split(/\s+/).pop()?.[0]?.toUpperCase()}</span>}
-            <button onClick={() => go("ho-so")} title="Hồ sơ của tôi" className="flex-1 min-w-0 text-left"><span className="block text-sm text-white font-medium truncate">{user.name}</span><span className="block text-xs text-white/50 truncate">{user.isSysadmin ? "Quản trị hệ thống" : user.isPrincipal ? "Ban giám hiệu" : user.isEquipment ? "Nhân viên thiết bị" : user.isLibrarian ? "Nhân viên thư viện" : user.isHead ? "Tổ trưởng" : "Giáo viên"}{user.test ? " · thử nghiệm" : ""} · Hồ sơ</span></button>
+            <button onClick={() => go("ho-so")} title="Hồ sơ của tôi" className="flex-1 min-w-0 text-left"><span className="block text-sm text-white font-medium truncate">{user.name}</span><span className="block text-xs text-white/70 truncate">{user.isSysadmin ? "Quản trị hệ thống" : user.isPrincipal ? "Ban giám hiệu" : user.isEquipment ? "Nhân viên thiết bị" : user.isLibrarian ? "Nhân viên thư viện" : user.isHead ? "Tổ trưởng" : "Giáo viên"}{user.test ? " · thử nghiệm" : ""} · Hồ sơ</span></button>
             <button onClick={logout} className="text-xs text-white/70 hover:text-white px-2 py-1 rounded-lg hover:bg-white/10">Đăng xuất</button>
           </div>
         ) : (
@@ -172,9 +172,9 @@ function Sidebar({ page, setPage }: { page: Page; setPage: (p: Page) => void }) 
 
   return (
     <>
-      <aside className="hidden lg:block fixed inset-y-0 left-0 w-64 bg-[#1a3670] z-40">{content}</aside>
+      <aside aria-label="Menu chính" className="hidden lg:block fixed inset-y-0 left-0 w-64 bg-[#1a3670] z-40">{content}</aside>
       <header className="lg:hidden fixed top-0 inset-x-0 z-40 h-14 bg-[#1a3670] text-white flex items-center px-3 gap-2 shadow">
-        <button onClick={() => go("home")} className="flex items-center gap-2 flex-1 min-w-0" aria-label="Trang chủ">
+        <button onClick={() => go("home")} className="flex items-center gap-2 flex-1 min-w-0" aria-label="THCS Lê Độ – Trang chủ">
           <img src={logoImg} alt="" className="h-9 w-9 rounded-lg object-cover bg-white" />
           <span className="font-bold truncate">THCS Lê Độ</span>
         </button>
@@ -315,7 +315,7 @@ function HomePage({ setPage, onQuick }: { setPage: (p: Page) => void; onQuick: (
     const s = SUBJECTS.find((x) => x.id === quick.subjectId)!
     onQuick({ subjectId: s.id, subjectName: s.name, teacherName: "", className: "", equipment: "", items: [], borrowDate: isoToVn(quick.date), returnDate: isoToVn(quick.date), period: "", periods: [quick.slot], periodPPCT: "", notes: "", missing: [] })
   }
-  const selectCls = "w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-[15px] bg-white focus:outline-none focus:ring-2 focus:ring-[#1a3670]/20 focus:border-[#1a3670]"
+  const selectCls = "w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-[15px] bg-white focus:outline-none focus:ring-2 focus:ring-[#1a3670]/50 focus:border-[#1a3670]"
 
   return (
     <main className="pt-20 lg:pt-10 pb-24 px-4 lg:px-10">
@@ -331,11 +331,11 @@ function HomePage({ setPage, onQuick }: { setPage: (p: Page) => void; onQuick: (
           </div>
           <div className="grid gap-3 px-6 py-5 md:grid-cols-[1.2fr_1fr_1fr_auto] md:items-end">
             <label className="block"><span className="block text-sm font-semibold text-gray-700 mb-1.5">Môn học</span>
-              <select className={selectCls} value={quick.subjectId} onChange={(e) => setQuick({ ...quick, subjectId: e.target.value })}>{SUBJECTS.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+              <select aria-label="Môn học" className={selectCls} value={quick.subjectId} onChange={(e) => setQuick({ ...quick, subjectId: e.target.value })}>{SUBJECTS.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
             <label className="block"><span className="block text-sm font-semibold text-gray-700 mb-1.5">Ngày sử dụng {quickDate && <span className="font-normal text-gray-500">· {dayLabel(quickDate)}</span>}</span>
               <input type="date" className={selectCls} min={user?.isAdmin ? undefined : vnToIso(tomorrowVN())} value={quick.date} onChange={(e) => setQuick({ ...quick, date: e.target.value })} /></label>
             <label className="block"><span className="block text-sm font-semibold text-gray-700 mb-1.5">Tiết học</span>
-              <select className={selectCls} value={quick.slot} onChange={(e) => setQuick({ ...quick, slot: e.target.value })}>{SLOT_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+              <select aria-label="Tiết học" className={selectCls} value={quick.slot} onChange={(e) => setQuick({ ...quick, slot: e.target.value })}>{SLOT_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
             <button onClick={submitQuick} className="h-[46px] px-5 rounded-xl bg-[#1a3670] hover:bg-[#132d5e] text-white font-semibold text-[15px] whitespace-nowrap">{user ? "Tìm thiết bị còn trống" : "Đăng nhập để đăng ký"}</button>
           </div>
         </section>
@@ -350,7 +350,7 @@ function HomePage({ setPage, onQuick }: { setPage: (p: Page) => void; onQuick: (
                 <li>Chọn môn, ngày, tiết và thiết bị; đăng ký trước giờ dạy ít nhất 24 giờ.</li>
                 <li>Chờ phòng thiết bị duyệt, nhận email, đến lấy thiết bị và trả đúng hạn.</li>
               </ol>
-            ) : mine === null ? <p className="text-sm text-gray-400">Đang tải…</p> : upcoming.length === 0 ? (
+            ) : mine === null ? <p className="text-sm text-gray-500">Đang tải…</p> : upcoming.length === 0 ? (
               <div className="border border-dashed border-gray-300 rounded-xl py-8 text-center">
                 <p className="font-semibold text-gray-800">Chưa có phiếu sắp tới</p>
                 <p className="text-sm text-gray-500 mt-1">Dùng đăng ký nhanh ở trên để tạo phiếu đầu tiên.</p>
@@ -375,7 +375,7 @@ function HomePage({ setPage, onQuick }: { setPage: (p: Page) => void; onQuick: (
             <h2 className="font-semibold text-gray-900 mb-4">Hôm nay ở phòng thiết bị</h2>
             <div className="grid grid-cols-3 gap-3">
               {([["Đang cho mượn", lending, "bg-[#F1F4F9] text-[#1a3670]"], ["Cần trả hôm nay", dueToday, "bg-amber-50 text-amber-700"], ["Chờ duyệt", pending, "bg-gray-50 text-gray-700"]] as const).map(([l, v, c]) => (
-                <div key={l} className={`rounded-xl px-4 py-3.5 ${c}`}><div className="text-3xl font-bold tabular-nums">{v}</div><div className="text-sm mt-0.5 opacity-90">{l}</div></div>
+                <div key={l} className={`rounded-xl px-4 py-3.5 ${c}`}><div className="text-3xl font-bold tabular-nums">{v}</div><div className="text-sm mt-0.5">{l}</div></div>
               ))}
             </div>
             {overdue > 0 ? <p className="mt-4 text-sm text-red-700">Có {overdue} phiếu đã quá hạn trả.</p>
@@ -393,7 +393,7 @@ function HomePage({ setPage, onQuick }: { setPage: (p: Page) => void; onQuick: (
                 <button key={s.id} onClick={() => setPage(s.id)} className="flex items-center gap-2.5 pl-3.5 pr-3 py-2 rounded-xl border border-gray-200 hover:border-[#1a3670]/40 hover:bg-[#F6F7F9] text-[15px] text-gray-800">
                   <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }} />{s.name}
                   {busy > 0 && <span className="text-xs text-gray-500">· {busy} đang mượn</span>}
-                  <span className="text-gray-400" aria-hidden="true">›</span>
+                  <span className="text-gray-500" aria-hidden="true">›</span>
                 </button>
               )
             })}
@@ -621,16 +621,37 @@ const ADMIN_MENU: { group: string; items: { id: string; label: string; tab: stri
   ] },
 ]
 const ADMIN_ITEMS = ADMIN_MENU.flatMap((g) => g.items)
-/** Nhân viên thư viện (không kiêm thiết bị) chỉ thấy mục Thư viện và Thông báo */
+/** Các mục quản trị chỉ quản trị hệ thống dùng */
+const SYSTEM_ITEMS = ["nguoi-dung", "du-lieu-ca-nhan", "nhat-ky-dang-nhap", "he-thong"]
+/** Ban giám hiệu: xem và ra quyết định (duyệt mất, mua sắm, thanh lý, kế hoạch, điểm thi đua), xem báo cáo */
+const PRINCIPAL_ITEMS = ["tong-quan", "muon-tra", "xac-nhan-mat", "de-xuat", "ghi-giam", "ke-hoach", "thi-dua", "toi-thieu", "thong-ke-thu-vien", "bao-cao", "so-sach", "minh-chung", "thong-bao"]
+/**
+ * Mỗi người chỉ thấy mục việc của mình (một người có thể nhiều vai trò thì cộng các mục lại):
+ *  - Nhân viên thiết bị: toàn bộ nghiệp vụ thiết bị và thư viện (thường kiêm nhiệm), sổ khách
+ *  - Nhân viên thư viện: nhóm Thư viện và Sổ khách
+ *  - Ban giám hiệu: các mục ra quyết định và báo cáo
+ *  - Quản trị hệ thống: người dùng, nhật ký, sao lưu, yêu cầu dữ liệu cá nhân
+ */
 function menuAllowed(user: ReturnType<typeof useAuth>["user"], group: string, id: string) {
-  if (!user?.isLibrarian || user.isEquipment || user.isSysadmin || user.isPrincipal) return true
-  return group === "Thư viện" || id === "thong-bao" || id === "khach-vang-lai"
+  if (!user) return false
+  if (user.isEquipment && !SYSTEM_ITEMS.includes(id)) return true
+  if (user.isLibrarian && (group === "Thư viện" || id === "khach-vang-lai")) return true
+  if (user.isPrincipal && PRINCIPAL_ITEMS.includes(id)) return true
+  if (user.isSysadmin && SYSTEM_ITEMS.includes(id)) return true
+  // tài khoản Google cũ chỉ có cờ quản lý, chưa gán vai trò: giữ nguyên quyền cũ
+  if (user.isAdmin && (!user.roles || user.roles.length === 0) && !SYSTEM_ITEMS.includes(id)) return true
+  return false
 }
 
 function AdminPage({ section = "tong-quan", go }: { section?: string; go: (section: string) => void }) {
   const { user } = useAuth()
   const current = ADMIN_ITEMS.find((i) => i.id === section) || ADMIN_ITEMS[0]
   const tab = current.tab
+  // Nhân viên thư viện chỉ được vào nhóm Thư viện và Sổ khách: các mục khác chuyển về trang mượn – trả sách
+  const currentGroup = ADMIN_MENU.find((g) => g.items.some((i) => i.id === current.id))?.group || ""
+  const blocked = !menuAllowed(user, currentGroup, current.id)
+  const firstAllowed = ADMIN_MENU.flatMap((g) => g.items.map((it) => ({ g: g.group, id: it.id }))).find((x) => menuAllowed(user, x.g, x.id))?.id
+  useEffect(() => { if (blocked && firstAllowed) go(firstAllowed) }, [blocked, firstAllowed, go])
   useEffect(() => { if (tab === "notifications") loadNotifsRef.current?.() }, [tab])
   const loadNotifsRef = useRef<(() => void) | null>(null)
   const [returning, setReturning] = useState<BorrowRecord | null>(null)
@@ -676,7 +697,8 @@ function AdminPage({ section = "tong-quan", go }: { section?: string; go: (secti
   loadNotifsRef.current = loadNotifs
   useEffect(() => () => latestRequest.current?.abort(), [])
 
-  if (!user?.isAdmin) {
+  if (blocked) return null
+  if (!(user?.isAdmin || user?.isStaff)) {
     return (
       <main className="pt-20 lg:pt-10 pb-24 px-4 lg:px-10">
         <div className="max-w-md mx-auto text-center py-20">
@@ -711,7 +733,7 @@ function AdminPage({ section = "tong-quan", go }: { section?: string; go: (secti
     try { await deleteRecord(id); loadData() } catch (err) { alert(err instanceof Error ? err.message : "Lỗi") }
   }
 
-  const selectCls = "border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/20 bg-white text-gray-700"
+  const selectCls = "border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/50 bg-white text-gray-700"
 
   return (
     <main className="pt-20 lg:pt-10 pb-24 px-4 lg:px-10">
@@ -767,12 +789,12 @@ function AdminPage({ section = "tong-quan", go }: { section?: string; go: (secti
         {tab === "records" && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-4 border-b border-gray-100 flex flex-wrap gap-3 items-center">
-              <input type="search" aria-label="Tìm kiếm" placeholder="Tìm giáo viên, lớp, đồ dùng..." className="border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/20 bg-white w-full sm:w-64 placeholder:text-gray-400" value={search} onChange={(e) => setSearch(e.target.value)} />
-              <select className={selectCls} value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}>
+              <input type="search" aria-label="Tìm kiếm" placeholder="Tìm giáo viên, lớp, đồ dùng..." className="border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/50 bg-white w-full sm:w-64 placeholder:text-gray-500" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <select aria-label="Lọc theo môn" className={selectCls} value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}>
                 <option value="">Tất cả môn</option>
                 {SUBJECTS.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
-              <select className={selectCls} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+              <select aria-label="Lọc theo trạng thái" className={selectCls} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
                 <option value="">Tất cả</option>
                 <option value="Chờ duyệt">Chờ duyệt</option>
                 <option value="Mượn">Đang mượn</option>
@@ -780,10 +802,10 @@ function AdminPage({ section = "tong-quan", go }: { section?: string; go: (secti
                 <option value="Từ chối">Từ chối</option>
                 <option value="overdue">Quá hạn trả</option>
               </select>
-              <span className="text-sm text-gray-400 ml-auto">{loading ? "..." : `${records.length} kết quả`}</span>
+              <span className="text-sm text-gray-500 ml-auto">{loading ? "..." : `${records.length} kết quả`}</span>
             </div>
             {records.length === 0 ? (
-              <div className="text-center py-16 text-gray-400"><div className="text-5xl mb-3">📋</div><p className="text-sm">Trống</p></div>
+              <div className="text-center py-16 text-gray-500"><div className="text-5xl mb-3">📋</div><p className="text-sm">Trống</p></div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -796,13 +818,13 @@ function AdminPage({ section = "tong-quan", go }: { section?: string; go: (secti
                       const btn = "px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap"
                       return (
                         <tr key={r.id} className={isOverdue(r) ? "bg-rose-50/50" : "hover:bg-gray-50/60"}>
-                          <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">{r.teacherName}{(r.code || r.roomName) && <div className="text-[10px] text-gray-400 font-normal">{[r.code, r.roomName].filter(Boolean).join(" · ")}</div>}{r.needsSpecialApproval && <div className="text-[10px] font-bold text-violet-700" title={r.specialReason}>{r.specialApproval ? "Đã duyệt đặc biệt" : "Cần duyệt đặc biệt"}</div>}</td>
+                          <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">{r.teacherName}{(r.code || r.roomName) && <div className="text-[10px] text-gray-500 font-normal">{[r.code, r.roomName].filter(Boolean).join(" · ")}</div>}{r.needsSpecialApproval && <div className="text-[10px] font-bold text-violet-700" title={r.specialReason}>{r.specialApproval ? "Đã duyệt đặc biệt" : "Cần duyệt đặc biệt"}</div>}</td>
                           <td className="px-3 py-3 text-gray-600">{r.className}</td>
-                          <td className="px-3 py-3"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white whitespace-nowrap" style={{ backgroundColor: sub?.color || "#888" }}>{r.subjectName}</span></td>
+                          <td className="px-3 py-3"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white whitespace-nowrap" style={{ backgroundColor: badgeColor(sub?.color) }}>{r.subjectName}</span></td>
                           <td className="px-3 py-3 text-gray-600 text-xs whitespace-nowrap">{r.period || "-"}</td>
                           <td className="px-3 py-3 text-gray-700 min-w-[180px] max-w-[280px]">
                             <div className="line-clamp-2" title={r.equipment}>{r.equipment}</div>
-                            {r.notes && <div className="text-[11px] text-gray-400 truncate" title={r.notes}>Ghi chú: {r.notes}</div>}
+                            {r.notes && <div className="text-[11px] text-gray-500 truncate" title={r.notes}>Ghi chú: {r.notes}</div>}
                           </td>
                           <td className="px-3 py-3 text-gray-600 whitespace-nowrap text-xs">{r.borrowDate}</td>
                           <td className="px-3 py-3 text-gray-600 whitespace-nowrap text-xs">{r.returnDate}</td>
@@ -815,11 +837,11 @@ function AdminPage({ section = "tong-quan", go }: { section?: string; go: (secti
                           </td>
                           <td className="px-3 py-3">
                             <div className="flex gap-1.5">
-                              {r.status === "Chờ duyệt" && <button onClick={() => handleStatusChange(r.id, "Mượn")} className={`${btn} bg-green-600 hover:bg-green-700 text-white`}>Duyệt</button>}
+                              {r.status === "Chờ duyệt" && <button onClick={() => handleStatusChange(r.id, "Mượn")} className={`${btn} bg-green-700 hover:bg-green-800 text-white`}>Duyệt</button>}
                               {r.status === "Chờ duyệt" && <button onClick={() => handleStatusChange(r.id, "Từ chối")} className={`${btn} bg-red-50 hover:bg-red-100 text-red-700`}>Từ chối</button>}
                               {r.status === "Mượn" && <button onClick={() => setReturning(r)} className={`${btn} bg-[#1a3670] hover:bg-[#132d5e] text-white`}>Đã trả</button>}
                               {r.status === "Trả" && <button onClick={() => handleStatusChange(r.id, "Mượn")} className={`${btn} bg-gray-100 hover:bg-gray-200 text-gray-700`}>Hoàn tác</button>}
-                              <button onClick={() => handleDelete(r.id)} className={`${btn} text-gray-400 hover:text-red-600 hover:bg-red-50`} aria-label="Xóa phiếu" title="Xóa phiếu">Xóa</button>
+                              <button onClick={() => handleDelete(r.id)} className={`${btn} text-gray-500 hover:text-red-600 hover:bg-red-50`} aria-label="Xóa phiếu" title="Xóa phiếu">Xóa</button>
                             </div>
                           </td>
                         </tr>
@@ -847,7 +869,7 @@ function AdminPage({ section = "tong-quan", go }: { section?: string; go: (secti
               {unreadCount > 0 && <button onClick={async () => { await markAllNotificationsRead(); loadNotifs() }} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Đọc hết</button>}
             </div>
             {notifs.length === 0 ? (
-              <div className="text-center py-16 text-gray-400"><div className="text-5xl mb-3">🔔</div><p className="text-sm">Trống</p></div>
+              <div className="text-center py-16 text-gray-500"><div className="text-5xl mb-3">🔔</div><p className="text-sm">Trống</p></div>
             ) : (
               <div className="divide-y divide-gray-50">
                 {notifs.map((n) => (
@@ -858,7 +880,7 @@ function AdminPage({ section = "tong-quan", go }: { section?: string; go: (secti
                     <div className="flex-1 min-w-0">
                       <h4 className={`text-sm ${n.read ? "text-gray-700" : "font-bold text-gray-900"}`}>{n.title}</h4>
                       <p className="text-xs text-gray-500 mt-0.5">{n.message}</p>
-                      <p className="text-[10px] text-gray-400 mt-1">{new Date(n.createdAt).toLocaleString("vi-VN")}</p>
+                      <p className="text-[10px] text-gray-500 mt-1">{new Date(n.createdAt).toLocaleString("vi-VN")}</p>
                     </div>
                     {!n.read && <button onClick={async () => { await markNotificationRead(n.id); loadNotifs() }} className="text-[10px] text-blue-500 font-bold">OK</button>}
                   </div>
@@ -890,7 +912,7 @@ function AdminSummary({ onPick, active, refreshKey }: { onPick: (status: string)
         <button key={it.label} onClick={() => onPick(it.key)} aria-pressed={active === it.key}
           className={`text-left border rounded-xl px-4 py-3 transition-shadow hover:shadow-md ${it.cls} ${active === it.key ? "ring-2 ring-[#1a3670]/40" : ""}`}>
           <div className="text-2xl font-bold">{it.value}</div>
-          <div className="text-xs font-medium opacity-80">{it.label}</div>
+          <div className="text-xs font-medium">{it.label}</div>
         </button>
       ))}
     </div>
@@ -943,7 +965,7 @@ function MyRecordsPage({ setPage }: { setPage: (p: Page) => void }) {
           </div>
         )}
         {records === null ? (
-          <p className="text-sm text-gray-400">Đang tải...</p>
+          <p className="text-sm text-gray-500">Đang tải...</p>
         ) : list.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 text-center py-14 text-gray-500">
             <p className="text-sm mb-3">Bạn chưa gửi yêu cầu mượn nào.</p>
@@ -958,7 +980,7 @@ function MyRecordsPage({ setPage }: { setPage: (p: Page) => void }) {
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white" style={{ backgroundColor: sub?.color || "#888" }}>{r.subjectName}</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white" style={{ backgroundColor: badgeColor(sub?.color) }}>{r.subjectName}</span>
                         <span className="text-xs text-gray-500">Lớp {r.className}</span>
                       </div>
                       <div className="font-semibold text-gray-900">{r.equipment}</div>
@@ -1064,8 +1086,8 @@ function AppContent() {
       {page === "khach" && <GuestPage />}
       {/^khach\//i.test(page) && <GuestSlipPage key={page} code={page.slice(6).toUpperCase()} />}
       {page === "cho-duyet" && <PendingPage />}
-      {page === "bgh" && (user?.isPrincipal || user?.isSysadmin ? <PrincipalPage go={setPage} /> : <main className="pt-24 px-6 text-sm text-gray-500">Trang dành cho Ban giám hiệu.</main>)}
-      {page === "to-truong" && (user?.isHead || user?.isSysadmin ? <HeadPage WeekGrid={WeekGrid} /> : <main className="pt-24 px-6 text-sm text-gray-500">Trang dành cho tổ trưởng chuyên môn.</main>)}
+      {page === "bgh" && (user?.isPrincipal ? <PrincipalPage go={setPage} /> : <main className="pt-24 px-6 text-sm text-gray-500">Trang dành cho Ban giám hiệu.</main>)}
+      {page === "to-truong" && (user?.isHead ? <HeadPage WeekGrid={WeekGrid} /> : <main className="pt-24 px-6 text-sm text-gray-500">Trang dành cho tổ trưởng chuyên môn.</main>)}
       {page === "home" && (user ? <TeacherHome go={setPage} onBorrow={openBorrow} /> : <HomePage setPage={setPage} onQuick={fillFormFromChat} />)}
       {page === "muon" && <BorrowPage key={borrowPreset?.key || 0} go={setPage} preset={borrowPreset} onDone={() => { setBorrowPreset(null); setPage("home") }} />}
       {page === "mon-hoc" && <SubjectsPage go={setPage} />}

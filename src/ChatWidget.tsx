@@ -66,7 +66,7 @@ function DraftCard({
   if (d.notes) rows.push(["Ghi chú", d.notes])
 
   if (msg.draftState === "dismissed") {
-    return <p className="mt-2 text-xs text-gray-400">Đã bỏ bản nháp này.</p>
+    return <p className="mt-2 text-xs text-gray-500">Đã bỏ bản nháp này.</p>
   }
   return (
     <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
@@ -290,7 +290,7 @@ export default function ChatWidget({
                 onSubmit={(e) => { e.preventDefault(); submit(input) }}
                 className="border-t border-gray-100 p-3"
               >
-                <p className="text-[11px] text-gray-400 mb-1.5">Câu hỏi được gửi tới Google Gemini để trả lời. Không nhập thông tin cá nhân của học sinh. <a href="#bao-mat" className="underline">Dữ liệu cá nhân</a></p>
+                <p className="text-[11px] text-gray-500 mb-1.5">Câu hỏi được gửi tới Google Gemini để trả lời. Không nhập thông tin cá nhân của học sinh. <a href="#bao-mat" className="underline">Dữ liệu cá nhân</a></p>
                 <div className="flex items-end gap-2">
                   <textarea
                     ref={inputRef}
@@ -314,7 +314,7 @@ export default function ChatWidget({
                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V5m0 0l-6 6m6-6l6 6" /></svg>
                   </button>
                 </div>
-                <p className="mt-2 text-[11px] text-gray-400">Trợ lý AI có thể nhầm. Hãy kiểm tra phiếu trước khi gửi.</p>
+                <p className="mt-2 text-[11px] text-gray-500">Trợ lý AI có thể nhầm. Hãy kiểm tra phiếu trước khi gửi.</p>
               </form>
             </>
           )}

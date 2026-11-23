@@ -8,6 +8,7 @@
 import db, { newId } from "./database.js";
 import notifications from "./notifications.js";
 import { SUBJECTS } from "./chatTools.js";
+import { canDecide } from "./auth.js";
 import { setEquipmentCatalog, loadSeedEquipment, parseDate, todayVN, formatDate, isExpired } from "./equipment.js";
 
 // ---------- Quy chế điểm thi đua ----------
@@ -155,6 +156,10 @@ export function updateEquipment(id, body, by) {
     const v = validateEquipment(body, true);
     if (v.error) return v;
     const before = await equipmentCol().get(id);
+    // Số "mất" và "đang sửa" phát sinh từ phiếu xác nhận mất, bảo trì: không sửa tay để tránh che giấu thất thoát
+    for (const k of ["qtyLost", "qtyRepair"]) {
+      if (v.value[k] !== undefined && v.value[k] !== (before[k] || 0)) return { error: "Số thiết bị mất, đang sửa chỉ thay đổi qua phiếu xác nhận mất và phiếu bảo trì", status: 409 };
+    }
     const eq = await equipmentCol().update(id, { ...v.value, updatedAt: new Date().toISOString() });
     await logChange(before, eq, { kind: "Sửa trực tiếp", by: by?.name || "" });
     await refreshCache();
@@ -170,6 +175,8 @@ export function deleteEquipment(id, by) {
     if (active.some((r) => (r.items || []).some((it) => it.equipmentId === id))) {
       return { error: "Thiết bị đang có trong phiếu chờ duyệt hoặc đang mượn, chưa xóa được", status: 409 };
     }
+    const left = (before.qtyGood || 0) + (before.qtyBroken || 0) + (before.qtyRepair || 0) + (before.qtyLostPending || 0);
+    if (left > 0) return { error: `Còn ${left} thiết bị trong kho: hãy ghi giảm (thanh lý, điều chuyển) trước khi xóa khỏi danh mục`, status: 409 };
     await equipmentCol().remove(id);
     await logChange(before, { id: before.id, name: before.name }, { kind: "Xóa khỏi danh mục", by: by?.name || "", always: true });
     await refreshCache();
@@ -493,6 +500,8 @@ export function registerInventoryRoutes(app, { requireAuth, requireAdmin, wrap }
   app.get("/api/points/me", requireAuth, wrap(async (req, res) => res.json({ ...(await scoreOf(req.session.user.id)), rules: RULES, schoolYear: schoolYearOf() })));
   app.get("/api/points", requireAdmin, wrap(async (req, res) => res.json({ teachers: await listScores(), rules: RULES, schoolYear: schoolYearOf() })));
   app.get("/api/points/:userId", requireAdmin, wrap(async (req, res) => res.json(await scoreOf(req.params.userId))));
-  app.post("/api/points/adjust", requireAdmin, wrap(async (req, res) => send(res, await adjustPoints(req.body || {}, req.session.user), 201)));
-  app.post("/api/points/unlock", requireAdmin, wrap(async (req, res) => send(res, await unlockTeacher(req.body || {}, req.session.user), 201)));
+  // Cộng, trừ điểm thủ công và mở khóa là quyết định thi đua: Ban giám hiệu làm (chưa có Ban giám hiệu thì nhân viên thiết bị)
+  const needDecide = (req, res, next) => (canDecide(req.session.user) ? next() : res.status(403).json({ error: "Chỉ Ban giám hiệu được cộng, trừ điểm thi đua và mở khóa" }));
+  app.post("/api/points/adjust", requireAdmin, needDecide, wrap(async (req, res) => send(res, await adjustPoints(req.body || {}, req.session.user), 201)));
+  app.post("/api/points/unlock", requireAdmin, needDecide, wrap(async (req, res) => send(res, await unlockTeacher(req.body || {}, req.session.user), 201)));
 }

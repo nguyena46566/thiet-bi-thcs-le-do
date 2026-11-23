@@ -8,11 +8,11 @@ import {
 import { printHtml, esc, para, table, dots } from "./printing"
 
 const card = "bg-white rounded-2xl shadow-sm border border-gray-100"
-const field = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/20 focus:border-[#1a3670] bg-white"
+const field = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/50 focus:border-[#1a3670] bg-white"
 const label = "block text-xs font-semibold text-gray-600 mb-1"
 const btnPrimary = "px-4 py-2 rounded-lg bg-[#1a3670] hover:bg-[#132d5e] text-white text-sm font-semibold disabled:opacity-50"
 const btnGhost = "px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold disabled:opacity-50"
-const th = "px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap"
+const th = "relative px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap"
 const todayIso = () => new Date().toLocaleDateString("sv-SE")
 const isoToVn = (d: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || ""); return m ? `${m[3]}/${m[2]}/${m[1]}` : "" }
 const Err = ({ msg }: { msg: string }) => (msg ? <div role="alert" className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-sm mb-3">{msg}</div> : null)
@@ -53,7 +53,7 @@ export function ChemicalsTab({ go }: { go: (s: string) => void }) {
       )}
       <div className="grid lg:grid-cols-5 gap-5 items-start">
         <div className={`lg:col-span-2 ${card} p-5`}>
-          <h3 className="font-bold text-gray-900 mb-1">Phiếu xuất dùng</h3>
+          <h2 className="font-bold text-gray-900 mb-1">Phiếu xuất dùng</h2>
           <p className="text-xs text-gray-500 mb-4">Xuất hóa chất, vật tư cho tiết thực hành mà không phải trả lại. Khi giáo viên mượn qua phiếu, phần đã dùng được ghi lúc xác nhận trả.</p>
           <Err msg={error} />
           {ok && <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 text-sm mb-3">{ok}</div>}
@@ -75,10 +75,10 @@ export function ChemicalsTab({ go }: { go: (s: string) => void }) {
           <div className="flex justify-end mt-4"><button disabled={!f.equipmentId} onClick={async () => { setError(""); setOk(""); try { const r = await consume({ ...f, date: isoToVn(f.date) }); setOk(`Đã xuất ${r.quantity} ${r.unit} ${r.name}.`); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } }} className={btnPrimary}>Xuất dùng</button></div>
         </div>
         <div className={`lg:col-span-3 ${card} overflow-hidden`}>
-          <div className="px-5 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">Sổ theo dõi tiêu hao</h3></div>
-          {list.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">Chưa có phiếu xuất dùng</p> : (
+          <div className="px-5 py-4 border-b border-gray-100"><h2 className="font-bold text-gray-900">Sổ theo dõi tiêu hao</h2></div>
+          {list.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Chưa có phiếu xuất dùng</p> : (
             <div className="overflow-x-auto"><table className="w-full text-sm">
-              <thead><tr className="bg-gray-50">{["Ngày", "Hóa chất / vật tư", "SL", "Người nhận", "Dùng cho", "Người xuất"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+              <thead><tr className="bg-gray-50">{["Ngày", "Hóa chất / vật tư", "SL", "Người nhận", "Dùng cho", "Người xuất"].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
               <tbody className="divide-y divide-gray-50">{list.map((c) => <tr key={c.id}><td className="px-3 py-2 text-xs whitespace-nowrap">{c.date}</td><td className="px-3 py-2">{c.name}</td><td className="px-3 py-2">{c.quantity} {c.unit}</td><td className="px-3 py-2">{c.receiver}</td><td className="px-3 py-2 text-xs">{c.purpose}</td><td className="px-3 py-2 text-xs">{c.createdBy}</td></tr>)}</tbody>
             </table></div>
           )}
@@ -119,7 +119,7 @@ export function PlansTab() {
   const [saved, setSaved] = useState("")
   const load = useCallback(() => { fetchPlans().then((x) => { setD(x); setCur((c) => (c ? x.plans.find((p) => p.id === c.id) || null : null)) }).catch((e) => setError(e.message)) }, [])
   useEffect(() => { load() }, [load])
-  if (!d) return <p className="text-sm text-gray-400">{error || "Đang tải…"}</p>
+  if (!d) return <p className="text-sm text-gray-500">{error || "Đang tải…"}</p>
   const editable = cur && (cur.status === "Nháp" || cur.status === "Trả lại")
   const act = async (fn: () => Promise<unknown>, msg = "") => { setError(""); setSaved(""); try { await fn(); setSaved(msg); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } }
   const setTask = (i: number, p: Partial<PlanTask>) => cur && setCur({ ...cur, tasks: cur.tasks.map((t, j) => (j === i ? { ...t, ...p } : t)) })
@@ -142,7 +142,7 @@ export function PlansTab() {
       <div className="space-y-4">
         <div className={`${card} p-5 flex flex-wrap items-center justify-between gap-3`}>
           <div className="min-w-0"><div className="text-xs text-gray-500">Năm học {cur.schoolYear} · <span className={`px-2 py-0.5 rounded-full font-bold ${STATUS_CLS[cur.status]}`}>{cur.status}</span>{cur.decisionNote ? ` · Ý kiến: ${cur.decisionNote}` : ""}</div>
-            <h3 className="font-bold text-gray-900">{cur.title}</h3></div>
+            <h2 className="font-bold text-gray-900">{cur.title}</h2></div>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => setCur(null)} className={btnGhost}>Đóng</button>
             <button onClick={() => printPlan(cur)} className={btnGhost}>In kế hoạch</button>
@@ -167,9 +167,9 @@ export function PlansTab() {
           ))}
         </div>
         <div className={`${card} overflow-hidden`}>
-          <div className="px-5 py-4 border-b border-gray-100 flex justify-between"><h3 className="font-bold text-gray-900">Lịch công tác</h3><span className="text-sm text-gray-500">Đã xong {done}/{cur.tasks.length}</span></div>
+          <div className="px-5 py-4 border-b border-gray-100 flex justify-between"><h2 className="font-bold text-gray-900">Lịch công tác</h2><span className="text-sm text-gray-500">Đã xong {done}/{cur.tasks.length}</span></div>
           <div className="overflow-x-auto"><table className="w-full text-sm">
-            <thead><tr className="bg-gray-50">{["Xong", "Nội dung", "Bắt đầu", "Kết thúc", "Người thực hiện", ""].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+            <thead><tr className="bg-gray-50">{["Xong", "Nội dung", "Bắt đầu", "Kết thúc", "Người thực hiện", ""].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-50">{cur.tasks.map((t, i) => (
               <tr key={t.id}>
                 <td className="px-3 py-2"><input type="checkbox" aria-label={`Đã xong: ${t.name}`} checked={t.done} disabled={cur.status !== "Đã duyệt"} onChange={(e) => setTask(i, { done: e.target.checked })} /></td>
@@ -177,7 +177,7 @@ export function PlansTab() {
                 <td className="px-3 py-2">{editable ? <input type="date" className={field} value={t.start} onChange={(e) => setTask(i, { start: e.target.value })} /> : isoToVn(t.start)}</td>
                 <td className="px-3 py-2">{editable ? <input type="date" className={field} value={t.end} onChange={(e) => setTask(i, { end: e.target.value })} /> : isoToVn(t.end)}</td>
                 <td className="px-3 py-2 min-w-[150px]">{editable ? <input className={field} value={t.owner} onChange={(e) => setTask(i, { owner: e.target.value })} /> : t.owner}</td>
-                <td className="px-3 py-2">{editable && <button onClick={() => setCur({ ...cur, tasks: cur.tasks.filter((_, j) => j !== i) })} className="text-xs text-gray-400 hover:text-red-600">Xóa</button>}</td>
+                <td className="px-3 py-2">{editable && <button onClick={() => setCur({ ...cur, tasks: cur.tasks.filter((_, j) => j !== i) })} className="text-xs text-gray-500 hover:text-red-600">Xóa</button>}</td>
               </tr>
             ))}</tbody>
           </table></div>
@@ -194,13 +194,13 @@ export function PlansTab() {
         <button onClick={() => act(async () => { const p = await createPlan(); setCur(p) })} className={btnPrimary}>+ Lập kế hoạch năm học</button>
       </div>
       <div className={`${card} overflow-hidden`}>
-        {d.plans.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">Chưa có kế hoạch nào</p> : (
+        {d.plans.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Chưa có kế hoạch nào</p> : (
           <ul className="divide-y divide-gray-50">{d.plans.map((p) => (
             <li key={p.id} className="px-5 py-3 flex flex-wrap items-center justify-between gap-2">
               <div><div className="font-medium text-gray-900">{p.title}</div><div className="text-xs text-gray-500">{p.number || "Chưa có số"} · lập bởi {p.createdBy} · {p.tasks.filter((t) => t.done).length}/{p.tasks.length} việc đã xong</div></div>
               <div className="flex items-center gap-2"><span className={`px-2 py-0.5 rounded-full text-xs font-bold ${STATUS_CLS[p.status]}`}>{p.status}</span>
                 <button onClick={() => setCur(p)} className={btnGhost}>Mở</button>
-                {p.status !== "Đã duyệt" && <button onClick={() => { if (confirm("Xóa kế hoạch này?")) act(() => deletePlan(p.id)) }} className="text-xs text-gray-400 hover:text-red-600">Xóa</button>}</div>
+                {p.status !== "Đã duyệt" && <button onClick={() => { if (confirm("Xóa kế hoạch này?")) act(() => deletePlan(p.id)) }} className="text-xs text-gray-500 hover:text-red-600">Xóa</button>}</div>
             </li>
           ))}</ul>
         )}
@@ -253,12 +253,12 @@ export function DecisionsTab() {
           <div className="flex justify-between flex-wrap gap-2 items-center"><p className="text-sm text-gray-600">Quyết định thành lập tổ kiểm kê (hằng năm), hội đồng thanh lý, hội đồng tiếp nhận – bàn giao; in theo thể thức văn bản để Hiệu trưởng ký.</p>
             <button onClick={() => setF(emptyDec())} className={btnPrimary}>+ Lập quyết định</button></div>
           <div className={`${card} overflow-hidden`}>
-            {list.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">Chưa có quyết định</p> : (
+            {list.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Chưa có quyết định</p> : (
               <ul className="divide-y divide-gray-50">{list.map((x) => (
                 <li key={x.id} className="px-5 py-3 flex flex-wrap items-center justify-between gap-2">
                   <div><div className="font-medium text-gray-900">{x.type}{x.number ? ` – ${x.number}` : ""}</div><div className="text-xs text-gray-500">{isoToVn(x.date)} · {x.members.length} thành viên{x.scope ? ` · ${x.scope}` : ""}</div></div>
                   <div className="flex gap-2"><button onClick={() => printDecision(x)} className={btnGhost}>In</button><button onClick={() => setF(x)} className={btnGhost}>Sửa</button>
-                    <button onClick={async () => { if (confirm("Xóa quyết định này?")) { await deleteDecision(x.id); load() } }} className="text-xs text-gray-400 hover:text-red-600">Xóa</button></div>
+                    <button onClick={async () => { if (confirm("Xóa quyết định này?")) { await deleteDecision(x.id); load() } }} className="text-xs text-gray-500 hover:text-red-600">Xóa</button></div>
                 </li>
               ))}</ul>
             )}
@@ -283,7 +283,7 @@ export function DecisionsTab() {
                 <input className={`${field} col-span-5`} placeholder="Họ và tên" value={m.name} onChange={(e) => setM(i, { name: e.target.value })} />
                 <input className={`${field} col-span-4`} placeholder="Chức vụ" value={m.position} onChange={(e) => setM(i, { position: e.target.value })} />
                 <select className={`${field} col-span-2`} value={m.duty} onChange={(e) => setM(i, { duty: e.target.value })}>{["Tổ trưởng", "Chủ tịch", "Phó", "Thư ký", "Thành viên"].map((x) => <option key={x}>{x}</option>)}</select>
-                <button onClick={() => setF({ ...f, members: (f.members || []).filter((_, j) => j !== i) })} className="col-span-1 text-gray-400 hover:text-red-600" aria-label="Xóa thành viên">✕</button>
+                <button onClick={() => setF({ ...f, members: (f.members || []).filter((_, j) => j !== i) })} className="col-span-1 text-gray-500 hover:text-red-600" aria-label="Xóa thành viên">✕</button>
               </div>
             ))}
             <button onClick={() => setF({ ...f, members: [...(f.members || []), { name: "", position: "", duty: "Thành viên" }] })} className="text-sm font-semibold text-[#1a3670] hover:underline">+ Thêm thành viên</button>

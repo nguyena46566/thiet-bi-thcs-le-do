@@ -1,8 +1,9 @@
 // Phân hệ kho thiết bị (đợt 1): kho, nhập kho, trả thiết bị (hỏng/mất), điểm thi đua
+import { badgeColor } from "./subjects"
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import {
   fetchInventory, createEquipment, updateEquipment, deleteEquipment, fetchPurchases, createPurchase,
-  fetchMyPoints, fetchAllPoints, fetchTeacherPoints, adjustPoints, unlockTeacher, returnRecord, fold,
+  fetchMyPoints, fetchAllPoints, fetchTeacherPoints, adjustPoints, unlockTeacher, returnRecord, fold, fetchCapabilities,
   type Equipment, type Purchase, type PenaltyEntry, type PointRules, type TeacherScore, type BorrowRecord,
 } from "@/api"
 
@@ -11,7 +12,7 @@ import { printQrLabels, exportExcel, EquipmentHistoryDialog } from "./Operations
 export type Subject = { id: string; name: string; color: string }
 
 const money = (n: number) => `${(n || 0).toLocaleString("vi-VN")} đ`
-const fieldBase = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/20 focus:border-[#1a3670] bg-white"
+const fieldBase = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/50 focus:border-[#1a3670] bg-white"
 const field = `w-full ${fieldBase}`
 const label = "block text-xs font-semibold text-gray-600 mb-1"
 const btnPrimary = "px-4 py-2 rounded-lg bg-[#1a3670] hover:bg-[#132d5e] text-white text-sm font-semibold disabled:opacity-50"
@@ -30,7 +31,7 @@ function Modal({ title, onClose, children, wide }: { title: string; onClose: () 
     <div className="fixed inset-0 z-[60] bg-black/40 flex items-start sm:items-center justify-center p-3 overflow-y-auto" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div role="dialog" aria-modal="true" aria-label={title} className={`bg-white rounded-2xl shadow-2xl w-full ${wide ? "max-w-3xl" : "max-w-lg"} my-8`}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h3 className="font-bold text-gray-900">{title}</h3>
+          <h2 className="font-bold text-gray-900">{title}</h2>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100 text-gray-500" aria-label="Đóng">✕</button>
         </div>
         <div className="p-5">{children}</div>
@@ -99,7 +100,7 @@ export function ReturnDialog({ record, subjects, onClose, onDone }: { record: Bo
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs text-gray-500"><tr><th className="text-left px-3 py-2">Thiết bị</th><th className="px-3 py-2 w-20">Mượn</th><th className="px-3 py-2 w-24">Hỏng</th><th className="px-3 py-2 w-24">Mất</th><th className="px-3 py-2 w-24">Đã dùng hết</th><th className="w-8" /></tr></thead>
           <tbody className="divide-y divide-gray-50">
-            {rows.length === 0 && <tr><td colSpan={5} className="px-3 py-3 text-gray-400 text-center text-xs">Phiếu nhập tay không có mã thiết bị. Nếu có hỏng/mất, thêm thiết bị ở ô bên dưới.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={5} className="px-3 py-3 text-gray-500 text-center text-xs">Phiếu nhập tay không có mã thiết bị. Nếu có hỏng/mất, thêm thiết bị ở ô bên dưới.</td></tr>}
             {rows.map((r, i) => (
               <tr key={r.equipmentId}>
                 <td className="px-3 py-2">{byId.get(r.equipmentId)?.name || r.equipmentId}</td>
@@ -109,7 +110,7 @@ export function ReturnDialog({ record, subjects, onClose, onDone }: { record: Bo
                     onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, [k]: Math.max(0, Math.floor(Number(e.target.value) || 0)) } : x)))} /></td>
                 ))}
                 <td className="px-3 py-2">{isConsumable(r.equipmentId) ? <input type="number" min={0} max={r.borrowed ?? 999} aria-label="Số đã dùng hết" className={field} value={r.consumed} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, consumed: Math.max(0, Math.floor(Number(e.target.value) || 0)) } : x)))} /> : <span className="text-xs text-gray-300">—</span>}</td>
-                <td>{r.borrowed === undefined && <button onClick={() => setRows(rows.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-600 px-2" aria-label="Bỏ dòng">✕</button>}</td>
+                <td>{r.borrowed === undefined && <button onClick={() => setRows(rows.filter((_, j) => j !== i))} className="text-gray-500 hover:text-red-600 px-2" aria-label="Bỏ dòng">✕</button>}</td>
               </tr>
             ))}
           </tbody>
@@ -279,7 +280,7 @@ export function InventoryTab({ subjects }: { subjects: Subject[] }) {
           <button onClick={() => printQrLabels(shown, subjects)} disabled={!shown.length} className={btnGhost} title="In nhãn mã QR cho các thiết bị đang hiển thị">In nhãn QR ({shown.length})</button>
           <button onClick={() => setEditing(emptyEq(subject || subjects[0].id))} className={btnPrimary}>+ Thêm thiết bị</button>
         </div>
-        {list === null ? <p className="p-6 text-sm text-gray-400">Đang tải…</p> : view === "tree" ? (
+        {list === null ? <p className="p-6 text-sm text-gray-500">Đang tải…</p> : view === "tree" ? (
           <TreeView items={shown} subjects={subjects} onHistory={setHistoryId} onEdit={setEditing} />
         ) : (
           <div className="overflow-x-auto">
@@ -292,29 +293,29 @@ export function InventoryTab({ subjects }: { subjects: Subject[] }) {
                   const s = subjects.find((x) => x.id === e.subjectId)
                   return (
                     <tr key={e.id} className="hover:bg-gray-50/60">
-                      <td className="px-3 py-2.5 text-[11px] text-gray-400 font-mono whitespace-nowrap">{e.id}</td>
+                      <td className="px-3 py-2.5 text-[11px] text-gray-500 font-mono whitespace-nowrap">{e.id}</td>
                       <td className="px-3 py-2.5 font-medium text-gray-900 min-w-[200px]">{e.name}
                         {e.kind && e.kind !== "Thiết bị" && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 align-middle">{e.kind}</span>}
                         {e.expired && <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 align-middle">Hết hạn</span>}
                         {e.highValue && <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-violet-100 text-violet-700 align-middle">Giá trị cao</span>}
-                        {(e.grades?.length || e.expiry) ? <span className="block text-[11px] text-gray-400">{[e.grades?.length ? `Lớp ${e.grades.join(", ")}` : "", e.expiry ? `hạn ${e.expiry}` : ""].filter(Boolean).join(" · ")}</span> : null}</td>
-                      <td className="px-3 py-2.5"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white whitespace-nowrap" style={{ backgroundColor: s?.color || "#888" }}>{s?.name}</span></td>
+                        {(e.grades?.length || e.expiry) ? <span className="block text-[11px] text-gray-500">{[e.grades?.length ? `Lớp ${e.grades.join(", ")}` : "", e.expiry ? `hạn ${e.expiry}` : ""].filter(Boolean).join(" · ")}</span> : null}</td>
+                      <td className="px-3 py-2.5"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white whitespace-nowrap" style={{ backgroundColor: badgeColor(s?.color) }}>{s?.name}</span></td>
                       <td className="px-3 py-2.5 text-xs text-gray-500">{e.unit || ""}</td>
                       <td className="px-3 py-2.5 font-semibold text-green-700">{e.qtyGood}</td>
-                      <td className={`px-3 py-2.5 ${e.qtyBroken ? "text-amber-700 font-semibold" : "text-gray-400"}`}>{e.qtyBroken}</td>
-                      <td className={`px-3 py-2.5 ${e.qtyRepair ? "text-amber-700 font-semibold" : "text-gray-400"}`}>{e.qtyRepair}</td>
-                      <td className={`px-3 py-2.5 ${e.qtyLost ? "text-rose-700 font-semibold" : "text-gray-400"}`}>{e.qtyLost}{e.qtyLostPending ? <span className="block text-[10px] text-amber-700 font-semibold whitespace-nowrap">+{e.qtyLostPending} chờ xác nhận</span> : null}</td>
+                      <td className={`px-3 py-2.5 ${e.qtyBroken ? "text-amber-700 font-semibold" : "text-gray-500"}`}>{e.qtyBroken}</td>
+                      <td className={`px-3 py-2.5 ${e.qtyRepair ? "text-amber-700 font-semibold" : "text-gray-500"}`}>{e.qtyRepair}</td>
+                      <td className={`px-3 py-2.5 ${e.qtyLost ? "text-rose-700 font-semibold" : "text-gray-500"}`}>{e.qtyLost}{e.qtyLostPending ? <span className="block text-[10px] text-amber-700 font-semibold whitespace-nowrap">+{e.qtyLostPending} chờ xác nhận</span> : null}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-gray-600">{e.unitPrice ? money(e.unitPrice) : <span className="text-gray-300">chưa có</span>}</td>
                       <td className="px-3 py-2.5 text-xs text-gray-500 min-w-[140px]">{e.location}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
                         <button onClick={() => setHistoryId(e.id)} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 mr-1">Lịch sử</button>
                         <button onClick={() => setEditing(e)} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700">Sửa</button>
-                        <button onClick={() => remove(e)} className="ml-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-gray-400 hover:text-red-600 hover:bg-red-50">Xóa</button>
+                        <button onClick={() => remove(e)} className="ml-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-gray-500 hover:text-red-600 hover:bg-red-50">Xóa</button>
                       </td>
                     </tr>
                   )
                 })}
-                {shown.length === 0 && <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-400">Không có thiết bị phù hợp</td></tr>}
+                {shown.length === 0 && <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-500">Không có thiết bị phù hợp</td></tr>}
               </tbody>
             </table>
             {pages > 1 && (
@@ -373,7 +374,7 @@ export function PurchasesTab({ subjects }: { subjects: Subject[] }) {
   return (
     <div className="grid lg:grid-cols-5 gap-5 items-start">
       <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-        <h3 className="font-bold text-gray-900 mb-1">Lập phiếu nhập kho</h3>
+        <h2 className="font-bold text-gray-900 mb-1">Lập phiếu nhập kho</h2>
         <p className="text-xs text-gray-500 mb-4">Dùng khi mua mới hoặc được cấp thêm thiết bị. Số lượng được cộng vào mục “Tốt”, đơn giá của thiết bị được cập nhật.</p>
         <ErrorBox msg={error} />
         {ok && <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 text-sm mb-3">{ok}</div>}
@@ -393,7 +394,7 @@ export function PurchasesTab({ subjects }: { subjects: Subject[] }) {
               <div className="flex gap-2 items-end">
                 <div className="w-24"><label className={label}>Số lượng</label><input type="number" min={1} className={field} value={r.quantity} onChange={(e) => setRow(i, { quantity: Math.max(1, Math.floor(Number(e.target.value) || 1)) })} /></div>
                 <div className="flex-1"><label className={label}>Đơn giá (đ)</label><input type="number" min={0} className={field} value={r.unitPrice} onChange={(e) => setRow(i, { unitPrice: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} /></div>
-                {rows.length > 1 && <button onClick={() => setRows(rows.filter((_, j) => j !== i))} className="px-2 py-2 text-gray-400 hover:text-red-600" aria-label="Xóa dòng">✕</button>}
+                {rows.length > 1 && <button onClick={() => setRows(rows.filter((_, j) => j !== i))} className="px-2 py-2 text-gray-500 hover:text-red-600" aria-label="Xóa dòng">✕</button>}
               </div>
             </div>
           ))}
@@ -408,15 +409,15 @@ export function PurchasesTab({ subjects }: { subjects: Subject[] }) {
 
       <div className="lg:col-span-3 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 className="font-bold text-gray-900">Lịch sử nhập kho</h3>
+          <h2 className="font-bold text-gray-900">Lịch sử nhập kho</h2>
           <span className="text-sm text-gray-500">Tổng chi: <strong className="text-gray-800">{money(grandTotal)}</strong></span>
         </div>
-        {list === null ? <p className="p-6 text-sm text-gray-400">Đang tải…</p> : list.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">Chưa có phiếu nhập kho nào</p> : (
+        {list === null ? <p className="p-6 text-sm text-gray-500">Đang tải…</p> : list.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Chưa có phiếu nhập kho nào</p> : (
           <ul className="divide-y divide-gray-50">
             {list.map((p) => (
               <li key={p.id} className="px-5 py-3">
                 <button onClick={() => setOpen(open === p.id ? null : p.id)} className="w-full text-left flex flex-wrap items-center justify-between gap-2" aria-expanded={open === p.id}>
-                  <span><strong className="text-gray-900">{p.date}</strong> · {p.supplier || "Không ghi nhà cung cấp"} <span className="text-gray-400 text-xs">({p.items.length} thiết bị, người lập: {p.createdBy})</span></span>
+                  <span><strong className="text-gray-900">{p.date}</strong> · {p.supplier || "Không ghi nhà cung cấp"} <span className="text-gray-500 text-xs">({p.items.length} thiết bị, người lập: {p.createdBy})</span></span>
                   <span className="font-semibold text-[#1a3670]">{money(p.total)}</span>
                 </button>
                 {open === p.id && (
@@ -440,15 +441,15 @@ export function PurchasesTab({ subjects }: { subjects: Subject[] }) {
 const KIND_LABEL: Record<string, string> = { late: "Trả trễ", damage: "Làm hỏng", loss: "Làm mất", manual: "Điều chỉnh" }
 
 function History({ items }: { items: PenaltyEntry[] }) {
-  if (!items.length) return <p className="text-sm text-gray-400">Chưa có lần trừ/cộng điểm nào trong năm học.</p>
+  if (!items.length) return <p className="text-sm text-gray-500">Chưa có lần trừ/cộng điểm nào trong năm học.</p>
   return (
     <ul className="divide-y divide-gray-100 text-sm">
       {items.map((p) => (
         <li key={p.id} className="py-2 flex items-start justify-between gap-3">
           <div><span className="text-xs font-semibold text-gray-500 mr-2">{KIND_LABEL[p.kind]}</span>{p.reason}
-            <div className="text-[11px] text-gray-400">{fmtTime(p.createdAt)}{p.compensation ? ` · bồi thường ${money(p.compensation)}` : ""}{p.createdBy ? ` · ${p.createdBy}` : ""}</div>
+            <div className="text-[11px] text-gray-500">{fmtTime(p.createdAt)}{p.compensation ? ` · bồi thường ${money(p.compensation)}` : ""}{p.createdBy ? ` · ${p.createdBy}` : ""}</div>
           </div>
-          <span className={`font-bold whitespace-nowrap ${p.points < 0 ? "text-rose-600" : p.points > 0 ? "text-green-600" : "text-gray-400"}`}>{p.points > 0 ? "+" : ""}{p.points}</span>
+          <span className={`font-bold whitespace-nowrap ${p.points < 0 ? "text-rose-600" : p.points > 0 ? "text-green-600" : "text-gray-500"}`}>{p.points > 0 ? "+" : ""}{p.points}</span>
         </li>
       ))}
     </ul>
@@ -476,6 +477,8 @@ export function PointsTab() {
   const [error, setError] = useState("")
   const [detail, setDetail] = useState<{ t: TeacherScore; history: PenaltyEntry[] } | null>(null)
   const [adjust, setAdjust] = useState<TeacherScore | null>(null)
+  const [canDecide, setCanDecide] = useState(false)
+  useEffect(() => { fetchCapabilities().then((c) => setCanDecide(c.canDecide)).catch(() => {}) }, [])
   const [pts, setPts] = useState(-5)
   const [reason, setReason] = useState("")
   const load = useCallback(() => { fetchAllPoints().then(setData).catch((e) => setError(e.message)) }, [])
@@ -494,13 +497,13 @@ export function PointsTab() {
     catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
   }
 
-  if (!data) return <div className="text-sm text-gray-400">{error || "Đang tải…"}</div>
+  if (!data) return <div className="text-sm text-gray-500">{error || "Đang tải…"}</div>
   return (
     <div className="space-y-4">
       <ErrorBox msg={error} />
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 className="font-bold text-gray-900">Điểm thi đua năm học {data.schoolYear}</h3>
+          <h2 className="font-bold text-gray-900">Điểm thi đua năm học {data.schoolYear}</h2>
           <span className="text-sm text-gray-500">{data.teachers.length} giáo viên</span>
         </div>
         <div className="overflow-x-auto">
@@ -517,12 +520,12 @@ export function PointsTab() {
                   <td className={`px-3 py-2.5 font-bold ${t.score < data.rules.lockBelow ? "text-rose-600" : t.score < data.rules.startPoints ? "text-amber-600" : "text-green-700"}`}>{t.score}</td>
                   <td className="px-3 py-2.5 whitespace-nowrap">
                     <button onClick={() => openDetail(t)} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700">Lịch sử</button>
-                    <button onClick={() => { setAdjust(t); setPts(-5); setReason("") }} className="ml-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700">Điều chỉnh</button>
-                    {t.locked && <button onClick={() => unlock(t)} className="ml-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-600 hover:bg-green-700 text-white">Mở khóa</button>}
+                    {canDecide && <button onClick={() => { setAdjust(t); setPts(-5); setReason("") }} className="ml-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700">Điều chỉnh</button>}
+                    {t.locked && canDecide && <button onClick={() => unlock(t)} className="ml-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-700 hover:bg-green-800 text-white">Mở khóa</button>}
                   </td>
                 </tr>
               ))}
-              {data.teachers.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">Chưa có giáo viên nào</td></tr>}
+              {data.teachers.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-500">Chưa có giáo viên nào</td></tr>}
             </tbody>
           </table>
         </div>
@@ -553,7 +556,7 @@ export function MyPointsCard() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-xs text-gray-500">Điểm thi đua năm học {d.schoolYear}</div>
-          <div className={`text-3xl font-extrabold ${d.locked ? "text-rose-600" : d.score < d.rules.startPoints ? "text-amber-600" : "text-green-700"}`}>{d.score}<span className="text-base text-gray-400 font-semibold">/{d.rules.startPoints}</span></div>
+          <div className={`text-3xl font-extrabold ${d.locked ? "text-rose-600" : d.score < d.rules.startPoints ? "text-amber-600" : "text-green-700"}`}>{d.score}<span className="text-base text-gray-500 font-semibold">/{d.rules.startPoints}</span></div>
         </div>
         <button onClick={() => setOpen(!open)} className="text-sm font-semibold text-[#1a3670] hover:underline" aria-expanded={open}>{open ? "Ẩn chi tiết" : "Xem chi tiết và quy chế"}</button>
       </div>
@@ -583,7 +586,7 @@ function TreeView({ items, subjects, onHistory, onEdit }: { items: Equipment[]; 
       <span className="flex-1 min-w-0 truncate">{e.name}</span>
       <span className="text-xs text-green-700 whitespace-nowrap">tốt {e.qtyGood}</span>
       {(e.qtyBroken > 0 || e.qtyRepair > 0) && <span className="text-xs text-amber-700 whitespace-nowrap">hỏng/sửa {e.qtyBroken + e.qtyRepair}</span>}
-      <span className="hidden md:inline text-xs text-gray-400 truncate max-w-[180px]">{e.location}</span>
+      <span className="hidden md:inline text-xs text-gray-500 truncate max-w-[180px]">{e.location}</span>
       <button onClick={() => onHistory(e.id)} className="text-xs font-semibold text-[#1a3670] hover:underline">Lịch sử</button>
       <button onClick={() => onEdit(e)} className="text-xs font-semibold text-gray-500 hover:underline">Sửa</button>
     </li>
@@ -591,7 +594,7 @@ function TreeView({ items, subjects, onHistory, onEdit }: { items: Equipment[]; 
   const branch = (key: string, title: string, count: number, children: ReactNode, level: number) => (
     <li key={key}>
       <button onClick={() => toggle(key)} aria-expanded={!!open[key]} className={`w-full flex items-center gap-2 text-left py-1.5 ${level === 0 ? "font-semibold text-gray-900" : level === 1 ? "font-medium text-gray-800" : "text-gray-700"} hover:text-[#1a3670]`}>
-        <span className="w-4 text-gray-400" aria-hidden="true">{open[key] ? "▾" : "▸"}</span>{title}<span className="text-xs text-gray-400 font-normal">({count})</span>
+        <span className="w-4 text-gray-500" aria-hidden="true">{open[key] ? "▾" : "▸"}</span>{title}<span className="text-xs text-gray-500 font-normal">({count})</span>
       </button>
       {open[key] && <ul className="pl-6 border-l border-gray-100 ml-2">{children}</ul>}
     </li>
@@ -602,7 +605,7 @@ function TreeView({ items, subjects, onHistory, onEdit }: { items: Equipment[]; 
         {grades.map(({ g, list: gl }) => branch(`${s.id}-${g}`, `Lớp ${g}`, gl.length, byTopic(gl).map(([t, tl]) => branch(`${s.id}-${g}-${t}`, t, tl.length, tl.map(row), 2)), 1))}
         {noGrade.length > 0 && branch(`${s.id}-none`, "Chưa ghi khối lớp", noGrade.length, noGrade.map(row), 1)}
       </>, 0))}
-      {groups.length === 0 && <li className="text-sm text-gray-400">Không có thiết bị phù hợp</li>}
+      {groups.length === 0 && <li className="text-sm text-gray-500">Không có thiết bị phù hợp</li>}
     </ul>
   )
 }

@@ -10,7 +10,7 @@ import { exportExcel } from "./Operations"
 const card = "bg-white rounded-2xl shadow-sm border border-gray-100"
 const btnPrimary = "px-4 py-2 rounded-lg bg-[#1a3670] hover:bg-[#132d5e] text-white text-sm font-semibold disabled:opacity-50"
 const btnGhost = "px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold disabled:opacity-50"
-const th = "px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap"
+const th = "relative px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap"
 const vnTime = (iso?: string | null) => (iso ? new Date(iso).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" }) : "")
 const kb = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.ceil(n / 1024)} KB`)
 const Err = ({ msg }: { msg: string }) => (msg ? <div role="alert" className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-sm mb-3">{msg}</div> : null)
@@ -33,7 +33,7 @@ export function SystemTab() {
   const fileRef = useRef<HTMLInputElement>(null)
   const load = useCallback(() => { fetchSystemStatus().then(setS).catch((e) => setError(e.message)); fetchBackups().then(setBackups).catch(() => {}) }, [])
   useEffect(() => { load() }, [load])
-  if (!s) return <p className="text-sm text-gray-400">{error || "Đang tải…"}</p>
+  if (!s) return <p className="text-sm text-gray-500">{error || "Đang tải…"}</p>
   const act = async (fn: () => Promise<string>) => { setBusy(true); setError(""); setOk(""); try { setOk(await fn()); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } finally { setBusy(false) } }
   const passed = s.checks.filter((c) => c.ok).length
   return (
@@ -46,25 +46,25 @@ export function SystemTab() {
       </div>
       <DemoPanel onChange={load} />
       <div className={`${card} p-5`}>
-        <h3 className="font-bold text-gray-900 mb-1">Kiểm tra trước khi vận hành chính thức ({passed}/{s.checks.length})</h3>
+        <h2 className="font-bold text-gray-900 mb-1">Kiểm tra trước khi vận hành chính thức ({passed}/{s.checks.length})</h2>
         <ul className="grid md:grid-cols-2 gap-x-6 gap-y-1.5 mt-3 text-sm">{s.checks.map((c) => <li key={c.label} className="flex gap-2"><span aria-hidden="true" className={c.ok ? "text-green-600" : "text-red-600"}>{c.ok ? "✓" : "✗"}</span><span className={c.ok ? "text-gray-700" : "text-gray-900 font-medium"}>{c.label}</span><span className="sr-only">{c.ok ? "đạt" : "chưa đạt"}</span></li>)}</ul>
       </div>
       <div className="grid lg:grid-cols-2 gap-4 items-start">
         <div className={`${card} p-5`}>
-          <h3 className="font-bold text-gray-900 mb-1">Sao lưu</h3>
+          <h2 className="font-bold text-gray-900 mb-1">Sao lưu</h2>
           <p className="text-sm text-gray-600 mb-3">{s.backupEncrypted ? "Bản sao lưu được nén và mã hóa bằng BACKUP_KEY." : "Chưa đặt BACKUP_KEY: bản tải về chỉ nén, KHÔNG mã hóa (có mật khẩu đã mã hóa và họ tên người dùng) – cất giữ cẩn thận, không gửi qua mạng xã hội."} Sao lưu tự động hằng đêm do GitHub Actions thực hiện (tệp <code>.github/workflows/sao-luu.yml</code>), giữ 30 ngày.</p>
           <button disabled={busy} onClick={() => act(async () => `Đã tải ${await downloadBackup()}`)} className={btnPrimary}>Tải bản sao lưu ngay</button>
           {backups.length > 0 && <ul className="mt-4 divide-y divide-gray-100 text-sm max-h-60 overflow-y-auto">{backups.map((b) => <li key={b.id} className="py-1.5 flex justify-between gap-2"><span>{vnTime(b.at)} · {b.kind} · {b.by}</span><span className="text-xs text-gray-500">{kb(b.size)}{b.encrypted ? " · mã hóa" : ""}</span></li>)}</ul>}
         </div>
         <div className={`${card} p-5`}>
-          <h3 className="font-bold text-gray-900 mb-1">Khôi phục từ bản sao lưu</h3>
+          <h2 className="font-bold text-gray-900 mb-1">Khôi phục từ bản sao lưu</h2>
           <p className="text-sm text-gray-600 mb-3">Thay <strong>toàn bộ</strong> dữ liệu hiện tại bằng dữ liệu trong bản sao lưu. Hãy tải một bản sao lưu hiện tại trước. Nếu lỗi giữa chừng, hệ thống tự quay lại dữ liệu cũ.</p>
           <input ref={fileRef} type="file" accept=".tbk,.gz" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) act(async () => { const r = await restoreBackup(f, true); setPreview({ file: f, ...r }); setConfirmText(""); return "Đã đọc bản sao lưu – kiểm tra số liệu trước khi khôi phục" }) }} />
           <button disabled={busy} onClick={() => fileRef.current?.click()} className={btnGhost}>Chọn tệp sao lưu…</button>
           {preview && (
             <div className="mt-4">
               <p className="text-sm">Bản sao lưu lúc <strong>{vnTime(preview.createdAt)}</strong> ({preview.file.name})</p>
-              <table className="w-full text-sm mt-2"><thead><tr className="bg-gray-50">{["Dữ liệu", "Hiện tại", "Trong bản sao lưu"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+              <table className="w-full text-sm mt-2"><thead><tr className="bg-gray-50">{["Dữ liệu", "Hiện tại", "Trong bản sao lưu"].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
                 <tbody className="divide-y divide-gray-50">{Object.keys(TABLE_NAMES).map((k) => <tr key={k}><td className="px-3 py-1.5">{TABLE_NAMES[k]}</td><td className="px-3 py-1.5">{preview.current?.[k] ?? 0}</td><td className={`px-3 py-1.5 font-semibold ${(preview.counts[k] ?? 0) < (preview.current?.[k] ?? 0) ? "text-red-700" : ""}`}>{preview.counts[k] ?? 0}</td></tr>)}</tbody></table>
               <label className="block text-xs font-semibold text-gray-600 mt-3 mb-1" htmlFor="rs-confirm">Gõ <code>KHOI-PHUC</code> để xác nhận</label>
               <div className="flex gap-2"><input id="rs-confirm" className="border border-gray-200 rounded-lg px-3 py-2 text-sm flex-1" value={confirmText} onChange={(e) => setConfirmText(e.target.value)} />
@@ -94,8 +94,8 @@ export function LoginLogTab() {
         <button disabled={!list?.length} onClick={() => list && exportExcel("Nhat-ky-dang-nhap.xlsx", [{ name: "Đăng nhập", rows: list.map((x) => ({ "Thời gian": vnTime(x.at), "Người dùng": x.name || x.username || x.email || "", "Cách": x.method, "Kết quả": x.result, "IP": x.ip, "Thiết bị": x.ua || "" })) }])} className={`${btnGhost} ml-auto`}>Xuất Excel</button>
       </div>
       <div className={`${card} overflow-hidden`}>
-        {!list ? <p className="p-6 text-sm text-gray-400">Đang tải…</p> : list.length === 0 ? <p className="p-6 text-sm text-gray-400">Không có</p> : (
-          <div className="overflow-x-auto max-h-[36rem]"><table className="w-full text-sm"><thead className="sticky top-0"><tr className="bg-gray-50">{["Thời gian", "Người dùng", "Cách", "Kết quả", "IP"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+        {!list ? <p className="p-6 text-sm text-gray-500">Đang tải…</p> : list.length === 0 ? <p className="p-6 text-sm text-gray-500">Không có</p> : (
+          <div className="overflow-x-auto max-h-[36rem]"><table className="w-full text-sm"><thead className="sticky top-0"><tr className="bg-gray-50">{["Thời gian", "Người dùng", "Cách", "Kết quả", "IP"].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-50">{list.map((x) => <tr key={x.id} className={x.result !== "Thành công" ? "bg-red-50/40" : ""}><td className="px-3 py-1.5 text-xs whitespace-nowrap">{vnTime(x.at)}</td><td className="px-3 py-1.5">{x.name || x.username || x.email}</td><td className="px-3 py-1.5 text-xs">{x.method}</td><td className={`px-3 py-1.5 text-xs font-semibold ${x.result === "Thành công" ? "text-green-700" : "text-red-700"}`}>{x.result}</td><td className="px-3 py-1.5 text-xs font-mono">{x.ip}</td></tr>)}</tbody></table></div>
         )}
       </div>
@@ -130,7 +130,7 @@ export function CsdlExportTab({ subjects }: { subjects: { id: string; name: stri
     <div className="space-y-4 max-w-3xl">
       <Err msg={error} /><Ok msg={ok} />
       <div className={`${card} p-5`}>
-        <h3 className="font-bold text-gray-900 mb-1">Dữ liệu cơ sở vật chất, thiết bị dạy học, thư viện</h3>
+        <h2 className="font-bold text-gray-900 mb-1">Dữ liệu cơ sở vật chất, thiết bị dạy học, thư viện</h2>
         <p className="text-sm text-gray-600 mb-3">Bảng tổng hợp để cán bộ phụ trách nhập vào cơ sở dữ liệu ngành giáo dục (Thông tư 42/2021/TT-BGDĐT) và báo cáo thống kê định kỳ. Website không kết nối trực tiếp với hệ thống của Bộ; biểu mẫu nhập liệu thực tế do Sở / Phòng GD&ĐT hướng dẫn, nên đối chiếu tên cột trước khi nhập.</p>
         <p className="text-sm text-gray-600 mb-4">Gồm 4 trang: phòng học bộ môn (có đánh dấu phòng ghép), thiết bị theo môn (số loại, số lượng tốt, hỏng, mất, giá trị), mức đáp ứng danh mục tối thiểu theo môn, số liệu thư viện.</p>
         <button disabled={busy} onClick={run} className={btnPrimary}>{busy ? "Đang tổng hợp…" : "Xuất tệp Excel"}</button>
@@ -178,11 +178,11 @@ export function EvidenceTab({ go }: { go: (section: string) => void }) {
     <div className="space-y-4">
       <p className="text-sm text-gray-500">Tiêu chuẩn 3 – tiêu chí 3.5 (thiết bị) và 3.6 (thư viện). Mã minh chứng do Hội đồng tự đánh giá đánh số.</p>
       <div className={`${card} overflow-hidden`}>
-        <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="bg-gray-50">{["Tiêu chí", "Yêu cầu", "Minh chứng trên website", "Năm học này", "Mã minh chứng", ""].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+        <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="bg-gray-50">{["Tiêu chí", "Yêu cầu", "Minh chứng trên website", "Năm học này", "Mã minh chứng", ""].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
           <tbody className="divide-y divide-gray-50">{rows.map(([c, req, ev, k, sec], i) => (
             <tr key={i}><td className="px-3 py-2 font-semibold whitespace-nowrap">{c}</td><td className="px-3 py-2 text-xs text-gray-600 min-w-[180px]">{req}</td><td className="px-3 py-2 min-w-[220px]">{ev}</td>
               <td className={`px-3 py-2 text-xs font-semibold min-w-[160px] ${d?.[k]?.have ? "text-green-700" : "text-amber-700"}`}>{d ? `${d[k].have ? "✓" : "✗"} ${d[k].text}` : "…"}</td>
-              <td className="px-3 py-2 text-xs text-gray-400">[……]</td><td className="px-3 py-2"><button onClick={() => go(sec)} className="text-xs font-semibold text-[#1a3670] hover:underline whitespace-nowrap">Mở để in</button></td></tr>
+              <td className="px-3 py-2 text-xs text-gray-500">[……]</td><td className="px-3 py-2"><button onClick={() => go(sec)} className="text-xs font-semibold text-[#1a3670] hover:underline whitespace-nowrap">Mở để in</button></td></tr>
           ))}</tbody></table></div>
       </div>
     </div>
@@ -201,7 +201,7 @@ function DemoPanel({ onChange }: { onChange: () => void }) {
   const act = async (fn: () => Promise<string>) => { setBusy(true); setError(""); setOk(""); try { setOk(await fn()); load(); onChange() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } finally { setBusy(false) } }
   return (
     <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
-      <h3 className="font-bold text-gray-900 mb-1">Dữ liệu mẫu để chạy thử</h3>
+      <h2 className="font-bold text-gray-900 mb-1">Dữ liệu mẫu để chạy thử</h2>
       <p className="text-sm text-gray-700 mb-3">Tạo dữ liệu đầy đủ cho mọi chức năng: 12 giáo viên (mật khẩu Test@2026), phiếu mượn từ đầu năm học (đã trả, đang mượn, quá hạn, chờ duyệt, từ chối, trả hỏng, báo mất), hóa chất sắp hết hạn và đã hết hạn, kiểm kê, bảo trì, ghi giảm, đề xuất mua sắm, kế hoạch năm học, quyết định, thư viện (19 đầu sách, 96 học sinh, lượt mượn, tiết đọc), khách vãng lai… Trước khi tạo, dữ liệu hiện tại được chụp lại; “Xóa dữ liệu mẫu” đưa web về đúng như cũ.</p>
       <Err msg={error} /><Ok msg={ok} />
       {st.active ? <>

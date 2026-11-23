@@ -10,7 +10,7 @@ import db, { newId } from "./database.js";
 import { SUBJECTS } from "./chatTools.js";
 import { parseDate, formatDate, todayVN, getEquipment, availabilityOf, normalizeSlots, slotLabel, requestCells, recordCovers, recordSlots, isExpired as isExpiredEq } from "./equipment.js";
 import { serial, applyDelta, refreshCache, withDerived, equipmentCol, purchaseCol, penaltyCol, int, str, schoolYearOf, createLossReport, listLossReports, confirmLoss, rejectLoss, logChange, listChanges, lossCol } from "./inventory.js";
-import { principalConfigured } from "./auth.js";
+import { principalConfigured, canDecide } from "./auth.js";
 import notifications from "./notifications.js";
 import { sendReminderEmail } from "./mailer.js";
 
@@ -225,6 +225,52 @@ export function createDisposal(body, user) {
   });
 }
 
+/**
+ * Đề nghị thanh lý (khi trường đã có Ban giám hiệu): nhân viên thiết bị lập đề nghị, kho CHƯA bị trừ.
+ * Ban giám hiệu duyệt kèm số quyết định thì mới ghi giảm; không duyệt thì phải nêu lý do.
+ */
+export function requestDisposal(body, user) {
+  return serial(async () => {
+    const eq = await equipmentCol().get(body?.equipmentId);
+    if (!eq) return { error: "Chọn thiết bị cần ghi giảm" };
+    const qty = int(body.quantity, 1, 10000);
+    if (qty === null) return { error: "Số lượng không hợp lệ" };
+    if (!DISPOSAL_REASONS.includes(body.reason)) return { error: "Chọn lý do ghi giảm" };
+    const key = BUCKETS[body.source] || "qtyBroken";
+    const pending = (await disposalCol().all()).filter((d) => d.status === "Chờ duyệt" && d.equipmentId === eq.id && (BUCKETS[d.source] || "qtyBroken") === key).reduce((a, d) => a + d.quantity, 0);
+    if ((eq[key] || 0) - pending < qty) return { error: `Chỉ còn ${(eq[key] || 0) - pending} thiết bị ở nhóm đã chọn (đã trừ ${pending} đang chờ duyệt thanh lý)` };
+    const date = parseDate(body.date) || todayVN();
+    const doc = {
+      id: newId(), status: "Chờ duyệt", equipmentId: eq.id, name: eq.name, subjectId: eq.subjectId, quantity: qty, source: body.source in BUCKETS ? body.source : "broken",
+      reason: body.reason, decisionNo: "", note: str(body.note, 300), date: formatDate(date), unitPrice: eq.unitPrice || 0, value: qty * (eq.unitPrice || 0),
+      createdBy: user.name, createdById: user.id, createdAt: new Date().toISOString(),
+    };
+    await disposalCol().insert(doc);
+    await notifications.createNotification({ type: "system", title: "Đề nghị thanh lý chờ duyệt", message: `${user.name} đề nghị ghi giảm ${qty} ${eq.name} (${doc.reason})`, userId: user.id, userName: user.name }).catch(() => {});
+    return { value: doc };
+  });
+}
+
+export function decideDisposal(id, approve, decisionNo, note, user) {
+  return serial(async () => {
+    const d = await disposalCol().get(id);
+    if (!d) return { error: "Không tìm thấy đề nghị thanh lý", status: 404 };
+    if (d.status !== "Chờ duyệt") return { error: "Đề nghị đã được xử lý", status: 409 };
+    const stamp = { decidedBy: user.name, decidedAt: new Date().toISOString() };
+    if (!approve) {
+      if (!str(note, 300)) return { error: "Không duyệt cần ghi lý do", status: 400 };
+      return { value: await disposalCol().update(id, { ...stamp, status: "Từ chối", decisionNote: str(note, 300) }) };
+    }
+    const no = str(decisionNo, 60);
+    if (!no) return { error: "Duyệt thanh lý cần ghi số quyết định", status: 400 };
+    const eq = await equipmentCol().get(d.equipmentId), key = BUCKETS[d.source] || "qtyBroken";
+    if (!eq || (eq[key] || 0) < d.quantity) return { error: "Số lượng thiết bị trong kho không còn đủ để thanh lý", status: 409 };
+    await applyDelta(eq.id, { [key]: -d.quantity, qtyDisposed: d.quantity }, { kind: "Ghi giảm", by: user.name, note: `${d.reason} – QĐ ${no}; đề nghị bởi ${d.createdBy}` });
+    await refreshCache();
+    return { value: await disposalCol().update(id, { ...stamp, status: "Đã duyệt", decisionNo: no, decisionNote: str(note, 300) }) };
+  });
+}
+
 // =====================================================================
 // BÁO CÁO TỔNG HỢP
 // =====================================================================
@@ -432,8 +478,16 @@ export function registerOperationRoutes(app, { requireAuth, requireAdmin, wrap }
   }));
   // Nhật ký thay đổi trong khoảng thời gian (dùng cho Sổ theo dõi tình trạng thiết bị – Mẫu 1)
   app.get("/api/inventory/changes", requireAdmin, wrap(async (req, res) => {
-    const from = req.query.from ? new Date(req.query.from).toISOString() : "0000";
-    const to = req.query.to ? new Date(req.query.to).toISOString() : "9999";
+    // Ngày dạng YYYY-MM-DD (cả ngày, giờ Việt Nam) hoặc YYYY-MM-DDTHH:mm[:ss]; sai định dạng thì báo 400 thay vì lỗi máy chủ
+    const day = (v, end) => {
+      if (!v) return end ? "9999" : "0000";
+      const s = String(v);
+      if (!/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/.test(s)) return null;
+      const t = s.length === 10 ? new Date(`${s}T${end ? "23:59:59.999" : "00:00:00"}+07:00`) : new Date(s);
+      return isNaN(t) ? null : t.toISOString();
+    };
+    const from = day(req.query.from, false), to = day(req.query.to, true);
+    if (from === null || to === null) return res.status(400).json({ error: "Ngày không hợp lệ, hãy dùng dạng YYYY-MM-DD" });
     res.json((await listChanges()).filter((c) => c.createdAt >= from && c.createdAt <= to));
   }));
 
@@ -593,6 +647,21 @@ export function registerOperationRoutes(app, { requireAuth, requireAdmin, wrap }
     send(res, await decideProposal(req.params.id, !!req.body?.approve, req.body?.note, req.session.user));
   }));
   // Ban giám hiệu bấm nút trong email (không cần đăng nhập)
+  // Tổ trưởng cho ý kiến về đề xuất của tổ mình trước khi Ban giám hiệu quyết định (không chặn quy trình)
+  app.post("/api/proposals/:id/review", requireAuth, wrap(async (req, res) => {
+    const u = req.session.user;
+    if (!u.isHead) return res.status(403).json({ error: "Chỉ tổ trưởng chuyên môn cho ý kiến về đề xuất của tổ" });
+    const p = await propCol().get(req.params.id);
+    if (!p) return res.status(404).json({ error: "Không tìm thấy đề xuất" });
+    if (p.status !== "Chờ duyệt") return res.status(409).json({ error: "Đề xuất đã được xử lý, không cho ý kiến nữa" });
+    if (!p.items.some((it) => SUBJECTS.find((s) => s.id === it.subjectId)?.group === u.group)) return res.status(403).json({ error: "Đề xuất này không thuộc môn của tổ thầy/cô" });
+    const opinion = ["Đồng ý", "Không đồng ý"].includes(req.body?.opinion) ? req.body.opinion : null;
+    if (!opinion) return res.status(400).json({ error: "Chọn Đồng ý hoặc Không đồng ý" });
+    const note = str(req.body?.note, 300);
+    if (opinion === "Không đồng ý" && !note) return res.status(400).json({ error: "Không đồng ý cần ghi lý do" });
+    const reviews = [...(p.headReviews || []).filter((r) => r.group !== u.group), { group: u.group, by: u.name, userId: u.id, opinion, note, at: new Date().toISOString() }];
+    res.json(await propCol().update(p.id, { headReviews: reviews }));
+  }));
   app.post("/api/proposals/:id/purchased", requireAdmin, wrap(async (req, res) => {
     const p = await propCol().get(req.params.id);
     if (!p) return res.status(404).json({ error: "Không tìm thấy đề xuất" });
@@ -601,7 +670,15 @@ export function registerOperationRoutes(app, { requireAuth, requireAdmin, wrap }
   }));
 
   app.get("/api/disposals", requireAdmin, wrap(async (req, res) => res.json(await listDisposals())));
-  app.post("/api/disposals", requireAdmin, wrap(async (req, res) => send(res, await createDisposal(req.body || {}, req.session.user), 201)));
+  // Có Ban giám hiệu: nhân viên chỉ lập đề nghị, Ban giám hiệu duyệt mới trừ kho. Chưa có Ban giám hiệu: ghi giảm ngay như trước.
+  app.post("/api/disposals", requireAdmin, wrap(async (req, res) => {
+    const u = req.session.user;
+    send(res, await (principalConfigured() && !u.isPrincipal ? requestDisposal(req.body || {}, u) : createDisposal(req.body || {}, u)), 201);
+  }));
+  app.post("/api/disposals/:id/decide", requireAdmin, wrap(async (req, res) => {
+    if (!canDecide(req.session.user)) return res.status(403).json({ error: "Chỉ Ban giám hiệu được duyệt thanh lý" });
+    send(res, await decideDisposal(req.params.id, !!req.body?.approve, req.body?.decisionNo, req.body?.note, req.session.user));
+  }));
 
   app.get("/api/reports", requireAdmin, wrap(async (req, res) => send(res, await buildReport(req.query || {}))));
 

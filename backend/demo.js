@@ -9,7 +9,7 @@ import db, { newId } from "./database.js";
 import { SUBJECTS } from "./chatTools.js";
 import { formatDate, todayVN, slotLabel } from "./equipment.js";
 import { refreshCache, equipmentCol, createEquipment, createPurchase, processReturn, adjustPoints } from "./inventory.js";
-import { startAudit, saveAuditCounts, finishAudit, createMaintenance, completeMaintenance, createDisposal } from "./operations.js";
+import { startAudit, saveAuditCounts, finishAudit, createMaintenance, completeMaintenance, createDisposal, requestDisposal } from "./operations.js";
 import { collect, writeAll } from "./ops.js";
 import { reloadUsers } from "./users.js";
 import { PRIVACY_VERSION } from "./privacy.js";
@@ -173,6 +173,8 @@ export async function seedDemo() {
   if (mVL) { const m = await createMaintenance({ equipmentId: mVL.id, quantity: 1, source: "good", kind: "Sửa chữa", content: "Hỏng lò xo, gãy móc treo", vendor: "Cửa hàng thiết bị Trường Thi", date: formatDate(addDays(T, -20)) }, admin); if (m.value) await completeMaintenance(m.value.id, { repaired: 1, disposed: 0, cost: 120000, note: "Thay lò xo mới" }, admin); inc("Bảo trì"); }
   if (mHH) { await createMaintenance({ equipmentId: mHH.id, quantity: 1, source: "good", kind: "Bảo dưỡng", content: "Vệ sinh, hiệu chỉnh", vendor: "", date: formatDate(addDays(T, -2)) }, admin); inc("Bảo trì"); }
   const dEq = bySubj("cong-nghe", 3)[0];
+  const dEq2 = bySubj("vat-li", 3)[4];
+  if (dEq2) { await equipmentCol().update(dEq2.id, { qtyBroken: (dEq2.qtyBroken || 0) + 2 }); await refreshCache(); const rq = await requestDisposal({ equipmentId: dEq2.id, quantity: 2, source: "broken", reason: "Hư hỏng không sửa được", note: "Gãy, không còn linh kiện thay thế" }, admin); if (rq.value) { await db.collection("disposals").update(rq.value.id, { demo: true }); inc("Đề nghị thanh lý chờ Ban giám hiệu duyệt"); } }
   if (dEq) { await createDisposal({ equipmentId: dEq.id, quantity: 1, source: "good", reason: "Hư hỏng không sửa được", decisionNo: "18/QĐ-THCSLĐ", date: formatDate(addDays(T, -25)), note: "Theo biên bản kiểm tra hư hỏng" }, admin); inc("Ghi giảm"); }
   const cons = db.collection("consumptions");
   for (const [n, q, who, pur, d] of [["Dung dịch HCl 1M", 2, "Nguyễn Thị Hồng", "Lớp 8A1 – Bài 9: Acid", -10], ["Giấy lọc (hộp 100 tờ)", 1, "Nguyễn Thị Hồng", "Lớp 6A2 – Tách chất", -5], ["Cồn đốt", 1, "Lê Thị Mai", "Lớp 7A3 – Quang hợp", -3]]) {
@@ -194,6 +196,8 @@ export async function seedDemo() {
       ...(status !== "Chờ duyệt" && { decidedBy: bgh.name, decidedAt: at(addDays(T, -1), 10), decisionNote: status === "Từ chối" ? "Để sang học kỳ II" : "Đồng ý, mua trong tháng" }) });
   }
   inc("Đề xuất mua sắm", 4);
+  { const first = (await props.all()).find((p) => p.demo && p.status === "Chờ duyệt" && p.items.some((i) => i.subjectId === "vat-li"));
+    if (first) { await props.update(first.id, { headReviews: [{ group: "Tổ Khoa học tự nhiên", by: "Tổ trưởng KHTN (thử nghiệm)", userId: "pw-totruong", opinion: "Đồng ý", note: "Tổ đang thiếu 4/7 bộ theo danh mục", at: now }] }); inc("Ý kiến tổ trưởng về đề xuất"); } }
 
   // 9. Kế hoạch năm học (đã duyệt) và quyết định
   const y0 = start.getFullYear(), y1 = y0 + 1;

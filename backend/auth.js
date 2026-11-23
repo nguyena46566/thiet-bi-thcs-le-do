@@ -123,12 +123,32 @@ export function requireAuth(req, res, next) {
 /**
  * Admin middleware - require admin role
  */
+/** Người có quyền quyết định: Ban giám hiệu khi trường đã có tài khoản Ban giám hiệu, nếu chưa thì nhân viên thiết bị */
+export const canDecide = (u) => (principalConfigured() ? !!u?.isPrincipal : !!u?.isAdmin);
+
+/**
+ * Việc Ban giám hiệu được GHI dữ liệu (ngoài việc xem): chỉ ra quyết định.
+ * Tác nghiệp hằng ngày (nhập kho, trả thiết bị, kiểm kê, thanh lý…) do nhân viên thiết bị làm để tách người làm và người duyệt.
+ */
+const PRINCIPAL_WRITE = [
+  ["POST", /^\/api\/loss-reports\/[^/]+\/(confirm|reject)$/],
+  ["POST", /^\/api\/proposals\/[^/]+\/decide$/],
+  ["POST", /^\/api\/disposals\/[^/]+\/decide$/],
+  ["POST", /^\/api\/plans\/[^/]+\/decide$/],
+  ["POST", /^\/api\/points\/(adjust|unlock)$/],
+  ["PATCH", /^\/api\/records\/[^/]+\/status$/],
+  ["PATCH", /^\/api\/notifications\/[^/]+\/read$/],
+  ["POST", /^\/api\/notifications\/mark-all-read$/],
+];
 export function requireAdmin(req, res, next) {
-  if (!req.session?.user) {
-    return res.status(401).json({ error: "Vui lòng đăng nhập" });
-  }
-  if (!req.session.user.isAdmin) {
-    return res.status(403).json({ error: "Bạn không có quyền truy cập" });
+  const u = req.session?.user;
+  if (!u) return res.status(401).json({ error: "Vui lòng đăng nhập" });
+  if (!u.isAdmin) return res.status(403).json({ error: "Bạn không có quyền truy cập" });
+  if (u.isPrincipal && !u.isEquipment && req.method !== "GET" && req.method !== "HEAD") {
+    const path = req.originalUrl.split("?")[0];
+    if (!PRINCIPAL_WRITE.some(([m, re]) => m === req.method && re.test(path))) {
+      return res.status(403).json({ error: "Ban giám hiệu xem và ra quyết định; thao tác này do nhân viên thiết bị thực hiện" });
+    }
   }
   next();
 }

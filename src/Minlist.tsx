@@ -4,11 +4,11 @@ import { fetchMinlist, saveMinSettings, linkMinItem, deleteMinItem, importMinlis
 import { exportExcel, printDoc } from "./Operations"
 
 const card = "bg-white rounded-2xl shadow-sm border border-gray-100"
-const field = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/20 focus:border-[#1a3670] bg-white"
+const field = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3670]/50 focus:border-[#1a3670] bg-white"
 const label = "block text-xs font-semibold text-gray-600 mb-1"
 const btnPrimary = "px-4 py-2 rounded-lg bg-[#1a3670] hover:bg-[#132d5e] text-white text-sm font-semibold disabled:opacity-50"
 const btnGhost = "px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold disabled:opacity-50"
-const th = "px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap"
+const th = "relative px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap"
 const ST_CLS: Record<string, string> = { "Đủ": "bg-green-50 text-green-700", "Thiếu": "bg-amber-50 text-amber-800", "Chưa có": "bg-red-50 text-red-700", "Chưa liên kết": "bg-gray-100 text-gray-600", "Chưa khai báo số GV": "bg-blue-50 text-blue-700" }
 const normText = (i: MinItem) => i.norm || `${String(i.normQty).padStart(2, "0")}${i.normPer === "trường" ? "" : "/" + i.normPer}`
 const target = (i: MinItem) => [i.forTeacher && "GV", i.forStudent && "HS"].filter(Boolean).join(", ")
@@ -40,7 +40,7 @@ export function MinlistTab({ subjects: siteSubjects }: { subjects: { id: string;
     }
     return out
   }, [d])
-  if (!d || !st) return <p className="text-sm text-gray-400">{error || "Đang tải…"}</p>
+  if (!d || !st) return <p className="text-sm text-gray-500">{error || "Đang tải…"}</p>
   const items = d.items.filter((i) => i.mon === mon && (!onlyAmended || i.amendedBy))
   const amendedCount = d.items.filter((i) => i.amendedBy).length
   const all = d.items.length, ok = d.items.filter((i) => i.status === "Đủ").length
@@ -114,7 +114,7 @@ export function MinlistTab({ subjects: siteSubjects }: { subjects: { id: string;
 
       <div className="flex flex-wrap gap-2">
         {d.subjects.map((m) => (
-          <button key={m} onClick={() => setMon(m)} aria-pressed={mon === m} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${mon === m ? "bg-[#1a3670] text-white" : summary[m] ? "bg-gray-100 text-gray-800 hover:bg-gray-200" : "bg-white border border-dashed border-gray-300 text-gray-400"}`}>
+          <button key={m} onClick={() => setMon(m)} aria-pressed={mon === m} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${mon === m ? "bg-[#1a3670] text-white" : summary[m] ? "bg-gray-100 text-gray-800 hover:bg-gray-200" : "bg-white border border-dashed border-gray-300 text-gray-500"}`}>
             {m}{summary[m] ? ` (${summary[m].ok}/${summary[m].total})` : ""}
           </button>
         ))}
@@ -122,7 +122,7 @@ export function MinlistTab({ subjects: siteSubjects }: { subjects: { id: string;
 
       <div className={`${card} overflow-hidden`}>
         <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="font-bold text-gray-900">{mon === "Thiết bị dùng chung" ? mon : `Môn ${mon}`}{st.teachers[mon] ? ` · ${st.teachers[mon]} giáo viên` : ""} <span className="text-sm font-normal text-gray-500">· {items.length} dòng</span></h3>
+          <h2 className="font-bold text-gray-900">{mon === "Thiết bị dùng chung" ? mon : `Môn ${mon}`}{st.teachers[mon] ? ` · ${st.teachers[mon]} giáo viên` : ""} <span className="text-sm font-normal text-gray-500">· {items.length} dòng</span></h2>
           <div className="flex gap-2">
             <button onClick={async () => { if (confirm(`Khôi phục danh mục gốc của ${mon} theo Thông tư 38/2021?\nCác dòng hiện có của môn này (kể cả liên kết thiết bị) sẽ bị thay thế.`)) { try { const r = await reseedMinlist(mon); setMsg(`Đã khôi phục ${r.imported} dòng của ${mon}.`); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } } }} className={btnGhost}>Khôi phục danh mục gốc</button>
             <button onClick={printBook} disabled={!items.length} className={btnGhost}>In sổ phân định (Mẫu 3)</button>
@@ -131,7 +131,7 @@ export function MinlistTab({ subjects: siteSubjects }: { subjects: { id: string;
         {d.amended?.includes(mon) && <div className="px-5 py-2.5 bg-amber-50 border-b border-amber-100 text-xs text-amber-900">Một số mục của {mon === "Thiết bị dùng chung" ? "phần này" : "môn này"} đã được <strong>Thông tư 26/2023/TT-BGDĐT</strong> (hiệu lực 12/02/2024) sửa đổi, bổ sung. Danh mục trên chép theo bản gốc năm 2021, cần đối chiếu các mục được sửa.</div>}
         {items.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Chưa có danh mục môn này. Tải file mẫu, chép bảng của môn từ Thông tư 38/2021 rồi bấm “Nhập từ Excel”.</p> : (
           <div className="overflow-x-auto"><table className="w-full text-sm">
-            <thead><tr className="bg-gray-50">{["STT", "Chủ đề", "Tên thiết bị", "Đối tượng", "ĐVT", "Định mức", "Cần có", "Đang có", "Trạng thái", ""].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+            <thead><tr className="bg-gray-50">{["STT", "Chủ đề", "Tên thiết bị", "Đối tượng", "ĐVT", "Định mức", "Cần có", "Đang có", "Trạng thái", ""].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-50">{items.map((i, k) => (
               <Fragment key={i.id}>
               {(k === 0 || items[k - 1].group !== i.group) && i.group && <tr className="bg-[#F6F7F9]"><td colSpan={10} className="px-3 py-2 text-xs font-bold text-[#1a3670]">{i.group}</td></tr>}
@@ -139,7 +139,7 @@ export function MinlistTab({ subjects: siteSubjects }: { subjects: { id: string;
                 <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{i.stt}</td>
                 <td className="px-3 py-2 text-xs text-gray-600 min-w-[160px]">{i.topic}</td>
                 <td className="px-3 py-2 min-w-[220px]"><div className="font-medium text-gray-900">{i.name}</div>
-                  <div className="text-[11px] text-gray-400">{[i.grades.length ? `Lớp ${i.grades.join(", ")}` : "", i.note].filter(Boolean).join(" · ")}</div>
+                  <div className="text-[11px] text-gray-500">{[i.grades.length ? `Lớp ${i.grades.join(", ")}` : "", i.note].filter(Boolean).join(" · ")}</div>
                   {i.amendedBy && <div className="text-[11px] font-semibold text-amber-800 bg-amber-50 rounded px-1.5 py-0.5 mt-0.5 inline-block" title={i.amendedBy}>Sửa đổi theo TT 26/2023</div>}
                   {i.linkedEquipmentIds.length > 0 && <div className="text-[11px] text-[#1a3670]">↳ {i.linkedEquipmentIds.map((id) => inv.find((e) => e.id === id)?.name || id).join("; ")}</div>}</td>
                 <td className="px-3 py-2 text-xs">{target(i)}</td>
@@ -150,7 +150,7 @@ export function MinlistTab({ subjects: siteSubjects }: { subjects: { id: string;
                 <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap ${ST_CLS[i.status] || ""}`}>{i.status}{i.status === "Thiếu" ? ` ${i.missing}` : ""}</span></td>
                 <td className="px-3 py-2 whitespace-nowrap">
                   <button onClick={() => setLinking(i)} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200">Liên kết</button>
-                  <button onClick={async () => { if (confirm(`Xóa dòng “${i.name}” khỏi danh mục?`)) { await deleteMinItem(i.id); load() } }} className="ml-1 px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-red-600">Xóa</button>
+                  <button onClick={async () => { if (confirm(`Xóa dòng “${i.name}” khỏi danh mục?`)) { await deleteMinItem(i.id); load() } }} className="ml-1 px-2 py-1 rounded-lg text-xs text-gray-500 hover:text-red-600">Xóa</button>
                 </td>
               </tr>
               </Fragment>
@@ -174,14 +174,14 @@ function LinkDialog({ item, inv, siteSubjects, onClose, onSaved }: { item: MinIt
   return (
     <div className="fixed inset-0 z-[60] bg-black/40 flex items-start sm:items-center justify-center p-3 overflow-y-auto" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div role="dialog" aria-modal="true" aria-label="Liên kết thiết bị" className="bg-white rounded-2xl shadow-2xl w-full max-w-xl p-5 my-8">
-        <h3 className="font-bold text-gray-900 mb-1">Liên kết thiết bị trong kho</h3>
+        <h2 className="font-bold text-gray-900 mb-1">Liên kết thiết bị trong kho</h2>
         <p className="text-sm text-gray-600 mb-3">{item.mon} · {item.name} · định mức {normText(item)}</p>
         <div className="flex gap-2 mb-3">
           <input type="search" className={field} placeholder="Tìm (không cần dấu)…" value={q} onChange={(e) => setQ(e.target.value)} />
-          <select className="border border-gray-200 rounded-lg px-2 text-sm" value={subject} onChange={(e) => setSubject(e.target.value)}><option value="">Mọi môn</option>{siteSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+          <select aria-label="Môn" className="border border-gray-200 rounded-lg px-2 text-sm" value={subject} onChange={(e) => setSubject(e.target.value)}><option value="">Mọi môn</option>{siteSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
         </div>
         <ul className="max-h-80 overflow-y-auto divide-y divide-gray-50 border border-gray-100 rounded-xl">
-          {list.length === 0 && <li className="px-4 py-3 text-sm text-gray-400">Không có thiết bị phù hợp. Có thể thêm thiết bị ở mục Danh mục thiết bị.</li>}
+          {list.length === 0 && <li className="px-4 py-3 text-sm text-gray-500">Không có thiết bị phù hợp. Có thể thêm thiết bị ở mục Danh mục thiết bị.</li>}
           {list.map((e) => (
             <li key={e.id}><label className="flex items-center gap-3 px-4 py-2.5 text-sm cursor-pointer hover:bg-gray-50">
               <input type="checkbox" checked={sel.includes(e.id)} onChange={(ev) => setSel(ev.target.checked ? [...sel, e.id] : sel.filter((x) => x !== e.id))} />

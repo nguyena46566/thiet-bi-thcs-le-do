@@ -40,6 +40,7 @@ body {
 
 /* Nền chung kiểu sổ tay phòng thiết bị */
 html, body { background: #F6F7F9; color: #1F2937; }
-:focus-visible { outline: 3px solid rgba(26, 54, 112, 0.35); outline-offset: 2px; }
+:focus-visible { outline: 3px solid #1a3670; outline-offset: 2px; }
+aside :focus-visible { outline-color: #F5B841; }
 .tabular-nums { font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

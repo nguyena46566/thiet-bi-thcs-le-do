@@ -1,0 +1,56 @@
+from common import *
+import subprocess, os
+print("== S6. Dữ liệu cá nhân, hồ sơ, khách vãng lai ==")
+tv = login("thuvien"); gv = login("giaovien"); nv = login("nhanvientb"); qt = login("quantri"); anon = C(); today = datetime.date.today()
+meta = anon.call("GET", "/api/privacy/meta")[1]
+chk("Thông tin xử lý dữ liệu công khai: phiên bản, thời hạn lưu khách, loại yêu cầu", meta["version"] and meta["guestRetentionDays"] == 365 and len(meta["requestTypes"]) == 4 and len(meta["guestKinds"]) == 5)
+# ---- hồ sơ của tôi
+c, p = gv.call("GET", "/api/me/profile"); chk("Hồ sơ của tôi: vai trò, thống kê hoạt động", c == 200 and p["user"]["roleNames"] == ["Giáo viên"] and set(p["stats"]) >= {"records", "borrowing", "pending", "proposals"}, p["user"]["roleNames"] if c == 200 else p)
+chk("Chưa đăng nhập không xem hồ sơ (401)", anon.call("GET", "/api/me/profile")[0] == 401)
+chk("Số điện thoại sai bị chặn", gv.call("PATCH", "/api/me/profile", {"phone": "abc"})[0] == 400)
+chk("Họ tên rỗng bị chặn", gv.call("PATCH", "/api/me/profile", {"name": "  "})[0] == 400)
+chk("Sửa họ tên, số điện thoại, chức vụ", gv.call("PATCH", "/api/me/profile", {"name": "Cô Lan", "phone": "0912 345 678", "position": "Giáo viên Hóa"})[0] == 200)
+p = gv.call("GET", "/api/me/profile")[1]["user"]; chk("Hồ sơ cập nhật và phiên đăng nhập đổi theo ngay", p["name"] == "Cô Lan" and p["phone"] == "0912 345 678" and gv.call("GET", "/api/auth/me")[1]["user"]["name"] == "Cô Lan")
+c, raw, h = gv.call("GET", "/api/me/export", raw=True); ex = json.loads(raw)
+chk("Tải dữ liệu của tôi: tệp đính kèm, có tài khoản, không có mật khẩu mã hóa", "attachment" in h.get("Content-Disposition", "") and ex["account"]["name"] == "Cô Lan" and "passwordHash" not in ex["account"] and "passwordHash" not in raw.decode())
+chk("Tệp dữ liệu cá nhân chỉ chứa phiếu của chính người đó", all(r.get("userId") == "pw-giaovien" for r in ex["borrowRecords"]))
+# ---- yêu cầu về dữ liệu
+chk("Yêu cầu sai loại bị chặn (400)", gv.call("POST", "/api/me/requests", {"type": "Linh tinh", "content": "x"})[0] == 400)
+chk("Yêu cầu xóa không ghi nội dung bị chặn (400)", gv.call("POST", "/api/me/requests", {"type": "Xóa dữ liệu", "content": ""})[0] == 400)
+c, rq = gv.call("POST", "/api/me/requests", {"type": "Xóa dữ liệu", "content": "Xóa số điện thoại"}); chk("Gửi yêu cầu xóa dữ liệu", c == 201 and rq["status"] == "Chờ xử lý")
+c, rq2 = gv.call("POST", "/api/me/requests", {"type": "Rút lại đồng ý", "content": ""}); chk("Rút lại đồng ý không cần nội dung", c == 201)
+chk("Nhân viên thiết bị không xem yêu cầu dữ liệu (403)", nv.call("GET", "/api/data-requests")[0] == 403)
+chk("Quản trị thấy yêu cầu", len(qt.call("GET", "/api/data-requests")[1]) == 2)
+chk("Trạng thái sai bị chặn", qt.call("PATCH", f"/api/data-requests/{rq['id']}", {"status": "Xong"})[0] == 400)
+chk("Từ chối phải ghi lý do", qt.call("PATCH", f"/api/data-requests/{rq['id']}", {"status": "Từ chối"})[0] == 400)
+c, x = qt.call("PATCH", f"/api/data-requests/{rq['id']}", {"status": "Đã xử lý", "response": "Đã xóa"}); chk("Quản trị xử lý yêu cầu", c == 200 and x["status"] == "Đã xử lý" and x["handledBy"])
+chk("Người dùng thấy phản hồi", [r for r in gv.call("GET", "/api/me/profile")[1]["requests"] if r["id"] == rq["id"]][0]["response"] == "Đã xóa")
+# ---- khách vãng lai
+G = {"name": "Nguyễn Văn Phụ Huynh", "kind": "Phụ huynh học sinh", "org": "PH em An 7A2", "purpose": "Làm việc với nhà trường", "place": "Văn phòng", "phone": "0987654321"}
+chk("Khách không tích đồng ý bị chặn (400)", anon.call("POST", "/api/guests/self", {**G, "consent": False})[0] == 400)
+chk("Thiếu họ tên bị chặn", anon.call("POST", "/api/guests/self", {**G, "name": "", "consent": True})[0] == 400)
+chk("Đối tượng sai bị chặn", anon.call("POST", "/api/guests/self", {**G, "kind": "Ai đó", "consent": True})[0] == 400)
+chk("Số điện thoại sai bị chặn", anon.call("POST", "/api/guests/self", {**G, "phone": "xx", "consent": True})[0] == 400)
+c, s = anon.call("POST", "/api/guests/self", {**G, "consent": True}); ds = today.strftime("%y%m%d")
+chk("Khách tự đăng ký (không cần tài khoản), nhận mã phiếu KVyymmdd-001", c == 201 and s["code"] == f"KV{ds}-001", s)
+c, sl = anon.call("GET", f"/api/guests/slip/{s['code'].lower()}"); chk("Xem lại phiếu bằng mã (không phân biệt hoa thường), không lộ số điện thoại", c == 200 and sl["name"] == G["name"] and "phone" not in sl)
+chk("Mã phiếu không có → 404", anon.call("GET", "/api/guests/slip/KV000000-999")[0] == 404)
+chk("Khách chưa đăng nhập không xem được sổ khách (401)", anon.call("GET", "/api/guests")[0] == 401)
+chk("Giáo viên không xem được sổ khách (403)", gv.call("GET", "/api/guests")[0] == 403)
+c, gs = tv.call("GET", f"/api/guests?from={today.isoformat()}&to={today.isoformat()}"); chk("Thủ thư xem sổ khách trong ngày", c == 200 and len(gs["guests"]) == 1 and gs["retentionDays"] == 365)
+c, g2 = tv.call("POST", "/api/guests", {"name": "Bạn đọc A", "kind": "Học sinh trường khác", "purpose": "Đọc sách tại thư viện", "consent": True}); chk("Nhân viên ghi khách, mã tiếp theo -002", c == 201 and g2["code"].endswith("-002") and g2["createdBy"])
+chk("Khách ra về, không ra về hai lần", tv.call("POST", f"/api/guests/{g2['id']}/checkout")[0] == 200 and tv.call("POST", f"/api/guests/{g2['id']}/checkout")[0] == 409)
+c, a = tv.call("POST", f"/api/guests/{g2['id']}/anonymize"); chk("Xóa thông tin khách theo yêu cầu (giữ thống kê)", a["name"] == "(đã ẩn danh)" and a["purpose"] == "Đọc sách tại thư viện" and a["phone"] == "")
+chk("Nhân viên thiết bị cũng ghi và xem được sổ khách", nv.call("GET", "/api/guests")[0] == 200 and nv.call("POST", "/api/guests", {**G, "name": "Khách thứ ba", "consent": True})[0] == 201)
+o = C(); codes = [o.call("POST", "/api/guests/self", {**G, "consent": True})[0] for _ in range(16)]
+chk("Chặn đăng ký dồn dập từ một địa chỉ (429)", 429 in codes, codes[-3:])
+# ---- ẩn danh tự động sau 365 ngày + dọn nhật ký đăng nhập (kiểm tra khi khởi động lại KHÔNG xóa CSDL)
+old = (today - datetime.timedelta(days=400)).isoformat() + "T08:00:00.000Z"
+sql(f"UPDATE guests SET data = jsonb_set(data,'{{checkInAt}}','\"{old}\"') WHERE data->>'code' LIKE '%-001'")
+sql(f"INSERT INTO loginlog (id, data) VALUES ('old-log', '{{\"id\":\"old-log\",\"at\":\"2025-01-01T00:00:00.000Z\",\"result\":\"Thành công\",\"name\":\"cũ\",\"ip\":\"1.1.1.1\"}}'::jsonb)")
+subprocess.run(["/home/claude/w/start.sh", "TEST_ACCOUNTS=1", "BACKUP_KEY=k"], env={**os.environ, "NORESET": "1"}, capture_output=True)
+qt = login("quantri")
+g1 = [g for g in login("thuvien").call("GET", "/api/guests?from=2000-01-01&to=2100-01-01")[1]["guests"] if g["code"].endswith("-001")][0]
+chk("Khách quá 365 ngày tự ẩn danh khi máy chủ khởi động", g1["name"] == "(đã ẩn danh)" and g1["anonymized"] is True and g1["phone"] == "", g1["name"])
+chk("Nhật ký đăng nhập quá 180 ngày tự xóa", "cũ" not in json.dumps(qt.call("GET", "/api/admin/login-log")[1]))
+done()
