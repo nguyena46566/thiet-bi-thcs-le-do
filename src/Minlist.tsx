@@ -1,6 +1,6 @@
 // Đối chiếu danh mục thiết bị dạy học tối thiểu (Thông tư 38/2021, sửa đổi bởi Thông tư 26/2023) với kho của trường
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { fetchMinlist, saveMinSettings, linkMinItem, deleteMinItem, importMinlist, reseedMinlist, fetchInventory, fold, type MinItem, type MinSettings, type Equipment } from "@/api"
+import { fetchMinlist, saveMinSettings, linkMinItem, deleteMinItem, importMinlist, reseedMinlist, fetchInventory, fold, setMinSiteState, bulkMinlist, autoLinkMinlist, type MinItem, type MinSettings, type Equipment } from "@/api"
 import { exportExcel, printDoc } from "./Operations"
 
 const card = "bg-white rounded-2xl shadow-sm border border-gray-100"
@@ -9,7 +9,7 @@ const label = "block text-xs font-semibold text-gray-600 mb-1"
 const btnPrimary = "px-4 py-2 rounded-lg bg-[#1a3670] hover:bg-[#132d5e] text-white text-sm font-semibold disabled:opacity-50"
 const btnGhost = "px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold disabled:opacity-50"
 const th = "relative px-3 py-2.5 text-left text-xs font-bold text-gray-500 uppercase whitespace-nowrap"
-const ST_CLS: Record<string, string> = { "Đủ": "bg-green-50 text-green-700", "Thiếu": "bg-amber-50 text-amber-800", "Chưa có": "bg-red-50 text-red-700", "Chưa liên kết": "bg-gray-100 text-gray-600", "Chưa khai báo số GV": "bg-blue-50 text-blue-700" }
+const ST_CLS: Record<string, string> = { "Đủ": "bg-green-50 text-green-700", "Thiếu": "bg-amber-50 text-amber-800", "Chưa có": "bg-red-50 text-red-700", "Chưa liên kết": "bg-gray-100 text-gray-600", "Không áp dụng": "bg-slate-100 text-slate-500", "Chưa khai báo số GV": "bg-blue-50 text-blue-700" }
 const normText = (i: MinItem) => i.norm || `${String(i.normQty).padStart(2, "0")}${i.normPer === "trường" ? "" : "/" + i.normPer}`
 const target = (i: MinItem) => [i.forTeacher && "GV", i.forStudent && "HS"].filter(Boolean).join(", ")
 
@@ -35,6 +35,7 @@ export function MinlistTab({ subjects: siteSubjects }: { subjects: { id: string;
     const out: Record<string, { total: number; ok: number; short: number; none: number; unlinked: number }> = {}
     for (const i of d?.items || []) {
       const s = (out[i.mon] ||= { total: 0, ok: 0, short: 0, none: 0, unlinked: 0 })
+      if (i.status === "Không áp dụng") continue // nhà trường không dạy: không tính vào mức đáp ứng
       s.total++
       if (i.status === "Đủ") s.ok++; else if (i.status === "Thiếu") s.short++; else if (i.status === "Chưa có") s.none++; else s.unlinked++
     }
@@ -43,8 +44,24 @@ export function MinlistTab({ subjects: siteSubjects }: { subjects: { id: string;
   if (!d || !st) return <p className="text-sm text-gray-500">{error || "Đang tải…"}</p>
   const items = d.items.filter((i) => i.mon === mon && (!onlyAmended || i.amendedBy))
   const amendedCount = d.items.filter((i) => i.amendedBy).length
-  const all = d.items.length, ok = d.items.filter((i) => i.status === "Đủ").length
+  const all = d.items.filter((i) => i.status !== "Không áp dụng").length, ok = d.items.filter((i) => i.status === "Đủ").length
 
+  // Rà soát nhanh: đánh dấu hàng loạt các dòng chưa xử lý của môn đang chọn
+  const bulk = async (action: "none" | "na") => {
+    const n = d.items.filter((i) => i.mon === mon && !i.siteState && !i.linkedEquipmentIds.length).length
+    if (!n) { setError("Môn này không còn dòng nào chưa xử lý"); return }
+    if (!confirm(action === "none" ? `Ghi ${n} dòng chưa liên kết của ${mon} là “trường chưa có”? (Bạn vẫn đổi lại từng dòng được.)` : `Ghi ${n} dòng chưa liên kết của ${mon} là “không áp dụng” (nhà trường không dạy)? Các dòng này sẽ không tính vào mức đáp ứng.`)) return
+    setError(""); try { const r = await bulkMinlist(mon, action); setMsg(`Đã ghi ${r.updated} dòng.`); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
+  }
+  const autoLink = async () => {
+    setError("")
+    try {
+      const r = await autoLinkMinlist(mon, false)
+      if (!r.count) { setMsg("Không tìm thấy thiết bị nào khớp tên với các dòng chưa liên kết của môn này."); return }
+      const sample = r.suggestions.slice(0, 8).map((x) => `• ${x.stt}: ${x.item.slice(0, 45)} ⇄ ${x.equipment.slice(0, 40)} (${x.match}%)`).join("\n")
+      if (confirm(`Tìm được ${r.count} dòng có thể ghép với thiết bị trong kho:\n\n${sample}${r.count > 8 ? "\n…" : ""}\n\nLiên kết tất cả?`)) { const a = await autoLinkMinlist(mon, true); setMsg(`Đã liên kết ${a.count} dòng.`); load() }
+    } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
+  }
   const downloadTemplate = () => exportExcel("Mau-nhap-danh-muc-toi-thieu-TT38.xlsx", [{ name: "Danh mục", rows: [
     Object.fromEntries(COLS.map(([h, k]) => [h, ({ mon: "Khoa học tự nhiên", stt: "1", group: "I. Tranh ảnh", topic: "Chủ đề …", name: "Tên thiết bị theo Thông tư", purpose: "…", target: "GV, HS", unit: "Bộ", norm: "08/GV", grades: "6", note: "" } as Record<string, string>)[k]])),
   ] }])
@@ -124,6 +141,9 @@ export function MinlistTab({ subjects: siteSubjects }: { subjects: { id: string;
         <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-bold text-gray-900">{mon === "Thiết bị dùng chung" ? mon : `Môn ${mon}`}{st.teachers[mon] ? ` · ${st.teachers[mon]} giáo viên` : ""} <span className="text-sm font-normal text-gray-500">· {items.length} dòng</span></h2>
           <div className="flex gap-2">
+            <button onClick={() => bulk("none")} className={btnGhost} title="Các dòng chưa liên kết thiết bị được ghi là trường chưa có">Trường chưa có (cả môn)</button>
+            <button onClick={() => bulk("na")} className={btnGhost} title="Môn, mô-đun nhà trường không dạy">Không áp dụng (cả môn)</button>
+            <button onClick={autoLink} className={btnGhost} title="Ghép thiết bị trong kho với các dòng danh mục theo tên">Gợi ý liên kết tự động</button>
             <button onClick={async () => { if (confirm(`Khôi phục danh mục gốc của ${mon} theo Thông tư 38/2021?\nCác dòng hiện có của môn này (kể cả liên kết thiết bị) sẽ bị thay thế.`)) { try { const r = await reseedMinlist(mon); setMsg(`Đã khôi phục ${r.imported} dòng của ${mon}.`); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } } }} className={btnGhost}>Khôi phục danh mục gốc</button>
             <button onClick={printBook} disabled={!items.length} className={btnGhost}>In sổ phân định (Mẫu 3)</button>
           </div>
@@ -150,6 +170,9 @@ export function MinlistTab({ subjects: siteSubjects }: { subjects: { id: string;
                 <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap ${ST_CLS[i.status] || ""}`}>{i.status}{i.status === "Thiếu" ? ` ${i.missing}` : ""}</span></td>
                 <td className="px-3 py-2 whitespace-nowrap">
                   <button onClick={() => setLinking(i)} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200">Liên kết</button>
+                  {i.siteState ? <button onClick={async () => { await setMinSiteState(i.id, ""); load() }} className="ml-1 px-2 py-1 rounded-lg text-xs text-gray-500 hover:underline">Bỏ đánh dấu</button> : <>
+                    <button onClick={async () => { await setMinSiteState(i.id, "none"); load() }} className="ml-1 px-2 py-1 rounded-lg text-xs text-gray-500 hover:underline" title="Trường chưa có thiết bị này">Chưa có</button>
+                    <button onClick={async () => { await setMinSiteState(i.id, "na"); load() }} className="ml-1 px-2 py-1 rounded-lg text-xs text-gray-500 hover:underline" title="Nhà trường không dạy, không áp dụng">K.áp dụng</button></>}
                   <button onClick={async () => { if (confirm(`Xóa dòng “${i.name}” khỏi danh mục?`)) { await deleteMinItem(i.id); load() } }} className="ml-1 px-2 py-1 rounded-lg text-xs text-gray-500 hover:text-red-600">Xóa</button>
                 </td>
               </tr>

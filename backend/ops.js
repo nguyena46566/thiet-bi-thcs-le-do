@@ -135,6 +135,20 @@ export function registerOpsRoutes(app, { requireAuth, wrap, express }) {
     res.json((await loginCol().all()).filter((x) => x.userId === req.session.user.id).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 10).map(({ ua, ...x }) => ({ ...x, device: /mobile|android|iphone/i.test(ua) ? "Điện thoại" : "Máy tính" })));
   }));
 
+  // ---------- Mã minh chứng kiểm định (Hội đồng tự đánh giá đánh số) ----------
+  const evCol = () => db.collection("settings");
+  app.get("/api/evidence-codes", requireAuth, wrap(async (req, res) => {
+    const u = req.session.user; if (!u.isAdmin) return res.status(403).json({ error: "Bạn không có quyền truy cập" });
+    res.json((await evCol().get("evidenceCodes"))?.codes || {});
+  }));
+  app.put("/api/evidence-codes", requireAuth, wrap(async (req, res) => {
+    const u = req.session.user; if (!(u.isEquipment || (u.isAdmin && !u.roles))) return res.status(403).json({ error: "Chỉ nhân viên thiết bị cập nhật mã minh chứng" });
+    const codes = {}; for (const [k, v] of Object.entries(req.body?.codes || {})) { if (/^[a-z0-9-]{1,40}$/i.test(k)) codes[k] = String(v ?? "").trim().slice(0, 40); }
+    const doc = { id: "evidenceCodes", codes, updatedAt: new Date().toISOString(), updatedBy: u.name };
+    if (await evCol().get("evidenceCodes")) await evCol().update("evidenceCodes", doc); else await evCol().insert(doc);
+    res.json(codes);
+  }));
+
   // ---------- Trạng thái hệ thống ----------
   app.get("/api/admin/status", requireAuth, requireSysadmin, wrap(async (req, res) => {
     const day = new Date(Date.now() - 864e5).toISOString();

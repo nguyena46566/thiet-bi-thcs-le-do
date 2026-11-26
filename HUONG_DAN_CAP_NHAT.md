@@ -66,3 +66,19 @@ Mở thêm một terminal ở thư mục gốc và chạy `npm run dev`. Nếu �
 3. Tệp `.github/workflows/sao-luu.yml` chạy lúc 1 giờ sáng, lưu bản sao lưu đã mã hóa ở tab **Actions > Sao luu du lieu > Artifacts**, giữ 30 ngày. Có thể bấm **Run workflow** để chạy ngay.
 4. Mở bản sao lưu ngoài máy chủ: `BACKUP_KEY="..." node backend/tools/giai-ma-sao-luu.mjs tep.tbk > du-lieu.json`.
 5. Khôi phục: đăng nhập quản trị hệ thống > **Hệ thống > Sao lưu, trạng thái hệ thống > Khôi phục**.
+
+## Dữ liệu mẫu để trình chiếu (bản v24)
+
+Đăng nhập quản trị hệ thống > **Hệ thống > Sao lưu, trạng thái hệ thống > Dữ liệu mẫu > Tạo dữ liệu mẫu**. Dùng được cả khi đã tắt `TEST_ACCOUNTS` (không cần bật tài khoản thử nghiệm).
+
+- Thiết bị, sách, phòng mẫu có chữ "(mẫu)" hoặc mã riêng (SGK-M0001, BD-M0001...). **Dữ liệu thật không bị thay đổi.**
+- Khi tắt `TEST_ACCOUNTS`, mỗi giáo viên mẫu có **mật khẩu ngẫu nhiên**, chỉ hiện một lần lúc tạo (có nút chép; quên thì bấm "Đặt lại mật khẩu tài khoản mẫu").
+- Trong lúc bật, các trang quản lý có biểu ngữ vàng cảnh báo số liệu có lẫn dữ liệu mẫu.
+- **Xóa dữ liệu mẫu** chỉ xóa phần mẫu và mọi thao tác thử trên phần đó; dữ liệu thật nhập thêm trong lúc bật vẫn giữ nguyên.
+
+## Tính năng mới ở bản v25
+
+- **Báo hỏng thiết bị:** giáo viên quét mã QR thiết bị > "Báo thiết bị hỏng" (số lượng, mô tả). Nhân viên thiết bị xác nhận ở **Bảo trì – sửa chữa > Báo hỏng chờ xử lý** thì thiết bị mới chuyển sang "hỏng" (không cho mượn). Ban giám hiệu chỉ xem.
+- **Kiểm kê bằng quét QR:** trong đợt kiểm kê, quét nhãn QR (hoặc gõ mã) vào ô "Quét mã QR thiết bị"; mỗi lần quét đếm thêm 1. Có thể kiểm kê một phần bằng cách chỉ định danh sách thiết bị (`equipmentIds`) khi mở đợt.
+- **In lý lịch thiết bị:** Danh mục thiết bị > Lịch sử > "In lý lịch" (thông tin, nhật ký thay đổi, lịch sử mượn, chỗ ký).
+- **Tra cứu sách:** dải "Sách mới nhập" (8 đầu sách mới nhất) khi chưa gõ tìm kiếm.

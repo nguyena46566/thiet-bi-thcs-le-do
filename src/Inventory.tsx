@@ -1,9 +1,9 @@
 // Phân hệ kho thiết bị (đợt 1): kho, nhập kho, trả thiết bị (hỏng/mất), điểm thi đua
 import { badgeColor } from "./subjects"
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import {
   fetchInventory, createEquipment, updateEquipment, deleteEquipment, fetchPurchases, createPurchase,
-  fetchMyPoints, fetchAllPoints, fetchTeacherPoints, adjustPoints, unlockTeacher, returnRecord, fold, fetchCapabilities,
+  fetchMyPoints, fetchAllPoints, fetchTeacherPoints, adjustPoints, unlockTeacher, returnRecord, fold, fetchCapabilities, importPrices,
   type Equipment, type Purchase, type PenaltyEntry, type PointRules, type TeacherScore, type BorrowRecord,
 } from "@/api"
 
@@ -229,6 +229,8 @@ export function InventoryTab({ subjects }: { subjects: Subject[] }) {
   const [view, setView] = useState<"list" | "tree">("list")
   const [error, setError] = useState("")
   const [pageNo, setPageNo] = useState(1)
+  const priceFile = useRef<HTMLInputElement>(null)
+  const [priceMsg, setPriceMsg] = useState("")
   const PAGE = 20
   const load = useCallback(() => { fetchInventory().then(setList).catch((e) => setError(e.message)) }, [])
   useEffect(() => { setPageNo(1) }, [q, subject, onlyIssue])
@@ -247,6 +249,18 @@ export function InventoryTab({ subjects }: { subjects: Subject[] }) {
   const sum = (k: "qtyGood" | "qtyBroken" | "qtyLost" | "qtyRepair") => shown.reduce((s, e) => s + e[k], 0)
   const value = shown.reduce((s, e) => s + (e.qtyGood + e.qtyBroken + e.qtyRepair) * e.unitPrice, 0)
   const noPrice = shown.filter((e) => !e.unitPrice).length
+  // Nhập đơn giá hàng loạt: tải danh sách có sẵn mã, điền cột "Đơn giá", nhập lại; khớp theo mã (hoặc tên)
+  const priceTemplate = () => exportExcel("Don-gia-thiet-bi-can-nhap.xlsx", [{ name: "Đơn giá", rows: (list || []).filter((e) => !e.unitPrice).map((e) => ({ "Mã thiết bị": e.id, "Tên thiết bị": e.name, "Môn": subjects.find((s) => s.id === e.subjectId)?.name || "", "Đơn giá (đ)": "", "Năm sử dụng": e.yearInUse || "", "Nước sản xuất": e.origin || "" })) }])
+  const importPriceFile = async (f: File) => {
+    setPriceMsg("Đang nhập…"); setError("")
+    try {
+      const XLSX = await import("xlsx"); const wb = XLSX.read(await f.arrayBuffer())
+      const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]], { defval: "" })
+      const rows = raw.map((r) => ({ id: r["Mã thiết bị"], name: r["Tên thiết bị"], unitPrice: r["Đơn giá (đ)"] ?? r["Đơn giá"], yearInUse: r["Năm sử dụng"], origin: r["Nước sản xuất"] }))
+      const r = await importPrices(rows)
+      setPriceMsg(`Đã cập nhật ${r.updated} thiết bị.${r.notFound.length ? ` Không tìm thấy ${r.notFound.length} dòng (${r.notFound.slice(0, 2).join("; ")}…).` : ""}${r.invalid.length ? ` Không hợp lệ ${r.invalid.length} dòng (${r.invalid.slice(0, 2).join("; ")}…).` : ""}`); load()
+    } catch (e) { setPriceMsg(""); setError(e instanceof Error ? e.message : "Lỗi") }
+  }
 
   const remove = async (e: Equipment) => {
     if (!confirm(`Xóa thiết bị “${e.name}” khỏi kho?`)) return
@@ -264,7 +278,8 @@ export function InventoryTab({ subjects }: { subjects: Subject[] }) {
           ["Giá trị tài sản", money(value), "bg-blue-50 border-blue-200 text-blue-800"],
         ].map(([l, v, c]) => <div key={l} className={`border rounded-xl px-4 py-3 ${c}`}><div className="text-xl font-bold truncate">{v}</div><div className="text-xs opacity-80">{l}</div></div>)}
       </div>
-      {noPrice > 0 && <p className="text-xs text-gray-500 mb-3">{noPrice} thiết bị chưa có đơn giá, nên giá trị tài sản và tiền bồi thường chưa đầy đủ. Bấm “Sửa” để nhập đơn giá.</p>}
+      {noPrice > 0 && <p className="text-xs text-gray-500 mb-3">{noPrice} thiết bị chưa có đơn giá, nên giá trị tài sản và tiền bồi thường chưa đầy đủ. Bấm “Sửa” từng dòng, hoặc <button onClick={priceTemplate} className="font-semibold text-[#1a3670] hover:underline">tải danh sách (Excel)</button>, điền cột đơn giá rồi <button onClick={() => priceFile.current?.click()} className="font-semibold text-[#1a3670] hover:underline">nhập lại</button>.{priceMsg && <span className="block mt-1 text-gray-700">{priceMsg}</span>}</p>}
+      <input ref={priceFile} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) importPriceFile(f); e.target.value = "" }} />
       <ErrorBox msg={error} />
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center gap-3">

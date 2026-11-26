@@ -187,6 +187,9 @@ export function compare(items, settings, inventory) {
       : it.normPer === "lớp" ? Math.ceil(classes / div) : it.normPer === "phòng" ? rooms : 1;
     const required = Math.round(it.normQty * base * 100) / 100;
     const have = (it.linkedEquipmentIds || []).reduce((a, id) => a + (Number(byId.get(id)?.qtyGood) || 0), 0);
+    // Rà soát nhanh: "na" = nhà trường không dạy/không áp dụng (không tính vào mức đáp ứng); "none" = trường chưa có thiết bị này
+    if (it.siteState === "na") return { ...it, required, have: 0, missing: 0, status: "Không áp dụng" };
+    if (it.siteState === "none") return { ...it, required, have: 0, missing: required, status: "Chưa có" };
     const status = !(it.linkedEquipmentIds || []).length ? "Chưa liên kết" : it.normPer === "GV" && !t ? "Chưa khai báo số GV" : have >= required ? "Đủ" : have > 0 ? "Thiếu" : "Chưa có";
     return { ...it, required, have, missing: Math.max(0, required - have), status };
   });
@@ -224,6 +227,11 @@ export function registerMinlistRoutes(app, { requireAdmin, wrap, getInventory })
       const ids = new Set((await getInventory()).map((e) => e.id));
       patch.linkedEquipmentIds = [...new Set(b.linkedEquipmentIds.map(String))].filter((id) => ids.has(id)).slice(0, 20);
     }
+    if (b.siteState !== undefined) {
+      if (!["none", "na", ""].includes(b.siteState)) return res.status(400).json({ error: "Trạng thái rà soát không hợp lệ" });
+      patch.siteState = b.siteState;
+      if (b.siteState) patch.linkedEquipmentIds = []; // đã xác định "chưa có" hoặc "không áp dụng" thì không còn liên kết
+    }
     if (b.name !== undefined || b.norm !== undefined || b.normQty !== undefined) {
       const v = validItem({ ...cur, ...b });
       if (v.error) return res.status(400).json(v);
@@ -238,6 +246,37 @@ export function registerMinlistRoutes(app, { requireAdmin, wrap, getInventory })
     if (!rows) return res.status(400).json({ error: "Chưa có dữ liệu gốc cho môn này" });
     for (const it of await col().all()) if (it.mon === mon) await col().remove(it.id);
     res.json({ imported: await insertRows(mon, rows, Date.now()) });
+  }));
+  // Rà soát nhanh cả môn: đánh dấu hàng loạt các dòng CHƯA liên kết là "trường chưa có" (none), "không áp dụng" (na) hoặc bỏ đánh dấu (clear)
+  app.post("/api/minlist/bulk", requireAdmin, wrap(async (req, res) => {
+    const { mon, action } = req.body || {};
+    if (!TT38_SUBJECTS.includes(mon)) return res.status(400).json({ error: "Chọn môn" });
+    if (!["none", "na", "clear"].includes(action)) return res.status(400).json({ error: "Thao tác không hợp lệ" });
+    let n = 0;
+    for (const it of await col().all()) {
+      if (it.mon !== mon) continue;
+      if (action === "clear") { if (it.siteState) { await col().update(it.id, { siteState: "" }); n++; } continue; }
+      if ((it.linkedEquipmentIds || []).length || it.siteState) continue; // chỉ dòng chưa xử lý
+      await col().update(it.id, { siteState: action }); n++;
+    }
+    res.json({ updated: n });
+  }));
+  // Gợi ý liên kết tự động theo tên thiết bị (xem trước, bấm xác nhận mới lưu)
+  app.post("/api/minlist/auto-link", requireAdmin, wrap(async (req, res) => {
+    const { mon, apply } = req.body || {};
+    const groups = { "Toán": ["toan-hoc"], "Ngoại ngữ": ["tieng-anh"], "Ngữ văn": ["ngu-van-gdcd"], "Giáo dục công dân": ["ngu-van-gdcd"], "Lịch sử và Địa lí": ["lich-su-dia-li"], "Giáo dục thể chất": ["gdtc"], "Khoa học tự nhiên": ["vat-li", "hoa-hoc", "sinh-hoc"], "Công nghệ": ["cong-nghe"], "Tin học": ["toan-hoc"] };
+    const fold = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
+    const words = (t) => [...new Set(fold(t).split(/[^a-z0-9]+/).filter((w) => w.length > 3))];
+    const inv = (await getInventory()).filter((e) => !e.demo);
+    const out = [];
+    for (const it of await col().all()) {
+      if ((mon && it.mon !== mon) || (it.linkedEquipmentIds || []).length || it.siteState || !groups[it.mon]) continue;
+      const w = words(it.name); if (w.length < 2) continue;
+      const best = inv.filter((e) => groups[it.mon].includes(e.subjectId)).map((e) => { const ew = fold(e.name); const hit = w.filter((x) => ew.includes(x)).length; return { e, hit, ratio: hit / w.length }; }).sort((a, b) => b.ratio - a.ratio || b.hit - a.hit)[0];
+      if (best && best.hit >= 2 && best.ratio >= 0.6) out.push({ itemId: it.id, stt: it.stt, item: it.name, equipmentId: best.e.id, equipment: best.e.name, match: Math.round(best.ratio * 100) });
+    }
+    if (apply) { for (const x of out) await col().update(x.itemId, { linkedEquipmentIds: [x.equipmentId] }); }
+    res.json({ applied: !!apply, count: out.length, suggestions: out.slice(0, 60) });
   }));
   app.delete("/api/minlist/:id", requireAdmin, wrap(async (req, res) => res.json(await col().remove(req.params.id))));
   // Nhập nhiều dòng (từ file Excel theo mẫu); replace=true thì xóa các dòng cũ của những môn có trong file

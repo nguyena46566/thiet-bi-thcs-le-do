@@ -40,7 +40,8 @@ export function startAudit(user, body = {}) {
     const drafts = (await auditCol().all()).filter((a) => a.status === "Đang kiểm kê");
     if (drafts.length) return { error: "Đang có một đợt kiểm kê chưa hoàn tất", status: 409, id: drafts[0].id };
     const subjectId = SUBJECTS.some((s) => s.id === body.subjectId) ? body.subjectId : "";
-    const list = (await refreshCache()).filter((e) => !subjectId || e.subjectId === subjectId);
+    const only = Array.isArray(body.equipmentIds) && body.equipmentIds.length ? new Set(body.equipmentIds) : null; // kiểm kê một phần theo danh sách thiết bị
+    const list = (await refreshCache()).filter((e) => (!subjectId || e.subjectId === subjectId) && (!only || only.has(e.id)));
     const out = await lentOut();
     const doc = {
       id: newId(), status: "Đang kiểm kê", title: str(body.title, 120) || `Kiểm kê ${formatDate(todayVN())}`, subjectId,
@@ -535,6 +536,43 @@ export function registerOperationRoutes(app, { requireAuth, requireAdmin, wrap }
   app.patch("/api/audits/:id", requireAdmin, wrap(async (req, res) => send(res, await saveAuditCounts(req.params.id, req.body || {}))));
   app.post("/api/audits/:id/finish", requireAdmin, wrap(async (req, res) => send(res, await finishAudit(req.params.id, req.session.user))));
   app.delete("/api/audits/:id", requireAdmin, wrap(async (req, res) => send(res, await cancelAudit(req.params.id))));
+
+  // ---------- Báo hỏng thiết bị: giáo viên (hoặc bất kỳ ai đã đăng nhập) báo, nhân viên thiết bị xác nhận thì mới chuyển sang "hỏng" ----------
+  const issueCol = () => db.collection("issues");
+  app.post("/api/inventory/equipment/:id/issues", requireAuth, wrap(async (req, res) => {
+    const u = req.session.user;
+    const eq = await equipmentCol().get(req.params.id);
+    if (!eq) return res.status(404).json({ error: "Không tìm thấy thiết bị" });
+    const qty = int(req.body?.quantity, 1, 1000), note = str(req.body?.note, 300);
+    if (qty === null) return res.status(400).json({ error: "Số lượng hỏng không hợp lệ" });
+    if (!note) return res.status(400).json({ error: "Ghi mô tả tình trạng hỏng" });
+    if (qty > (eq.qtyGood || 0)) return res.status(409).json({ error: `Chỉ có ${eq.qtyGood || 0} thiết bị đang tốt` });
+    if ((await issueCol().all()).some((i) => i.status === "Chờ xử lý" && i.equipmentId === eq.id && i.reporterId === u.id)) return res.status(409).json({ error: "Thầy/cô đã báo hỏng thiết bị này, đang chờ nhân viên thiết bị xử lý" });
+    const doc = await issueCol().insert({ id: newId(), status: "Chờ xử lý", equipmentId: eq.id, name: eq.name, subjectId: eq.subjectId, quantity: qty, note, reporterId: u.id, reporterName: u.name, createdAt: new Date().toISOString() });
+    await notifications.createNotification({ type: "system", title: "Báo thiết bị hỏng", message: `${u.name} báo hỏng ${qty} ${eq.name}: ${note}`, userId: u.id, userName: u.name }).catch(() => {});
+    res.status(201).json(doc);
+  }));
+  app.get("/api/issues", requireAdmin, wrap(async (req, res) => res.json((await issueCol().all()).sort((a, b) => b.createdAt.localeCompare(a.createdAt)))));
+  app.get("/api/issues/mine", requireAuth, wrap(async (req, res) => res.json((await issueCol().all()).filter((i) => i.reporterId === req.session.user.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)))));
+  app.post("/api/issues/:id/resolve", requireAdmin, wrap(async (req, res) => {
+    const u = req.session.user;
+    const out = await serial(async () => {
+      const i = await issueCol().get(req.params.id);
+      if (!i) return { error: "Không tìm thấy báo hỏng", status: 404 };
+      if (i.status !== "Chờ xử lý") return { error: "Báo hỏng đã được xử lý", status: 409 };
+      const note = str(req.body?.note, 300), stamp = { resolvedBy: u.name, resolvedAt: new Date().toISOString(), resolution: note };
+      if (!req.body?.accept) {
+        if (!note) return { error: "Không xác nhận cần ghi lý do", status: 400 };
+        return { value: await issueCol().update(i.id, { ...stamp, status: "Không xác nhận" }) };
+      }
+      const eq = await equipmentCol().get(i.equipmentId);
+      if (!eq || (eq.qtyGood || 0) < i.quantity) return { error: "Số thiết bị tốt trong kho không còn đủ để chuyển sang hỏng", status: 409 };
+      await applyDelta(eq.id, { qtyGood: -i.quantity, qtyBroken: i.quantity }, { kind: "Báo hỏng", by: u.name, note: `${i.reporterName}: ${i.note}` });
+      await refreshCache();
+      return { value: await issueCol().update(i.id, { ...stamp, status: "Đã xác nhận" }) };
+    });
+    send(res, out);
+  }));
 
   app.get("/api/maintenance", requireAdmin, wrap(async (req, res) => res.json(await listMaintenance())));
   app.post("/api/maintenance", requireAdmin, wrap(async (req, res) => send(res, await createMaintenance(req.body || {}, req.session.user), 201)));

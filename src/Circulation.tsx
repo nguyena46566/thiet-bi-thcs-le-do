@@ -389,7 +389,7 @@ export function LibraryStatsTab() {
 export function OpacPage() {
   const [q, setQ] = useState("")
   const [kind, setKind] = useState("")
-  const [d, setD] = useState<{ results: OpacResult[]; kinds: Record<string, string> } | null>(null)
+  const [d, setD] = useState<{ results: OpacResult[]; newest: OpacResult[]; kinds: Record<string, string> } | null>(null)
   const [error, setError] = useState("")
   useEffect(() => { const t = setTimeout(() => { searchOpac(q, kind).then(setD).catch((e) => setError(e.message)) }, 250); return () => clearTimeout(t) }, [q, kind])
   return (
@@ -400,6 +400,12 @@ export function OpacPage() {
         <select aria-label="Loại tài liệu" className="border border-gray-200 rounded-xl px-3 text-sm" value={kind} onChange={(e) => setKind(e.target.value)}><option value="">Mọi loại</option>{Object.entries(d?.kinds || {}).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
       </div>
       <Err msg={error} />
+      {d && d.newest.length > 0 && !q && !kind && (
+        <section aria-label="Sách mới nhập" className="mb-6">
+          <h2 className="font-semibold text-gray-900 mb-2">Sách mới nhập</h2>
+          <ul className="grid sm:grid-cols-2 gap-2">{d.newest.map((r) => <li key={r.id} className="bg-white rounded-xl border border-gray-200/80 px-3.5 py-2.5"><div className="text-sm font-semibold text-gray-900">{r.title}</div><div className="text-xs text-gray-500">{[r.author, r.kind].filter(Boolean).join(" · ")} · {r.available ? `còn ${r.available} bản` : "đã cho mượn hết"}</div></li>)}</ul>
+        </section>
+      )}
       {!d ? <p className="text-sm text-gray-500">Đang tải…</p> : d.results.length === 0 ? <p className="text-sm text-gray-500">Không tìm thấy sách phù hợp.</p> : (
         <ul className="space-y-3">{d.results.map((r) => (
           <li key={r.id} className="bg-white rounded-2xl border border-gray-200/80 p-4 flex flex-wrap gap-3 justify-between">

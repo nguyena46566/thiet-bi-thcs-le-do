@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
   fetchSystemStatus, fetchBackups, downloadBackup, restoreBackup, fetchLoginLog, fetchRooms, fetchInventory, fetchMinlist, fetchLibStats,
-  fetchAudits, fetchMaintenance, fetchDecisions, fetchStocktakes, fetchReadingPeriods, fetchDemoStatus, createDemoData, removeDemoData,
+  fetchAudits, fetchMaintenance, fetchDecisions, fetchStocktakes, fetchReadingPeriods, fetchDemoStatus, createDemoData, removeDemoData, resetDemoPasswords, fetchEvidenceCodes, saveEvidenceCodes, fetchCapabilities,
   type SystemStatus, type BackupEntry, type LoginEntry,
 } from "@/api"
 import { exportExcel } from "./Operations"
@@ -144,6 +144,16 @@ export function CsdlExportTab({ subjects }: { subjects: { id: string; name: stri
 // ===================================================================
 export function EvidenceTab({ go }: { go: (section: string) => void }) {
   const [d, setD] = useState<Record<string, { have: boolean; text: string }> | null>(null)
+  const [codes, setCodes] = useState<Record<string, string>>({})
+  const [canEdit, setCanEdit] = useState(false)
+  const [msg, setMsg] = useState("")
+  useEffect(() => { fetchEvidenceCodes().then(setCodes).catch(() => {}); fetchCapabilities().then((c) => setCanEdit(c.canOperate)).catch(() => {}) }, [])
+  const HINT: Record<string, string> = {
+    minlist: "Vào Danh mục tối thiểu: liên kết thiết bị, hoặc đánh dấu “trường chưa có” / “không áp dụng” cho từng môn",
+    decision: "Vào Quyết định thành lập, lập quyết định thành lập tổ kiểm kê", audit: "Vào Kiểm kê, mở đợt kiểm kê, nhập số đếm và bấm kết thúc",
+    repair: "Vào Bảo trì – sửa chữa, ghi mỗi lần gửi sửa, bảo dưỡng", libStats: "Nhập sách theo hóa đơn, lập thẻ bạn đọc, cho mượn sách để có số liệu",
+    reading: "Vào Tiết đọc thư viện, xếp và ghi tiết đọc (tối thiểu 3 tiết/học kỳ/lớp)", libStock: "Vào Kiểm kê – thanh lọc, kiểm kê kho sách",
+  }
   useEffect(() => {
     const t = new Date(), sy = t.getMonth() >= 8 ? t.getFullYear() : t.getFullYear() - 1, from = `${sy}-09-01`
     Promise.all([fetchMinlist().catch(() => null), fetchAudits().catch(() => []), fetchMaintenance().catch(() => []), fetchDecisions().catch(() => []), fetchLibStats().catch(() => null), fetchStocktakes().catch(() => []), fetchReadingPeriods().catch(() => null)])
@@ -155,7 +165,10 @@ export function EvidenceTab({ go }: { go: (section: string) => void }) {
         const dcY = dc.filter((x) => x.type === "Tổ kiểm kê" && x.date >= from)
         const stY = st.filter((x) => x.status === "Hoàn tất" && (x.finishedAt || "") >= from)
         setD({
-          minlist: { have: items.length > 0 && okN === items.length, text: items.length ? `${okN}/${items.length} dòng đủ (${Math.round((okN / items.length) * 100)}%)` : "Chưa có" },
+          minlist: (() => {
+            const apply = items.filter((i) => i.status !== "Không áp dụng"), todo = apply.filter((i) => i.status === "Chưa liên kết" || i.status === "Chưa khai báo số GV").length
+            return { have: apply.length > 0 && todo === 0, text: apply.length ? `${okN}/${apply.length} dòng đủ (${Math.round((okN / apply.length) * 100)}%)${todo ? `; còn ${todo} dòng chưa rà soát` : "; đã rà soát xong"}` : "Chưa có" }
+          })(),
           audit: { have: auY.length > 0, text: `${auY.length} đợt kiểm kê hoàn tất trong năm học` },
           decision: { have: dcY.length > 0, text: `${dcY.length} quyết định thành lập tổ kiểm kê` },
           repair: { have: mtY.length > 0, text: `${mtY.length} lượt bảo trì, sửa chữa` },
@@ -176,39 +189,53 @@ export function EvidenceTab({ go }: { go: (section: string) => void }) {
   ]
   return (
     <div className="space-y-4">
-      <p className="text-sm text-gray-500">Tiêu chuẩn 3 – tiêu chí 3.5 (thiết bị) và 3.6 (thư viện). Mã minh chứng do Hội đồng tự đánh giá đánh số.</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-gray-500">Tiêu chuẩn 3 – tiêu chí 3.5 (thiết bị) và 3.6 (thư viện). Mã minh chứng do Hội đồng tự đánh giá đánh số; nhập vào cột “Mã minh chứng” rồi bấm Lưu.</p>
+        {canEdit && <div className="flex items-center gap-2">{msg && <span className="text-xs text-green-700">{msg}</span>}<button onClick={async () => { try { await saveEvidenceCodes(codes); setMsg("Đã lưu mã minh chứng") } catch (e) { setMsg(e instanceof Error ? e.message : "Lỗi") } }} className={btnPrimary}>Lưu mã minh chứng</button></div>}
+      </div>
       <div className={`${card} overflow-hidden`}>
         <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="bg-gray-50">{["Tiêu chí", "Yêu cầu", "Minh chứng trên website", "Năm học này", "Mã minh chứng", ""].map((h) => <th key={h} className={th}>{h || <span className="sr-only">Thao tác</span>}</th>)}</tr></thead>
           <tbody className="divide-y divide-gray-50">{rows.map(([c, req, ev, k, sec], i) => (
             <tr key={i}><td className="px-3 py-2 font-semibold whitespace-nowrap">{c}</td><td className="px-3 py-2 text-xs text-gray-600 min-w-[180px]">{req}</td><td className="px-3 py-2 min-w-[220px]">{ev}</td>
-              <td className={`px-3 py-2 text-xs font-semibold min-w-[160px] ${d?.[k]?.have ? "text-green-700" : "text-amber-700"}`}>{d ? `${d[k].have ? "✓" : "✗"} ${d[k].text}` : "…"}</td>
-              <td className="px-3 py-2 text-xs text-gray-500">[……]</td><td className="px-3 py-2"><button onClick={() => go(sec)} className="text-xs font-semibold text-[#1a3670] hover:underline whitespace-nowrap">Mở để in</button></td></tr>
+              <td className={`px-3 py-2 text-xs font-semibold min-w-[160px] ${d?.[k]?.have ? "text-green-700" : "text-amber-700"}`}>{d ? `${d[k].have ? "✓" : "✗"} ${d[k].text}` : "…"}{d && !d[k].have && <span className="block font-normal text-gray-600 mt-0.5">Cần làm: {HINT[k]}</span>}</td>
+              <td className="px-3 py-2">{canEdit ? <input aria-label={`Mã minh chứng ${ev}`} className="w-28 border border-gray-200 rounded-md px-2 py-1 text-xs" placeholder="VD: H1.3.5.02" value={codes[k] || ""} onChange={(e) => setCodes({ ...codes, [k]: e.target.value })} /> : <span className="text-xs text-gray-600">{codes[k] || "—"}</span>}</td><td className="px-3 py-2"><button onClick={() => go(sec)} className="text-xs font-semibold text-[#1a3670] hover:underline whitespace-nowrap">Mở để in</button></td></tr>
           ))}</tbody></table></div>
       </div>
     </div>
   )
 }
 
-/** Dữ liệu mẫu để chạy thử: chỉ hiện khi máy chủ bật TEST_ACCOUNTS=1 */
+/** Dữ liệu mẫu để chạy thử và trình chiếu: an toàn trên web đang chạy thật (xóa chỉ xóa phần mẫu) */
 function DemoPanel({ onChange }: { onChange: () => void }) {
   const [st, setSt] = useState<{ active: boolean; at: string | null; summary: Record<string, number> | null } | null>(null)
-  const [hidden, setHidden] = useState(false)
+  const [pw, setPw] = useState<Record<string, string> | null>(null)
+  const [common, setCommon] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(""), [ok, setOk] = useState("")
-  const load = useCallback(() => { fetchDemoStatus().then(setSt).catch(() => setHidden(true)) }, [])
+  const load = useCallback(() => { fetchDemoStatus().then(setSt).catch(() => {}) }, [])
   useEffect(() => { load() }, [load])
-  if (hidden || !st) return null
+  if (!st) return null
   const act = async (fn: () => Promise<string>) => { setBusy(true); setError(""); setOk(""); try { setOk(await fn()); load(); onChange() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") } finally { setBusy(false) } }
+  const copyAll = () => navigator.clipboard?.writeText(Object.entries(pw || {}).map(([u, p]) => `${u}\t${p}`).join("\n")).then(() => setOk("Đã chép danh sách tài khoản và mật khẩu"))
   return (
     <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
-      <h2 className="font-bold text-gray-900 mb-1">Dữ liệu mẫu để chạy thử</h2>
-      <p className="text-sm text-gray-700 mb-3">Tạo dữ liệu đầy đủ cho mọi chức năng: 12 giáo viên (mật khẩu Test@2026), phiếu mượn từ đầu năm học (đã trả, đang mượn, quá hạn, chờ duyệt, từ chối, trả hỏng, báo mất), hóa chất sắp hết hạn và đã hết hạn, kiểm kê, bảo trì, ghi giảm, đề xuất mua sắm, kế hoạch năm học, quyết định, thư viện (19 đầu sách, 96 học sinh, lượt mượn, tiết đọc), khách vãng lai… Trước khi tạo, dữ liệu hiện tại được chụp lại; “Xóa dữ liệu mẫu” đưa web về đúng như cũ.</p>
-      <Err msg={error} /><Ok msg={ok} />
+      <h3 className="font-bold text-gray-900 mb-1">Dữ liệu mẫu (để trình chiếu, tập huấn)</h3>
+      <p className="text-sm text-gray-700 mb-3">Tạo dữ liệu đầy đủ cho mọi chức năng: 12 giáo viên mẫu, phiếu mượn đủ trạng thái, hóa chất sắp hết hạn, kiểm kê, bảo trì, thanh lý chờ Ban giám hiệu duyệt, đề xuất mua sắm, kế hoạch, thư viện (19 đầu sách, 96 học sinh, lượt mượn, quá hạn, tiết đọc), khách vãng lai… <strong>Dữ liệu thật không bị đụng tới</strong>: thiết bị, sách, phòng mẫu có chữ “(mẫu)” hoặc mã riêng (VD SGK-M0001, BD-M0001); bấm “Xóa dữ liệu mẫu” chỉ xóa đúng phần mẫu, dữ liệu thật nhập thêm trong lúc bật vẫn giữ nguyên. Trong lúc bật, các báo cáo và số liệu <strong>có lẫn dữ liệu mẫu</strong> nên chỉ dùng để trình chiếu.</p>
+      {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-sm mb-3">{error}</div>}
+      {ok && <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 text-sm mb-3">{ok}</div>}
+      {pw && <div className="bg-white border border-amber-300 rounded-xl p-3 mb-3">
+        <div className="flex flex-wrap justify-between gap-2 mb-1"><strong className="text-sm">Tài khoản giáo viên mẫu — mật khẩu chỉ hiện lúc này, hãy chép lại</strong><button onClick={copyAll} className={btnGhost}>Chép tất cả</button></div>
+        <ul className="grid sm:grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-0.5 text-xs font-mono">{Object.entries(pw).map(([u, p]) => <li key={u}>{u} · {p}</li>)}</ul>
+      </div>}
+      {common && <p className="text-xs text-gray-700 mb-3">Đang bật tài khoản thử nghiệm: giáo viên mẫu dùng mật khẩu chung <code>{common}</code> và có nút đăng nhập nhanh ở trang đăng nhập.</p>}
       {st.active ? <>
         <p className="text-sm mb-2">Đang có dữ liệu mẫu (tạo lúc {vnTime(st.at)}).</p>
         {st.summary && <ul className="grid sm:grid-cols-2 md:grid-cols-3 gap-x-4 text-xs text-gray-700 mb-3">{Object.entries(st.summary).map(([k, v]) => <li key={k}>{k}: <strong>{v}</strong></li>)}</ul>}
-        <button disabled={busy} onClick={() => { if (confirm("Xóa toàn bộ dữ liệu mẫu và đưa web về trạng thái trước khi tạo? Dữ liệu nhập thêm sau đó cũng bị xóa.")) act(async () => { await removeDemoData(); return "Đã xóa dữ liệu mẫu" }) }} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50">Xóa dữ liệu mẫu</button>
-      </> : <button disabled={busy} onClick={() => act(async () => { const r = await createDemoData(); return `Đã tạo dữ liệu mẫu: ${Object.values(r.summary).reduce((a, b) => a + b, 0)} bản ghi` })} className={btnPrimary}>{busy ? "Đang tạo… (khoảng 1 phút)" : "Tạo dữ liệu mẫu"}</button>}
+        <div className="flex flex-wrap gap-2">
+          <button disabled={busy} onClick={() => act(async () => { const r = await resetDemoPasswords(); setPw(r.passwords); setCommon(null); return "Đã đặt lại mật khẩu các tài khoản giáo viên mẫu" })} className={btnGhost}>Đặt lại mật khẩu tài khoản mẫu</button>
+          <button disabled={busy} onClick={() => { if (confirm("Xóa toàn bộ dữ liệu mẫu? Dữ liệu thật giữ nguyên.")) act(async () => { const r = await removeDemoData(); setPw(null); setCommon(null); return `Đã xóa dữ liệu mẫu (${Object.values(r.removed).reduce((a, b) => a + b, 0)} bản ghi). Dữ liệu thật giữ nguyên.` }) }} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50">Xóa dữ liệu mẫu</button>
+        </div>
+      </> : <button disabled={busy} onClick={() => { if (confirm("Tạo dữ liệu mẫu? Dữ liệu thật không bị thay đổi; bạn có thể xóa riêng phần mẫu bất cứ lúc nào.")) act(async () => { const r = await createDemoData(); setPw(r.passwords); setCommon(r.commonPassword); return `Đã tạo dữ liệu mẫu: ${Object.values(r.summary).reduce((a, b) => a + b, 0)} bản ghi` }) }} className={btnPrimary}>{busy ? "Đang tạo… (khoảng 1 phút)" : "Tạo dữ liệu mẫu"}</button>}
     </div>
   )
 }

@@ -30,6 +30,7 @@ import {
   type Notification,
   sendRemindersNow,
   fetchAvailable,
+  fetchDemoActive,
 } from "@/api"
 
 type Page = "home" | "admin" | "noiquy" | "mine" | string
@@ -621,6 +622,20 @@ const ADMIN_MENU: { group: string; items: { id: string; label: string; tab: stri
   ] },
 ]
 const ADMIN_ITEMS = ADMIN_MENU.flatMap((g) => g.items)
+/** Cảnh báo khi đang bật dữ liệu mẫu: số liệu, báo cáo có lẫn dữ liệu mẫu nên không dùng cho báo cáo chính thức */
+function DemoBanner({ go }: { go: (section: string) => void }) {
+  const { user } = useAuth()
+  const [active, setActive] = useState(false)
+  useEffect(() => { let on = true; fetchDemoActive().then((r) => { if (on) setActive(r.active) }).catch(() => {}); return () => { on = false } }, [])
+  if (!active) return null
+  return (
+    <div role="status" className="mb-4 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 px-4 py-2.5 text-sm flex flex-wrap items-center justify-between gap-2">
+      <span><strong>Đang bật dữ liệu mẫu.</strong> Số liệu và báo cáo trên các trang này có lẫn dữ liệu mẫu (tên có “(mẫu)”), chỉ dùng để trình chiếu, không dùng cho báo cáo chính thức.</span>
+      {user?.isSysadmin && <button onClick={() => go("he-thong")} className="font-semibold underline">Quản lý dữ liệu mẫu</button>}
+    </div>
+  )
+}
+
 /** Các mục quản trị chỉ quản trị hệ thống dùng */
 const SYSTEM_ITEMS = ["nguoi-dung", "du-lieu-ca-nhan", "nhat-ky-dang-nhap", "he-thong"]
 /** Ban giám hiệu: xem và ra quyết định (duyệt mất, mua sắm, thanh lý, kế hoạch, điểm thi đua), xem báo cáo */
@@ -740,6 +755,7 @@ function AdminPage({ section = "tong-quan", go }: { section?: string; go: (secti
       <div className="max-w-[1500px] mx-auto">
         <div>
         <section className="flex-1 min-w-0">
+        <DemoBanner go={go} />
         <div className="mb-5 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
           <div>
             <div className="text-sm font-semibold text-gray-500 mb-1">Trung tâm điều hành · {ADMIN_MENU.find((g) => g.items.includes(current))?.group || "Tổng quan"}</div>

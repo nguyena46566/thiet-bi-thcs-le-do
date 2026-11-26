@@ -500,6 +500,28 @@ export function registerInventoryRoutes(app, { requireAuth, requireAdmin, wrap }
   app.get("/api/points/me", requireAuth, wrap(async (req, res) => res.json({ ...(await scoreOf(req.session.user.id)), rules: RULES, schoolYear: schoolYearOf() })));
   app.get("/api/points", requireAdmin, wrap(async (req, res) => res.json({ teachers: await listScores(), rules: RULES, schoolYear: schoolYearOf() })));
   app.get("/api/points/:userId", requireAdmin, wrap(async (req, res) => res.json(await scoreOf(req.params.userId))));
+  // Nhập đơn giá (năm sử dụng, xuất xứ) hàng loạt từ Excel: tìm theo mã thiết bị, nếu không có thì theo tên (không phân biệt dấu)
+  app.post("/api/inventory/prices/import", requireAdmin, wrap(async (req, res) => {
+    const rows = (Array.isArray(req.body?.rows) ? req.body.rows : []).slice(0, 2000);
+    const fold = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase().replace(/\s+/g, " ").trim();
+    const all = await equipmentCol().all();
+    const byId = new Map(all.map((e) => [e.id, e])), byName = new Map(all.map((e) => [fold(e.name), e]));
+    const out = { updated: 0, notFound: [], invalid: [] };
+    for (const [n, r] of rows.entries()) {
+      const ref = String(r.id ?? r.ref ?? "").trim(), name = String(r.name ?? "").trim();
+      const e = byId.get(ref) || byName.get(fold(name)) || byName.get(fold(ref));
+      if (!e) { out.notFound.push(`Dòng ${n + 2}: ${ref || name || "(trống)"}`); continue; }
+      const price = r.unitPrice === "" || r.unitPrice == null ? null : Number(String(r.unitPrice).replace(/[.\s]/g, "").replace(",", "."));
+      const year = r.yearInUse === "" || r.yearInUse == null ? null : Math.floor(Number(r.yearInUse));
+      if (price !== null && (!Number.isFinite(price) || price < 0 || price > 5e9)) { out.invalid.push(`Dòng ${n + 2}: đơn giá “${r.unitPrice}” không hợp lệ`); continue; }
+      if (year !== null && (!Number.isFinite(year) || year < 1990 || year > 2100)) { out.invalid.push(`Dòng ${n + 2}: năm “${r.yearInUse}” không hợp lệ`); continue; }
+      const patch = {}; if (price !== null) patch.unitPrice = Math.round(price); if (year !== null) patch.yearInUse = year; if (str(r.origin, 60)) patch.origin = str(r.origin, 60);
+      if (!Object.keys(patch).length) continue;
+      await equipmentCol().update(e.id, { ...patch, updatedAt: new Date().toISOString() }); out.updated++;
+    }
+    await refreshCache();
+    res.json({ ...out, notFound: out.notFound.slice(0, 30), invalid: out.invalid.slice(0, 30) });
+  }));
   // Cộng, trừ điểm thủ công và mở khóa là quyết định thi đua: Ban giám hiệu làm (chưa có Ban giám hiệu thì nhân viên thiết bị)
   const needDecide = (req, res, next) => (canDecide(req.session.user) ? next() : res.status(403).json({ error: "Chỉ Ban giám hiệu được cộng, trừ điểm thi đua và mở khóa" }));
   app.post("/api/points/adjust", requireAdmin, needDecide, wrap(async (req, res) => send(res, await adjustPoints(req.body || {}, req.session.user), 201)));

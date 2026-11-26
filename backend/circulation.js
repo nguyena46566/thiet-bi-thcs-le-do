@@ -296,14 +296,19 @@ export function registerCirculationRoutes(app, { requireAuth, wrap }) {
   app.get("/api/opac", wrap(async (req, res) => {
     const q = fold(str(req.query.q, 100)), kind = String(req.query.kind || ""), grade = String(req.query.grade || "");
     const cs = await copies().all();
-    const out = (await titles().all()).filter((t) => (!kind || t.kind === kind) && (!grade || String(t.grade || "") === grade)
+    const view = (t) => {
+      const mine = cs.filter((c) => c.titleId === t.id && c.status !== "Thanh lý" && c.status !== "Mất");
+      return { id: t.id, title: t.title, author: t.author, publisher: t.publisher, year: t.year, kind: BOOK_KINDS[t.kind] || t.kind, grade: t.grade, callNumber: t.callNumber || "", summary: t.summary || "",
+        total: mine.length, available: mine.filter((c) => c.status === "Trên giá").length, shelves: [...new Set(mine.filter((c) => c.status === "Trên giá").map((c) => c.shelf).filter(Boolean))], createdAt: t.createdAt || "", keywords: t.keywords || "", classification: t.classification || "" };
+    };
+    const all = (await titles().all()).map(view).filter((t) => t.total > 0);
+    const kindName = (k) => BOOK_KINDS[k] || k;
+    const out = all.filter((t) => (!kind || t.kind === kindName(kind)) && (!grade || String(t.grade || "") === grade)
       && (!q || fold([t.title, t.author, t.publisher, t.keywords, t.classification].join(" ")).includes(q)))
-      .map((t) => {
-        const mine = cs.filter((c) => c.titleId === t.id && c.status !== "Thanh lý" && c.status !== "Mất");
-        return { id: t.id, title: t.title, author: t.author, publisher: t.publisher, year: t.year, kind: BOOK_KINDS[t.kind] || t.kind, grade: t.grade, callNumber: t.callNumber || "", summary: t.summary || "",
-          total: mine.length, available: mine.filter((c) => c.status === "Trên giá").length, shelves: [...new Set(mine.filter((c) => c.status === "Trên giá").map((c) => c.shelf).filter(Boolean))] };
-      }).filter((t) => t.total > 0).sort((a, b) => a.title.localeCompare(b.title, "vi")).slice(0, 100);
-    res.json({ results: out, kinds: BOOK_KINDS });
+      .sort((a, b) => a.title.localeCompare(b.title, "vi")).slice(0, 100).map(({ createdAt, keywords, classification, ...x }) => x);
+    // Sách mới nhập (hiện khi chưa tìm kiếm, lọc): 8 đầu sách nhập gần nhất
+    const newest = !q && !kind && !grade ? [...all].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 8).map(({ createdAt, keywords, classification, ...x }) => x) : [];
+    res.json({ results: out, newest, kinds: BOOK_KINDS });
   }));
 
   // ---------- Biên mục ----------

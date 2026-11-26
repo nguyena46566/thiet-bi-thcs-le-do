@@ -16,7 +16,7 @@ const dataDir = path.join(__dirname, "data");
 const MAX_NOTIFICATIONS = 200;
 
 export const newId = () => crypto.randomUUID();
-const DOC_TABLES = ["equipment", "purchases", "penalties", "audits", "maintenance", "disposals", "lossreports", "rooms", "proposals", "changelog", "minlist", "settings", "consumptions", "plans", "decisions", "users", "rolelog", "booktitles", "bookcopies", "bookreceipts", "shelves", "datarequests", "guests", "readers", "bookloans", "readingperiods", "libaudits", "loginlog", "backuplog"];
+const DOC_TABLES = ["equipment", "purchases", "penalties", "audits", "maintenance", "disposals", "lossreports", "rooms", "proposals", "changelog", "minlist", "settings", "consumptions", "plans", "decisions", "users", "rolelog", "booktitles", "bookcopies", "bookreceipts", "shelves", "datarequests", "guests", "readers", "bookloans", "readingperiods", "libaudits", "loginlog", "backuplog", "issues"];
 export { DOC_TABLES };
 
 function countStats(list) {

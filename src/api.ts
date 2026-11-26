@@ -405,7 +405,7 @@ export const fetchEquipmentHistory = (id: string) => call<EquipmentHistory>("GET
 export const verifyLoss = (id: string, b: { searchScope: string; involved: string; findings: string }) => call<LossReport>("PATCH", `/api/loss-reports/${encodeURIComponent(id)}/verify`, b);
 
 // ============ DANH MỤC THIẾT BỊ TỐI THIỂU (TT 38/2021) ============
-export interface MinItem { id: string; mon: string; stt: string; group: string; topic: string; name: string; purpose: string; forTeacher: boolean; forStudent: boolean; unit: string; normQty: number; normPer: string; normDiv?: number; norm?: string; grades: number[]; note: string; siteSubjectId: string; linkedEquipmentIds: string[]; source: string; amendedBy?: string; required: number; have: number; missing: number; status: string }
+export interface MinItem { id: string; siteState?: "none" | "na" | ""; mon: string; stt: string; group: string; topic: string; name: string; purpose: string; forTeacher: boolean; forStudent: boolean; unit: string; normQty: number; normPer: string; normDiv?: number; norm?: string; grades: number[]; note: string; siteSubjectId: string; linkedEquipmentIds: string[]; source: string; amendedBy?: string; required: number; have: number; missing: number; status: string }
 export interface MinSettings { teachers: Record<string, number>; rooms?: Record<string, number>; classes: Record<string, number>; hsPerRoom: number }
 export const fetchMinlist = () => call<{ subjects: string[]; amended?: string[]; settings: MinSettings; items: MinItem[] }>("GET", "/api/minlist");
 export const reseedMinlist = (mon: string) => call<{ imported: number }>("POST", "/api/minlist/reseed", { mon });
@@ -520,7 +520,7 @@ export const fetchReadingPeriods = (schoolYear = "") => call<{ schoolYear: strin
 export const createReadingPeriod = (b: { date: string; slot: string; className: string; topic: string; leader: string }) => call<ReadingPeriod>("POST", "/api/library/reading-periods", b);
 export const updateReadingPeriod = (id: string, b: { status?: string; attendance?: number; note?: string }) => call<ReadingPeriod>("PATCH", `/api/library/reading-periods/${encodeURIComponent(id)}`, b);
 export const deleteReadingPeriod = (id: string) => call<boolean>("DELETE", `/api/library/reading-periods/${encodeURIComponent(id)}`);
-export const searchOpac = (q: string, kind = "", grade = "") => call<{ results: OpacResult[]; kinds: Record<string, string> }>("GET", `/api/opac?q=${encodeURIComponent(q)}&kind=${kind}&grade=${grade}`);
+export const searchOpac = (q: string, kind = "", grade = "") => call<{ results: OpacResult[]; newest: OpacResult[]; kinds: Record<string, string> }>("GET", `/api/opac?q=${encodeURIComponent(q)}&kind=${kind}&grade=${grade}`);
 export const catalogTitle = (id: string, b: Record<string, string>) => call<BookTitle>("PATCH", `/api/library/titles/${encodeURIComponent(id)}`, b);
 export const fetchStocktakes = () => call<LibAudit[]>("GET", "/api/library/stocktakes");
 export const createStocktake = (shelf: string, title: string) => call<LibAudit>("POST", "/api/library/stocktakes", { shelf, title });
@@ -553,11 +553,28 @@ export async function restoreBackup(file: File, dry: boolean) {
 }
 
 export const fetchDemoStatus = () => call<{ active: boolean; at: string | null; summary: Record<string, number> | null }>("GET", "/api/admin/demo-data");
-export const createDemoData = () => call<{ summary: Record<string, number> }>("POST", "/api/admin/demo-data", {});
-export const removeDemoData = () => call<{ restoredTo: string }>("DELETE", "/api/admin/demo-data");
+export const createDemoData = (randomPasswords = false) => call<{ summary: Record<string, number>; passwords: Record<string, string> | null; commonPassword: string | null }>("POST", "/api/admin/demo-data", { randomPasswords });
+export const removeDemoData = () => call<{ removed: Record<string, number> }>("DELETE", "/api/admin/demo-data");
+export const resetDemoPasswords = () => call<{ passwords: Record<string, string> }>("POST", "/api/admin/demo-data/passwords", {});
+export const fetchDemoActive = () => call<{ active: boolean }>("GET", "/api/demo-status");
+// Rà soát nhanh danh mục tối thiểu TT 38
+export const setMinSiteState = (id: string, siteState: "none" | "na" | "") => call<MinItem>("PATCH", `/api/minlist/${encodeURIComponent(id)}`, { siteState });
+export const bulkMinlist = (mon: string, action: "none" | "na" | "clear") => call<{ updated: number }>("POST", "/api/minlist/bulk", { mon, action });
+export const autoLinkMinlist = (mon: string, apply: boolean) => call<{ applied: boolean; count: number; suggestions: { itemId: string; stt: string; item: string; equipmentId: string; equipment: string; match: number }[] }>("POST", "/api/minlist/auto-link", { mon, apply });
+// Nhập đơn giá thiết bị từ Excel; mã minh chứng kiểm định
+export const importPrices = (rows: Record<string, unknown>[]) => call<{ updated: number; notFound: string[]; invalid: string[] }>("POST", "/api/inventory/prices/import", { rows });
+export const fetchEvidenceCodes = () => call<Record<string, string>>("GET", "/api/evidence-codes");
+export const saveEvidenceCodes = (codes: Record<string, string>) => call<Record<string, string>>("PUT", "/api/evidence-codes", { codes });
 
 // ============ PHÂN CÔNG, PHÂN QUYỀN ============
 export interface Capabilities { principalConfigured: boolean; canDecide: boolean; canOperate: boolean; canLibrary: boolean; viewOnlyAdmin: boolean }
 export const fetchCapabilities = () => call<Capabilities>("GET", "/api/me/capabilities");
 export const decideDisposal = (id: string, approve: boolean, decisionNo: string, note: string) => call<Disposal>("POST", `/api/disposals/${encodeURIComponent(id)}/decide`, { approve, decisionNo, note });
 export const reviewProposal = (id: string, opinion: "Đồng ý" | "Không đồng ý", note: string) => call<Proposal>("POST", `/api/proposals/${encodeURIComponent(id)}/review`, { opinion, note });
+
+// ============ BÁO HỎNG THIẾT BỊ ============
+export interface EquipmentIssue { id: string; status: "Chờ xử lý" | "Đã xác nhận" | "Không xác nhận"; equipmentId: string; name: string; subjectId: string; quantity: number; note: string; reporterId: string; reporterName: string; createdAt: string; resolvedBy?: string; resolvedAt?: string; resolution?: string }
+export const reportIssue = (equipmentId: string, quantity: number, note: string) => call<EquipmentIssue>("POST", `/api/inventory/equipment/${encodeURIComponent(equipmentId)}/issues`, { quantity, note });
+export const fetchIssues = () => call<EquipmentIssue[]>("GET", "/api/issues");
+export const fetchMyIssues = () => call<EquipmentIssue[]>("GET", "/api/issues/mine");
+export const resolveIssue = (id: string, accept: boolean, note = "") => call<EquipmentIssue>("POST", `/api/issues/${encodeURIComponent(id)}/resolve`, { accept, note });

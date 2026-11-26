@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   fetchAudits, startAudit, fetchAudit, saveAudit, finishAudit, cancelAudit,
   fetchInventory, fetchMaintenance, createMaintenance, completeMaintenance, fetchReport, fetchEquipmentDetail,
-  fetchDisposals, createDisposal, decideDisposal, fetchCapabilities, type Capabilities, fetchRecords, fetchNotifications, fetchLossReports, confirmLoss, rejectLoss, fetchRooms, fetchRoomLog,
+  fetchDisposals, createDisposal, decideDisposal, fetchCapabilities, type Capabilities, reportIssue, fetchIssues, fetchMyIssues, resolveIssue, type EquipmentIssue, fetchRecords, fetchNotifications, fetchLossReports, confirmLoss, rejectLoss, fetchRooms, fetchRoomLog,
   fetchEquipmentHistory, verifyLoss, fetchAlerts, fetchChanges, type EquipmentHistory,
   type Audit, type AuditItem, type Equipment, type Maintenance, type Report, type BorrowDraft, type Disposal, type BorrowRecord, type Notification, type LossReport, type Room,
 } from "@/api"
@@ -47,6 +47,8 @@ export function AuditTab({ subjects }: { subjects: Subject[] }) {
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
   const [onlyTodo, setOnlyTodo] = useState(false)
+  const [scan, setScan] = useState("")
+  const [scanMsg, setScanMsg] = useState("")
 
   const load = useCallback(async () => {
     try {
@@ -79,6 +81,18 @@ export function AuditTab({ subjects }: { subjects: Subject[] }) {
     if (!current || !confirm("Hủy đợt kiểm kê này? Số đã nhập sẽ mất.")) return
     try { await cancelAudit(current.id); setCurrent(null); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
   }
+  // Quét nhãn QR (hoặc gõ mã) từng thiết bị: mỗi lần quét đếm thêm 1 thiết bị tốt đang có mặt
+  const onScan = (ev: React.FormEvent) => {
+    ev.preventDefault(); if (!current) return
+    const raw = scan.trim(); if (!raw) return
+    const id = decodeURIComponent(raw.split("#").pop()!.split("/").pop() || "")
+    const it = current.items.find((x) => x.equipmentId === id)
+    setScan("")
+    if (!it) { setScanMsg(""); setError(`Mã “${id}” không thuộc đợt kiểm kê này`); return }
+    setError(""); const n = (it.countGood ?? 0) + 1
+    setCurrent({ ...current, items: current.items.map((x) => (x.equipmentId === id ? { ...x, countGood: n } : x)) })
+    setScanMsg(`${it.name}: đã đếm ${n}`)
+  }
   const fillBook = () => current && setCurrent({ ...current, items: current.items.map((i) => (i.countGood === null ? { ...i, countGood: Math.max(0, i.sysGood - i.out), countBroken: i.sysBroken } : i)) })
   const exportAudit = (a: Audit) => exportExcel(`Bien-ban-kiem-ke-${(a.finishedAt || a.createdAt).slice(0, 10)}.xlsx`, [{
     name: "Biên bản kiểm kê",
@@ -94,6 +108,14 @@ export function AuditTab({ subjects }: { subjects: Subject[] }) {
     return (
       <div>
         <Err msg={error} />
+        {!done && (
+          <form onSubmit={onScan} className={`${card} p-4 mb-4 flex flex-wrap items-center gap-2`}>
+            <label htmlFor="au-scan" className="text-sm font-semibold text-gray-700">Quét mã QR thiết bị</label>
+            <input id="au-scan" autoComplete="off" className="flex-1 min-w-[220px] border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Quét nhãn (hoặc gõ mã thiết bị) rồi Enter: mỗi lần quét đếm thêm 1" value={scan} onChange={(e) => setScan(e.target.value)} />
+            <button type="submit" className={btnGhost}>Đếm thêm 1</button>
+            {scanMsg && <span role="status" className="w-full text-sm text-green-700">{scanMsg}</span>}
+          </form>
+        )}
         <div className={`${card} p-5 mb-4 flex flex-wrap items-center gap-3 justify-between`}>
           <div>
             <h2 className="font-bold text-gray-900">{current.title} {current.subjectId ? `– ${subjects.find((s) => s.id === current.subjectId)?.name}` : "– tất cả môn"}</h2>
@@ -199,6 +221,15 @@ export function MaintenanceTab({ subjects }: { subjects: Subject[] }) {
   useEffect(() => { load() }, [load])
   const eq = inventory.find((e) => e.id === f.equipmentId)
   const maxQty = eq ? (f.source === "good" ? eq.qtyGood : eq.qtyBroken) : 0
+  const [issues, setIssues] = useState<EquipmentIssue[]>([])
+  const loadIssues = useCallback(() => { fetchIssues().then(setIssues).catch(() => {}) }, [])
+  useEffect(() => { loadIssues() }, [loadIssues])
+  const resolve = async (i: EquipmentIssue, accept: boolean) => {
+    const note = accept ? "" : prompt("Lý do không xác nhận:", "") ?? ""
+    if (!accept && !note) return
+    setError(""); try { await resolveIssue(i.id, accept, note); loadIssues(); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
+  }
+  const pendingIssues = issues.filter((i) => i.status === "Chờ xử lý")
 
   const create = async () => {
     setBusy(true); setError("")
@@ -216,6 +247,18 @@ export function MaintenanceTab({ subjects }: { subjects: Subject[] }) {
   const broken = inventory.filter((e) => e.qtyBroken > 0)
 
   return (
+    <div className="space-y-5">
+    {pendingIssues.length > 0 && (
+      <section className={`${card} overflow-hidden border-amber-200`}>
+        <div className="px-5 py-3.5 border-b border-gray-100 bg-amber-50"><h2 className="font-semibold text-gray-900">Báo hỏng chờ xử lý ({pendingIssues.length})</h2><p className="text-xs text-gray-600">Giáo viên báo qua mã QR thiết bị. Xác nhận thì thiết bị chuyển sang “hỏng” (không cho mượn); sau đó gửi sửa hoặc thanh lý.</p></div>
+        <ul className="divide-y divide-gray-50">{pendingIssues.map((i) => (
+          <li key={i.id} className="px-5 py-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+            <div className="min-w-0"><div className="font-medium text-gray-900">{i.name} × {i.quantity}</div><div className="text-xs text-gray-500">{i.reporterName} · {fmtTime(i.createdAt)} · {i.note}</div></div>
+            <div className="flex gap-2"><button onClick={() => resolve(i, false)} className={btnGhost}>Không xác nhận</button><button onClick={() => resolve(i, true)} className={btnPrimary}>Xác nhận hỏng</button></div>
+          </li>
+        ))}</ul>
+      </section>
+    )}
     <div className="grid lg:grid-cols-5 gap-5 items-start">
       <div className={`lg:col-span-2 ${card} p-5`}>
         <h2 className="font-bold text-gray-900 mb-1">Gửi bảo trì / bảo dưỡng</h2>
@@ -294,6 +337,7 @@ export function MaintenanceTab({ subjects }: { subjects: Subject[] }) {
           </div>
         </div>
       )}
+    </div>
     </div>
   )
 }
@@ -455,7 +499,15 @@ type Detail = Awaited<ReturnType<typeof fetchEquipmentDetail>>
 export function EquipmentPage({ id, isAdmin, loggedIn, login, onBorrow, goHome }: { id: string; isAdmin: boolean; loggedIn: boolean; login: () => void; onBorrow: (d: BorrowDraft) => void; goHome: () => void }) {
   const [d, setD] = useState<Detail | null>(null)
   const [error, setError] = useState("")
-  useEffect(() => { if (loggedIn) fetchEquipmentDetail(id).then(setD).catch((e) => setError(e.message)) }, [id, loggedIn])
+  const [mine, setMine] = useState<EquipmentIssue[]>([])
+  const [rep, setRep] = useState({ open: false, quantity: 1, note: "" })
+  const [repMsg, setRepMsg] = useState("")
+  const loadMine = useCallback(() => { fetchMyIssues().then((l) => setMine(l.filter((i) => i.equipmentId === id))).catch(() => {}) }, [id])
+  useEffect(() => { if (loggedIn) { fetchEquipmentDetail(id).then(setD).catch((e) => setError(e.message)); loadMine() } }, [id, loggedIn, loadMine])
+  const sendIssue = async () => {
+    setRepMsg(""); setError("")
+    try { await reportIssue(id, rep.quantity, rep.note); setRep({ open: false, quantity: 1, note: "" }); setRepMsg("Đã gửi báo hỏng. Nhân viên thiết bị sẽ kiểm tra và xác nhận."); loadMine() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
+  }
 
   const wrap = (children: React.ReactNode) => <main className="pt-20 lg:pt-10 pb-24 px-4 lg:px-10"><div className="max-w-2xl mx-auto">{children}</div></main>
   if (!loggedIn) return wrap(<div className="text-center py-16"><h1 className="text-xl font-bold text-gray-900 mb-2">Đăng nhập để xem thông tin thiết bị</h1><button onClick={login} className={btnPrimary}>Đăng nhập bằng Google</button></div>)
@@ -480,6 +532,20 @@ export function EquipmentPage({ id, isAdmin, loggedIn, login, onBorrow, goHome }
         <button className={`${btnPrimary} w-full`} onClick={() => onBorrow({ subjectId: e.subjectId, subjectName: d.subjectName, teacherName: "", className: "", equipment: `${e.name} (x1)`, items: [{ equipmentId: e.id, quantity: 1 }], borrowDate: "", returnDate: "", period: "", periodPPCT: "", notes: "", missing: [] })}>
           Đăng ký mượn thiết bị này
         </button>
+      </div>
+      <div className={`${card} p-5 mb-4`}>
+        <h2 className="font-bold text-gray-900 mb-1">Phát hiện thiết bị hỏng?</h2>
+        <p className="text-xs text-gray-500 mb-3">Báo ngay để phòng thiết bị kiểm tra, không cho mượn nhầm thiết bị hỏng.</p>
+        {repMsg && <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 text-sm mb-3">{repMsg}</div>}
+        {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-sm mb-3">{error}</div>}
+        {rep.open ? (
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-2"><div><label htmlFor="iss-q" className="block text-xs font-semibold text-gray-600 mb-1">Số lượng hỏng</label><input id="iss-q" type="number" min={1} max={e.qtyGood} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value={rep.quantity} onChange={(x) => setRep({ ...rep, quantity: Math.max(1, Math.floor(Number(x.target.value) || 1)) })} /></div>
+              <div className="col-span-2"><label htmlFor="iss-n" className="block text-xs font-semibold text-gray-600 mb-1">Tình trạng hỏng *</label><input id="iss-n" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="VD: vỡ ống, gãy chân đế" value={rep.note} onChange={(x) => setRep({ ...rep, note: x.target.value })} /></div></div>
+            <div className="flex gap-2 justify-end"><button onClick={() => setRep({ ...rep, open: false })} className={btnGhost}>Hủy</button><button disabled={!rep.note.trim()} onClick={sendIssue} className={btnPrimary}>Gửi báo hỏng</button></div>
+          </div>
+        ) : <button onClick={() => setRep({ ...rep, open: true })} disabled={e.qtyGood < 1} className={btnGhost}>Báo thiết bị hỏng</button>}
+        {mine.length > 0 && <ul className="mt-3 divide-y divide-gray-100 text-sm">{mine.slice(0, 5).map((i) => <li key={i.id} className="py-1.5 flex justify-between gap-2"><span>{i.quantity} cái: {i.note}</span><span className={`text-xs font-semibold whitespace-nowrap ${i.status === "Đã xác nhận" ? "text-green-700" : i.status === "Không xác nhận" ? "text-gray-500" : "text-amber-700"}`}>{i.status}</span></li>)}</ul>}
       </div>
       {isAdmin && d.history && (
         <div className={`${card} p-5 mb-4`}>
@@ -923,6 +989,15 @@ export function EquipmentHistoryDialog({ id, onClose }: { id: string; onClose: (
     { name: "Nhật ký thay đổi", rows: h.changes.map((c) => ({ "Thời gian": vnTime(c.createdAt), "Nghiệp vụ": c.kind, "Thay đổi": diffText(c.diff), "Người thực hiện": c.by, "Ghi chú": c.note })) },
     { name: "Lịch sử mượn", rows: h.loans.map((l) => ({ "Số phiếu": l.code, "Giáo viên": l.teacherName, "Lớp": l.className, "Ngày mượn": l.borrowDate, "Ngày trả": l.returnDate, "Tiết": l.period, "Số lượng": l.quantity, "Trạng thái": l.status, "Duyệt lúc": vnTime(l.approvedAt), "Trả lúc": vnTime(l.returnedAt), "Hỏng": l.damaged, "Mất": l.lost })) },
   ])
+  // Lý lịch thiết bị: thông tin, số lượng theo tình trạng, nhật ký thay đổi, lịch sử mượn; in để lưu hồ sơ
+  const printProfile = () => { if (!h) return; const q = h.equipment; printHtml({
+    title: "Lý lịch thiết bị", subtitle: `${q.name}${q.id ? ` (mã ${q.id})` : ""}`,
+    body: `${table(["Nội dung", "Thông tin"], [["Tên thiết bị", q.name], ["Đơn vị tính", q.unit || ""], ["Vị trí", q.location || ""], ["Nước sản xuất", q.origin || ""], ["Năm đưa vào sử dụng", q.yearInUse || ""], ["Nguồn kinh phí", q.fundSource || ""], ["Đơn giá (đ)", (q.unitPrice || 0).toLocaleString("vi-VN")],
+        ["Số lượng hiện có", `Tốt ${q.qtyGood} · Hỏng ${q.qtyBroken} · Đang sửa ${q.qtyRepair} · Mất ${q.qtyLost}`]])}
+      <h2>Nhật ký thay đổi số lượng</h2>${h.changes.length ? table(["Thời gian", "Nghiệp vụ", "Thay đổi", "Người thực hiện", "Ghi chú"], h.changes.map((c) => [vnTime(c.createdAt), c.kind, diffText(c.diff), c.by, c.note || ""])) : "<p>Chưa có</p>"}
+      <h2>Lịch sử mượn</h2>${h.loans.length ? table(["Số phiếu", "Giáo viên", "Lớp", "Ngày mượn", "Ngày trả", "Tình trạng"], h.loans.map((l) => [l.code || "", l.teacherName, l.className, l.borrowDate, l.returnDate, l.status])) : "<p>Chưa có</p>"}`,
+    signs: [["Người lập", "(Ký, ghi rõ họ tên)"], ["Hiệu trưởng", "(Ký, đóng dấu)"]],
+  }) }
   const e = h?.equipment
   return (
     <div className="fixed inset-0 z-[60] bg-black/40 flex items-start sm:items-center justify-center p-3 overflow-y-auto" onMouseDown={(ev) => { if (ev.target === ev.currentTarget) onClose() }}>
@@ -934,6 +1009,7 @@ export function EquipmentHistoryDialog({ id, onClose }: { id: string; onClose: (
             {e && !e.deleted && <div className="text-sm text-gray-600 mt-0.5">Tốt {e.qtyGood} · Hỏng {e.qtyBroken} · Đang sửa {e.qtyRepair} · Mất {e.qtyLost}{e.qtyLostPending ? ` · chờ xác nhận mất ${e.qtyLostPending}` : ""}{e.location ? ` · ${e.location}` : ""}</div>}
           </div>
           <div className="flex gap-2 shrink-0">
+            <button onClick={printProfile} disabled={!h} className={btnGhost}>In lý lịch</button>
             <button onClick={doExport} disabled={!h} className={btnGhost}>Xuất Excel</button>
             <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500" aria-label="Đóng">✕</button>
           </div>

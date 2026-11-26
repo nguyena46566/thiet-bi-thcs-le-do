@@ -92,6 +92,7 @@ export function ReceiptsTab() {
   const [count, setCount] = useState<Record<string, string>>({})
   const [countNote, setCountNote] = useState("")
   const [shelf, setShelf] = useState("")
+  const excelRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState(""), [ok, setOk] = useState("")
   const load = useCallback(() => { fetchReceipts().then(setList).catch((e) => setError(e.message)); fetchTitles().then(setTitles).catch(() => {}); fetchShelves().then(setShelves).catch(() => {}) }, [])
   useEffect(() => { load() }, [load])
@@ -106,6 +107,27 @@ export function ReceiptsTab() {
     const setL = (i: number, p: Partial<ReceiptLine>) => setEdit({ ...edit, lines: lines.map((l, j) => (j === i ? { ...l, ...p } : l)) })
     const pick = (i: number, name: string) => { const t = titles.find((x) => x.title === name); setL(i, t ? { title: t.title, author: t.author, publisher: t.publisher, year: t.year, kind: t.kind, grade: t.grade, price: t.price } : { title: name }) }
     const sum = lines.reduce((a, l) => a + l.invoiceQty * l.price, 0)
+    // Nhập các dòng hóa đơn từ Excel (cột: Tên sách, Tác giả, NXB, Năm, Loại, Khối, Số lượng, Đơn giá); loại ghi SGK, STK, STN, SNV, BTC hoặc tên đầy đủ
+    const KIND_BY_TEXT = (t: string): string => { const x = fold(t); return x.startsWith("sgk") || x.includes("giao khoa") ? "SGK" : x.startsWith("stk") || x.includes("tham khao") ? "STK" : x.startsWith("stn") || x.includes("thieu nhi") || x.includes("truyen") ? "STN" : x.startsWith("snv") || x.includes("nghiep vu") || x.includes("giang day") ? "SNV" : x.startsWith("btc") || x.includes("bao") || x.includes("tap chi") ? "BTC" : "" }
+    const excelTemplate = () => exportExcel("Mau-dong-hoa-don-sach.xlsx", [{ name: "Hóa đơn", rows: [{ "Tên sách": "Toán 7 – tập 1", "Tác giả": "Nhiều tác giả", "NXB": "NXB Giáo dục Việt Nam", "Năm": "2025", "Loại": "SGK", "Khối": "7", "Số lượng": 20, "Đơn giá": 18000 }, { "Tên sách": "Dế Mèn phiêu lưu ký", "Tác giả": "Tô Hoài", "NXB": "NXB Kim Đồng", "Năm": "2024", "Loại": "STN", "Khối": "", "Số lượng": 5, "Đơn giá": 45000 }] }])
+    const importLines = async (f: File) => {
+      setError("")
+      try {
+        const XLSX = await import("xlsx"); const wb = XLSX.read(await f.arrayBuffer())
+        const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]], { defval: "" })
+        const bad: string[] = []; const got: ReceiptLine[] = []
+        raw.forEach((r, i) => {
+          const title = String(r["Tên sách"] ?? r["Tên tài liệu"] ?? "").trim(); if (!title) return
+          const kind = KIND_BY_TEXT(String(r["Loại"] ?? "")); const qty = Math.floor(Number(r["Số lượng"])); const price = Math.floor(Number(String(r["Đơn giá"] ?? 0).replace(/[.\s]/g, "")))
+          if (!kind) { bad.push(`Dòng ${i + 2}: loại “${r["Loại"]}” không hợp lệ (ghi SGK, STK, STN, SNV hoặc BTC)`); return }
+          if (!(qty >= 1)) { bad.push(`Dòng ${i + 2}: số lượng không hợp lệ`); return }
+          got.push({ ...emptyLine(), title, author: String(r["Tác giả"] ?? "").trim(), publisher: String(r["NXB"] ?? "").trim(), year: String(r["Năm"] ?? "").trim(), kind, grade: String(r["Khối"] ?? "").trim(), invoiceQty: qty, price: Number.isFinite(price) && price > 0 ? price : 0 })
+        })
+        if (bad.length) { setError(bad.slice(0, 3).join("; ") + (bad.length > 3 ? ` … (${bad.length} dòng lỗi)` : "")); return }
+        if (!got.length) { setError("File không có dòng nào"); return }
+        setEdit({ ...edit, lines: [...lines.filter((l) => l.title.trim()), ...got] })
+      } catch (e) { setError(e instanceof Error ? e.message : "Không đọc được file") }
+    }
     return (
       <div className="space-y-4">
         <Err msg={error} />
@@ -141,7 +163,8 @@ export function ReceiptsTab() {
           </table></div>
           <div className="px-5 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2">
             <button onClick={() => setEdit({ ...edit, lines: [...lines, emptyLine()] })} className="text-sm font-semibold text-[#1a3670] hover:underline">+ Thêm dòng</button>
-            <div className="flex items-center gap-3"><span className="text-sm">Tổng hóa đơn: <strong>{money(sum)}</strong> · {lines.reduce((a, l) => a + l.invoiceQty, 0)} bản</span>
+            <div className="flex flex-wrap items-center gap-2"><button onClick={excelTemplate} className="text-sm font-semibold text-[#1a3670] hover:underline">Tải file mẫu</button><button onClick={() => excelRef.current?.click()} className="text-sm font-semibold text-[#1a3670] hover:underline">Nhập dòng từ Excel</button><input ref={excelRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) importLines(f); e.target.value = "" }} /></div>
+          <div className="flex items-center gap-3"><span className="text-sm">Tổng hóa đơn: <strong>{money(sum)}</strong> · {lines.reduce((a, l) => a + l.invoiceQty, 0)} bản</span>
               <button onClick={() => setEdit(null)} className={btnGhost}>Hủy</button>
               <button onClick={() => act(async () => { const r = edit.id ? await updateReceipt(edit.id, edit) : await createReceipt(edit); setEdit(null); await openReceipt(r.id) }, "Đã lưu phiếu. Bước tiếp theo: kiểm đếm.")} className={btnPrimary}>Lưu phiếu</button></div>
           </div>

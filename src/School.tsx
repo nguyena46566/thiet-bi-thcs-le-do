@@ -30,6 +30,22 @@ export function RoomsTab({ subjects }: { subjects: Subject[] }) {
     try { if (f.id) await updateRoom(f.id, f); else await createRoom(f); setF({ name: "", kind: "Phòng học bộ môn", subjectIds: [], note: "" }); load() }
     catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
   }
+  // Tạo nhanh các phòng thường gặp của trường THCS (sửa tên, môn sau nếu cần)
+  const COMMON = [
+    { name: "Phòng học bộ môn KHTN", kind: "Phòng học bộ môn", subjectIds: ["vat-li", "hoa-hoc", "sinh-hoc"], note: "Phòng ghép 3 phân môn" },
+    { name: "Phòng học bộ môn Công nghệ", kind: "Phòng học bộ môn", subjectIds: ["cong-nghe"], note: "" },
+    { name: "Phòng Tin học", kind: "Phòng học bộ môn", subjectIds: ["toan-hoc"], note: "" },
+    { name: "Phòng học bộ môn Ngoại ngữ", kind: "Phòng học bộ môn", subjectIds: ["tieng-anh"], note: "" },
+    { name: "Phòng đa năng", kind: "Phòng học bộ môn", subjectIds: [], note: "Dùng chung" },
+  ]
+  const quickCreate = async () => {
+    const have = new Set((list || []).map((r) => r.name.toLowerCase()))
+    const todo = COMMON.filter((r) => !have.has(r.name.toLowerCase()))
+    if (!todo.length) { setError("Đã có đủ các phòng thường gặp"); return }
+    if (!confirm(`Tạo ${todo.length} phòng: ${todo.map((r) => r.name).join(", ")}?`)) return
+    setError("")
+    try { for (const r of todo) await createRoom(r); load() } catch (e) { setError(e instanceof Error ? e.message : "Lỗi") }
+  }
   const remove = async (r: Room) => {
     if (!confirm(`Xóa “${r.name}”?`)) return
     try { await deleteRoom(r.id); load() } catch (e) { alert(e instanceof Error ? e.message : "Lỗi") }
@@ -57,7 +73,7 @@ export function RoomsTab({ subjects }: { subjects: Subject[] }) {
       </div>
       <div className={`lg:col-span-3 ${card} overflow-hidden`}>
         <div className="px-5 py-4 border-b border-gray-100"><h2 className="font-bold text-gray-900">Danh sách phòng ({list?.length ?? 0})</h2></div>
-        {list === null ? <p className="p-6 text-sm text-gray-500">Đang tải…</p> : list.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Chưa có phòng nào</p> : (
+        {list === null ? <p className="p-6 text-sm text-gray-500">Đang tải…</p> : list.length === 0 ? <div className="p-8 text-center"><p className="text-sm text-gray-500 mb-3">Chưa có phòng nào</p><button onClick={quickCreate} className="px-4 py-2 rounded-lg bg-[#1a3670] hover:bg-[#132d5e] text-white text-sm font-semibold">Tạo nhanh 5 phòng thường gặp</button></div> : (
           <ul className="divide-y divide-gray-50">{list.map((r) => (
             <li key={r.id} className="px-5 py-3 flex flex-wrap items-center justify-between gap-2">
               <div><div className="font-medium text-gray-900">{r.name} <span className="text-xs text-gray-500 font-normal">· {r.kind}</span>{r.subjectIds.length > 1 && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-violet-100 text-violet-700" title="Thông tư 23/2024/TT-BGDĐT cho phép ghép phòng học bộ môn có chức năng tương đồng, phải bảo đảm đủ thiết bị và thời gian dạy học">Phòng ghép {r.subjectIds.length} môn</span>}</div>
