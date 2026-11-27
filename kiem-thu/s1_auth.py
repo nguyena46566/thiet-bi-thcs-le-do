@@ -4,7 +4,7 @@ opt = C().call("GET", "/api/auth/options")[1]
 chk("Trang đăng nhập liệt kê 6 tài khoản thử nghiệm", len(opt["testAccounts"]) == 6 and opt["testPassword"] == "Test@2026")
 accs = {u: login(u) for u in ("quantri", "nhanvientb", "thuvien", "hieutruong", "totruong", "giaovien")}
 chk("Đăng nhập thành công cả 6 vai trò", all(c.status == 200 for c in accs.values()))
-chk("Mỗi vai trò vào đúng trang đầu", [accs[u].me["landing"] for u in ("quantri", "nhanvientb", "thuvien", "hieutruong", "totruong", "giaovien")] == ["admin/nguoi-dung", "admin", "admin/muon-tra-sach", "bgh", "to-truong", ""], [accs[u].me.get("landing") for u in accs])
+chk("Mỗi vai trò vào đúng TRANG RIÊNG của mình sau khi đăng nhập", [accs[u].me["landing"] for u in ("quantri", "nhanvientb", "thuvien", "hieutruong", "totruong", "giaovien")] == ["quan-tri", "nv-thiet-bi", "thu-thu", "bgh", "to-truong", ""], [accs[u].me.get("landing") for u in accs])
 chk("Sai mật khẩu → 401", login("giaovien", "saimatkhau").status == 401)
 chk("Tài khoản không tồn tại → 401", login("khongco").status == 401)
 for _ in range(5): login("giaovien", "sai")

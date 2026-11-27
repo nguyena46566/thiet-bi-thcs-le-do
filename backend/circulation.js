@@ -73,6 +73,28 @@ export function registerCirculationRoutes(app, { requireAuth, wrap }) {
 
   // Riêng việc ghi nhận bồi thường: thủ thư ghi đã đền sách / đã nộp tiền; Ban giám hiệu quyết định miễn
   const requireLibraryOrPrincipal = (req, res, next) => (req.session?.user?.isPrincipal ? next() : requireLibrary(req, res, next));
+  // Trang riêng của thủ thư: việc cần làm hôm nay
+  app.get("/api/library/overview", requireLibrary, wrap(async (req, res) => {
+    const t = today(), ls = await loans().all();
+    const tmap = new Map((await titles().all()).map((x) => [x.id, x.title]));
+    const view = (l) => ({ id: l.id, copyCode: l.copyCode, title: tmap.get(l.titleId) || "", readerName: l.readerName, readerType: l.readerType, className: l.className || "", mode: l.mode, loanDate: l.loanDate, dueDate: l.dueDate, returnDate: l.returnDate || null, condition: l.condition || "", compensation: l.compensation || null,
+      overdueDays: !l.returnedAt && l.dueDate < t ? Math.round((new Date(t) - new Date(l.dueDate)) / 864e5) : 0 });
+    const open = ls.filter((l) => !l.returnedAt);
+    const { schoolYear, term } = termOf(t);
+    const pl = (await periods().all()).filter((p) => p.schoolYear === schoolYear);
+    const classes = [...new Set((await readers().all()).filter((r) => r.type === "Học sinh").map((r) => r.className).filter(Boolean))].sort((a, b) => a.localeCompare(b, "vi"));
+    const lacking = classes.map((cn) => ({ className: cn, done: pl.filter((p) => p.className === cn && p.term === term && p.status === "Đã dạy").length })).filter((x) => x.done < MIN_READING_PERIODS);
+    const cs = await copies().all();
+    res.json({
+      today: t, term, schoolYear, minReading: MIN_READING_PERIODS,
+      overdue: open.filter((l) => l.mode !== "Đọc tại chỗ" && l.dueDate < t).map(view).sort((a, b) => b.overdueDays - a.overdueDays).slice(0, 30),
+      compensation: ls.filter((l) => l.compensation && l.compensation.status === "Chưa xử lý").map(view),
+      receiptsWaiting: (await db.collection("bookreceipts").all()).filter((x) => x.status === "Chờ kiểm đếm").map(({ lines, ...x }) => ({ ...x, lineCount: (lines || []).length })),
+      readingLacking: lacking, readingToday: pl.filter((p) => p.date === t).length,
+      stats: { titles: (await titles().all()).length, copies: cs.length, onShelf: cs.filter((x) => x.status === "Trên giá").length, unshelved: cs.filter((x) => x.status === "Chưa xếp giá").length, borrowing: open.filter((l) => l.mode !== "Đọc tại chỗ").length, loansToday: ls.filter((l) => l.loanDate === t).length, returnsToday: ls.filter((l) => l.returnedAt && String(l.returnDate || "") === t).length, readers: (await readers().all()).length },
+    });
+  }));
+
   // ---------- Quy định mượn ----------
   // Công khai: trang tra cứu sách hiển thị nội quy mượn sách
   app.get("/api/library/rules", wrap(async (req, res) => res.json({ ...(await getRules()), modes: KIND_MODES })));

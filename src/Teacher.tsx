@@ -117,7 +117,7 @@ export function TeacherHome({ go, onBorrow }: { go: (p: string) => void; onBorro
             })}</ul>
           )}
         </section>
-        <p className="text-sm text-gray-500 mt-4">Xem tất cả phiếu ở <button onClick={() => go("mine")} className="font-semibold text-[#1a3670] hover:underline">Phiếu của tôi</button>. Nội quy, hướng dẫn ở <button onClick={() => go("thong-tin")} className="font-semibold text-[#1a3670] hover:underline">Thông tin thêm</button>.</p>
+        <p className="text-sm text-gray-500 mt-4">Xem tất cả phiếu ở <button onClick={() => go("mine")} className="font-semibold text-[#1a3670] hover:underline">Phiếu của tôi</button>. Thiếu thiết bị? Gửi đề xuất mua sắm ở <button onClick={() => go("mine")} className="font-semibold text-[#1a3670] hover:underline">Phiếu của tôi</button> (nút “+ Đề xuất mới”). Nội quy, hướng dẫn ở <button onClick={() => go("thong-tin")} className="font-semibold text-[#1a3670] hover:underline">Thông tin thêm</button>.</p>
       </div>
     </main>
   )

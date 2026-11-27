@@ -82,3 +82,18 @@ Mở thêm một terminal ở thư mục gốc và chạy `npm run dev`. Nếu �
 - **Kiểm kê bằng quét QR:** trong đợt kiểm kê, quét nhãn QR (hoặc gõ mã) vào ô "Quét mã QR thiết bị"; mỗi lần quét đếm thêm 1. Có thể kiểm kê một phần bằng cách chỉ định danh sách thiết bị (`equipmentIds`) khi mở đợt.
 - **In lý lịch thiết bị:** Danh mục thiết bị > Lịch sử > "In lý lịch" (thông tin, nhật ký thay đổi, lịch sử mượn, chỗ ký).
 - **Tra cứu sách:** dải "Sách mới nhập" (8 đầu sách mới nhất) khi chưa gõ tìm kiếm.
+
+## Tài khoản có sẵn từng vai trò trong dữ liệu mẫu (bản v26)
+
+Bấm **Tạo dữ liệu mẫu** là hệ thống tạo luôn, không cần tự gán quyền: `tb.mau` (nhân viên thiết bị), `tv.mau` (thủ thư), `bgh.mau` (Ban giám hiệu), `tt.mau` (tổ trưởng Khoa học tự nhiên) và 12 giáo viên mẫu (`gv.hong`, `gv.nam`...). Mật khẩu ngẫu nhiên hiện một lần lúc tạo (có nút "Chép tất cả").
+
+Lưu ý: trong lúc có `bgh.mau`, thanh lý, xác nhận mất, mua sắm, điểm thi đua chuyển sang chờ Ban giám hiệu duyệt (đúng như khi dùng thật). **Xóa dữ liệu mẫu** là xóa luôn các tài khoản này.
+
+## Trang riêng của từng người quản lý (bản v27)
+
+Sau khi đăng nhập, mỗi người vào thẳng trang "việc cần làm hôm nay" của mình (mục **Trang của tôi** ở menu trái):
+
+- **Nhân viên thiết bị** (`#nv-thiet-bi`): phiếu chờ duyệt (duyệt, từ chối ngay trên trang), đến hạn và quá hạn trả, báo hỏng của giáo viên, đề xuất đã duyệt chờ mua, cảnh báo hóa chất, việc đang chờ Ban giám hiệu.
+- **Nhân viên thư viện** (`#thu-thu`): sách quá hạn, chờ bồi thường, phiếu nhập chờ kiểm đếm, lớp chưa đủ tiết đọc, sách chưa xếp giá, số liệu trong ngày.
+- **Quản trị hệ thống** (`#quan-tri`): tài khoản chờ duyệt, yêu cầu dữ liệu cá nhân, cấu hình còn thiếu, đăng nhập lỗi, sao lưu, dữ liệu mẫu.
+- **Ban giám hiệu** (`#bgh`) và **tổ trưởng** (`#to-truong`): như các bản trước.

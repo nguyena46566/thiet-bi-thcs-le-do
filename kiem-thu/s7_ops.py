@@ -56,7 +56,7 @@ base = {"eq": len(inv(nv)), "rec": len(nv.call("GET", "/api/records")[1]), "user
 chk("Giáo viên/nhân viên không tạo được dữ liệu mẫu (403)", nv.call("POST", "/api/admin/demo-data")[0] == 403 and gv.call("POST", "/api/admin/demo-data")[0] == 403)
 c, d = qt.call("POST", "/api/admin/demo-data"); chk("Tạo dữ liệu mẫu đầy đủ", c == 201 and sum(d["summary"].values()) > 600, sum(d["summary"].values()) if c == 201 else d)
 chk("Tạo lần hai bị chặn (409)", qt.call("POST", "/api/admin/demo-data")[0] == 409)
-chk("Trang đăng nhập liệt kê 12 giáo viên mẫu", len(anon.call("GET", "/api/auth/options")[1]["demoAccounts"]) == 12)
+chk("Trang đăng nhập liệt kê 16 tài khoản mẫu (12 giáo viên + 4 vai trò)", len(anon.call("GET", "/api/auth/options")[1]["demoAccounts"]) == 16)
 recs = nv.call("GET", "/api/records")[1]; sts = {r["status"] for r in recs}; chk("Phiếu mượn mẫu đủ trạng thái: Chờ duyệt, Mượn, Trả, Từ chối", {"Chờ duyệt", "Mượn", "Trả", "Từ chối"} <= sts and len(recs) > 40, (len(recs), sts))
 al = nv.call("GET", "/api/inventory/alerts")[1]; chk("Cảnh báo hóa chất có hết hạn, sắp hết hạn, dưới tối thiểu", len(al["expired"]) >= 1 and len(al["expiringSoon"]) >= 1 and len(al["lowStock"]) >= 1, {k: len(v) for k, v in al.items()})
 ht = login("hieutruong"); ov = ht.call("GET", "/api/principal/overview")[1]; chk("Trang Ban giám hiệu có việc chờ: báo mất, đề xuất, phiếu giá trị cao", len(ov["losses"]) >= 1 and len(ov["proposals"]) >= 2 and len(ov["special"]) >= 1, (len(ov["losses"]), len(ov["proposals"]), len(ov["special"])))

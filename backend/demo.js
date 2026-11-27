@@ -25,7 +25,14 @@ async function snapshotIds() {
   out.__notifications = new Set((await db.notifications.list({ limit: 5000 })).map((d) => d.id));
   return out;
 }
-const DEMO_USERNAMES = ["gv.hong", "gv.nam", "gv.mai", "gv.ducanh", "gv.lan", "gv.tuan", "gv.ha", "gv.long", "gv.thu", "gv.hung", "gv.ngoc", "gv.binh", "tranthibich", "gv.nghi"];
+/** Tài khoản có sẵn vai trò để thử từng chức năng mà không phải tự gán quyền */
+const ROLE_ACCOUNTS = [
+  ["tb.mau", "Nhân viên thiết bị (mẫu)", ["equipment"], "", "Nhân viên thiết bị"],
+  ["tv.mau", "Nhân viên thư viện (mẫu)", ["librarian"], "", "Nhân viên thư viện"],
+  ["bgh.mau", "Phó hiệu trưởng (mẫu)", ["principal"], "", "Ban giám hiệu"],
+  ["tt.mau", "Tổ trưởng KHTN (mẫu)", ["head", "teacher"], "Tổ Khoa học tự nhiên", "Tổ trưởng Khoa học tự nhiên"],
+];
+const DEMO_USERNAMES = ["tb.mau", "tv.mau", "bgh.mau", "tt.mau", "gv.hong", "gv.nam", "gv.mai", "gv.ducanh", "gv.lan", "gv.tuan", "gv.ha", "gv.long", "gv.thu", "gv.hung", "gv.ngoc", "gv.binh", "tranthibich", "gv.nghi"];
 // Bộ sinh số ngẫu nhiên có hạt giống: mỗi lần tạo ra cùng một bộ dữ liệu
 let seed = 20262027;
 const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
@@ -79,6 +86,11 @@ export async function seedDemo(opts = {}) {
     const roles = u === "gv.lan" ? ["teacher", "head"] : ["teacher"];
     await users.insert({ id: `pw-${u}`, username: u, name, email: "", phone: `09${Math.floor(10000000 + rnd() * 89999999)}`, position: pos, roles, group: u === "gv.lan" ? "Tổ Toán – Tin" : "", status: "active", authType: "password", test: common, demo: true,
       passwordHash: hashPw(pwOf(u)), consent, createdAt: at(start), approvedBy: "Quản trị hệ thống (thử nghiệm)", lastLoginAt: at(addDays(T, -1), 7), subjectHint: subj });
+  }
+  // Tài khoản theo vai trò (nhân viên thiết bị, thủ thư, Ban giám hiệu, tổ trưởng): có sẵn để thử, xóa dữ liệu mẫu là xóa luôn
+  for (const [u, name, roles, group, pos] of ROLE_ACCOUNTS) {
+    await users.insert({ id: `pw-${u}`, username: u, name, email: "", phone: "", position: pos, roles, group, status: "active", authType: "password", test: common, demo: true,
+      passwordHash: hashPw(pwOf(u)), consent, createdAt: at(start), approvedBy: "Quản trị hệ thống (thử nghiệm)", lastLoginAt: null });
   }
   await users.insert({ id: "pw-tranthibich", username: "tranthibich", name: "Trần Thị Bích", email: "bich@thcsledo.edu.vn", roles: [], requestedRoles: ["teacher"], status: "pending", authType: "password", test: common, demo: true, passwordHash: hashPw(randomPw()), createdAt: at(addDays(T, -1), 15) });
   await users.insert({ id: "pw-gv.nghi", username: "gv.nghi", name: "Lưu Văn Nghị (đã chuyển trường)", roles: ["teacher"], status: "locked", authType: "password", test: common, demo: true, passwordHash: hashPw(randomPw()), createdAt: at(start) });

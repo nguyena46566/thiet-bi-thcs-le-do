@@ -72,10 +72,10 @@ export async function updateUserFields(id, patch) {
 }
 /** Trang đầu tiên sau khi đăng nhập, theo vai trò chính */
 export function landingOf(su) {
-  if (su.isEquipment) return "admin";
+  if (su.isEquipment) return "nv-thiet-bi";
   if (su.isPrincipal) return "bgh";
-  if (su.isLibrarian) return "admin/muon-tra-sach";
-  if (su.isSysadmin) return "admin/nguoi-dung";
+  if (su.isLibrarian) return "thu-thu";
+  if (su.isSysadmin) return "quan-tri";
   if (su.isHead) return "to-truong";
   return "";
 }

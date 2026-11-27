@@ -205,6 +205,7 @@ export function EvidenceTab({ go }: { go: (section: string) => void }) {
   )
 }
 
+const ROLE_OF: Record<string, string> = { "tb.mau": "Nhân viên thiết bị", "tv.mau": "Thủ thư", "bgh.mau": "Ban giám hiệu", "tt.mau": "Tổ trưởng KHTN" }
 /** Dữ liệu mẫu để chạy thử và trình chiếu: an toàn trên web đang chạy thật (xóa chỉ xóa phần mẫu) */
 function DemoPanel({ onChange }: { onChange: () => void }) {
   const [st, setSt] = useState<{ active: boolean; at: string | null; summary: Record<string, number> | null } | null>(null)
@@ -220,12 +221,12 @@ function DemoPanel({ onChange }: { onChange: () => void }) {
   return (
     <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
       <h3 className="font-bold text-gray-900 mb-1">Dữ liệu mẫu (để trình chiếu, tập huấn)</h3>
-      <p className="text-sm text-gray-700 mb-3">Tạo dữ liệu đầy đủ cho mọi chức năng: 12 giáo viên mẫu, phiếu mượn đủ trạng thái, hóa chất sắp hết hạn, kiểm kê, bảo trì, thanh lý chờ Ban giám hiệu duyệt, đề xuất mua sắm, kế hoạch, thư viện (19 đầu sách, 96 học sinh, lượt mượn, quá hạn, tiết đọc), khách vãng lai… <strong>Dữ liệu thật không bị đụng tới</strong>: thiết bị, sách, phòng mẫu có chữ “(mẫu)” hoặc mã riêng (VD SGK-M0001, BD-M0001); bấm “Xóa dữ liệu mẫu” chỉ xóa đúng phần mẫu, dữ liệu thật nhập thêm trong lúc bật vẫn giữ nguyên. Trong lúc bật, các báo cáo và số liệu <strong>có lẫn dữ liệu mẫu</strong> nên chỉ dùng để trình chiếu.</p>
+      <p className="text-sm text-gray-700 mb-3">Tạo dữ liệu đầy đủ cho mọi chức năng và <strong>tài khoản có sẵn từng vai trò</strong> (nhân viên thiết bị <code>tb.mau</code>, thủ thư <code>tv.mau</code>, Ban giám hiệu <code>bgh.mau</code>, tổ trưởng <code>tt.mau</code>, cùng 12 giáo viên mẫu), phiếu mượn đủ trạng thái, hóa chất sắp hết hạn, kiểm kê, bảo trì, thanh lý chờ Ban giám hiệu duyệt, đề xuất mua sắm, kế hoạch, thư viện (19 đầu sách, 96 học sinh, lượt mượn, quá hạn, tiết đọc), khách vãng lai… <strong>Dữ liệu thật không bị đụng tới</strong>: thiết bị, sách, phòng mẫu có chữ “(mẫu)” hoặc mã riêng (VD SGK-M0001, BD-M0001); bấm “Xóa dữ liệu mẫu” chỉ xóa đúng phần mẫu, dữ liệu thật nhập thêm trong lúc bật vẫn giữ nguyên. Trong lúc bật, các báo cáo và số liệu <strong>có lẫn dữ liệu mẫu</strong> nên chỉ dùng để trình chiếu.</p>
       {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-sm mb-3">{error}</div>}
       {ok && <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 text-sm mb-3">{ok}</div>}
       {pw && <div className="bg-white border border-amber-300 rounded-xl p-3 mb-3">
         <div className="flex flex-wrap justify-between gap-2 mb-1"><strong className="text-sm">Tài khoản giáo viên mẫu — mật khẩu chỉ hiện lúc này, hãy chép lại</strong><button onClick={copyAll} className={btnGhost}>Chép tất cả</button></div>
-        <ul className="grid sm:grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-0.5 text-xs font-mono">{Object.entries(pw).map(([u, p]) => <li key={u}>{u} · {p}</li>)}</ul>
+        <ul className="grid sm:grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-0.5 text-xs font-mono">{Object.entries(pw).map(([u, p]) => <li key={u} className={ROLE_OF[u] ? "font-bold" : ""}>{u} · {p}{ROLE_OF[u] ? ` (${ROLE_OF[u]})` : ""}</li>)}</ul>
       </div>}
       {common && <p className="text-xs text-gray-700 mb-3">Đang bật tài khoản thử nghiệm: giáo viên mẫu dùng mật khẩu chung <code>{common}</code> và có nút đăng nhập nhanh ở trang đăng nhập.</p>}
       {st.active ? <>

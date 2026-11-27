@@ -12,6 +12,7 @@ import { PrivacyPage, ConsentGate, ProfilePage, GuestPage, GuestSlipPage, Guests
 import { CirculationTab, ReadersTab, ReadingPeriodsTab, StocktakeTab, LibraryStatsTab, OpacPage, MyLibraryLoans, LibraryRulesNotice } from "./Circulation"
 import { SUBJECTS, badgeColor } from "./subjects"
 import { TeacherHome, BorrowPage, SubjectsPage, InfoPage } from "./Teacher"
+import { EquipmentStaffPage, LibrarianPage, SysadminPage } from "./StaffPages"
 import { PointsRulesText } from "./Inventory"
 import { ReceiptsTab, BooksTab as LibBooksTab, ShelvesTab, LibraryLedgerTab, BookCopyPage, ShelfPage } from "./Library"
 import ChatWidget from "@/ChatWidget"
@@ -128,11 +129,13 @@ function Sidebar({ page, setPage }: { page: Page; setPage: (p: Page) => void }) 
           </>
         ) : (
           <>
-            {(user?.isHead || user?.isPrincipal || user?.isSysadmin) && <>
+            {(user?.isHead || user?.isPrincipal || user?.isSysadmin || user?.isEquipment || user?.isLibrarian) && <>
               {groupTitle("Trang của tôi")}
+              {user?.isEquipment && item("nv-thiet-bi", "Nhân viên thiết bị", page === "nv-thiet-bi", () => go("nv-thiet-bi"), "#7DD3FC")}
+              {user?.isLibrarian && item("thu-thu", "Nhân viên thư viện", page === "thu-thu", () => go("thu-thu"), "#7DD3FC")}
               {user?.isPrincipal && item("bgh", "Ban giám hiệu", page === "bgh", () => go("bgh"), "#F5B841")}
               {user?.isHead && item("to-truong", `Tổ trưởng – ${user.group?.replace(/^Tổ /, "") || "tổ"}`, page === "to-truong", () => go("to-truong"), "#9FD3B5")}
-              {user?.isSysadmin && item("qtht", "Quản trị hệ thống", false, () => go("admin/nguoi-dung"), "#C4B5FD")}
+              {user?.isSysadmin && item("quan-tri", "Quản trị hệ thống", page === "quan-tri", () => go("quan-tri"), "#C4B5FD")}
             </>}
             {groupTitle(user ? "Thiết bị" : "Tra cứu")}
             {item("home", user ? "Lịch mượn của tôi" : "Trang chủ", page === "home", () => go("home"), "")}
@@ -1035,7 +1038,7 @@ function MyRecordsPage({ setPage }: { setPage: (p: Page) => void }) {
 }
 
 // ============ MAIN APP ============
-const PAGES = new Set<string>(["home", "noiquy", "admin", "mine", "dang-nhap", "cho-duyet", "bgh", "to-truong", "bao-mat", "ho-so", "khach", "tra-cuu-sach", "muon", "mon-hoc", "thong-tin", ...SUBJECTS.map((s) => s.id)])
+const PAGES = new Set<string>(["home", "noiquy", "admin", "mine", "dang-nhap", "cho-duyet", "bgh", "to-truong", "bao-mat", "ho-so", "khach", "tra-cuu-sach", "muon", "mon-hoc", "thong-tin", "nv-thiet-bi", "thu-thu", "quan-tri", ...SUBJECTS.map((s) => s.id)])
 function readHash(): Page {
   const h = decodeURIComponent(window.location.hash.replace(/^#\/?/, ""))
   if (/^admin\/[a-z-]+$/.test(h)) return h // các mục trong trang quản trị
@@ -1103,6 +1106,9 @@ function AppContent() {
       {/^khach\//i.test(page) && <GuestSlipPage key={page} code={page.slice(6).toUpperCase()} />}
       {page === "cho-duyet" && <PendingPage />}
       {page === "bgh" && (user?.isPrincipal ? <PrincipalPage go={setPage} /> : <main className="pt-24 px-6 text-sm text-gray-500">Trang dành cho Ban giám hiệu.</main>)}
+      {page === "nv-thiet-bi" && (user?.isEquipment ? <EquipmentStaffPage go={setPage} /> : <main className="pt-24 px-6 text-sm text-gray-500">Trang dành cho nhân viên thiết bị.</main>)}
+      {page === "thu-thu" && (user?.isLibrarian || user?.isEquipment ? <LibrarianPage go={setPage} /> : <main className="pt-24 px-6 text-sm text-gray-500">Trang dành cho nhân viên thư viện.</main>)}
+      {page === "quan-tri" && (user?.isSysadmin ? <SysadminPage go={setPage} /> : <main className="pt-24 px-6 text-sm text-gray-500">Trang dành cho quản trị hệ thống.</main>)}
       {page === "to-truong" && (user?.isHead ? <HeadPage WeekGrid={WeekGrid} /> : <main className="pt-24 px-6 text-sm text-gray-500">Trang dành cho tổ trưởng chuyên môn.</main>)}
       {page === "home" && (user ? <TeacherHome go={setPage} onBorrow={openBorrow} /> : <HomePage setPage={setPage} onQuick={fillFormFromChat} />)}
       {page === "muon" && <BorrowPage key={borrowPreset?.key || 0} go={setPage} preset={borrowPreset} onDone={() => { setBorrowPreset(null); setPage("home") }} />}

@@ -578,3 +578,24 @@ export const reportIssue = (equipmentId: string, quantity: number, note: string)
 export const fetchIssues = () => call<EquipmentIssue[]>("GET", "/api/issues");
 export const fetchMyIssues = () => call<EquipmentIssue[]>("GET", "/api/issues/mine");
 export const resolveIssue = (id: string, accept: boolean, note = "") => call<EquipmentIssue>("POST", `/api/issues/${encodeURIComponent(id)}/resolve`, { accept, note });
+
+// ============ TRANG RIÊNG THEO VAI TRÒ ============
+export interface StaffRecord { id: string; code: string; teacherName: string; className: string; subjectName: string; equipment: string; borrowDate: string; returnDate: string; period?: string; periods?: string[]; status: string; needsSpecialApproval: boolean }
+export interface StaffOverview {
+  today: string; pending: StaffRecord[]; dueToday: StaffRecord[]; overdue: StaffRecord[]; issues: EquipmentIssue[]; lossesWaiting: LossReport[]; disposalsWaiting: Disposal[]; toBuy: Proposal[];
+  alerts: { expired: number; expiringSoon: number; lowStock: number }; auditsRunning: number; maintenanceRunning: number;
+  stats: { types: number; good: number; broken: number; repair: number; noPrice: number };
+}
+export interface LibLoanView { id: string; copyCode: string; title: string; readerName: string; readerType: string; className: string; mode: string; loanDate: string; dueDate: string; returnDate: string | null; condition: string; overdueDays: number; compensation: { amount: number; status: string; basis: string } | null }
+export interface LibraryOverview {
+  today: string; term: string; schoolYear: string; minReading: number; overdue: LibLoanView[]; compensation: LibLoanView[];
+  receiptsWaiting: { id: string; invoiceNo: string; supplier: string; invoiceDate: string; lineCount: number }[]; readingLacking: { className: string; done: number }[]; readingToday: number;
+  stats: { titles: number; copies: number; onShelf: number; unshelved: number; borrowing: number; loansToday: number; returnsToday: number; readers: number };
+}
+export interface AdminOverview {
+  storage: string; uptimeMinutes: number; lastBackup: { at: string; kind: string } | null; backupEncrypted: boolean; logins24h: { ok: number; failed: number };
+  failedChecks: { label: string; ok: boolean }[]; checks: { label: string; ok: boolean }[]; pendingUsers: AppUser[]; dataRequests: { id: string; userName?: string; type: string; content: string; createdAt: string }[]; demoActive: boolean; users: { active: number; locked: number; pending: number };
+}
+export const fetchStaffOverview = () => call<StaffOverview>("GET", "/api/staff/overview");
+export const fetchLibraryOverview = () => call<LibraryOverview>("GET", "/api/library/overview");
+export const fetchAdminOverview = () => call<AdminOverview>("GET", "/api/admin/overview");

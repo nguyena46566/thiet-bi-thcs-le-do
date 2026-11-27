@@ -150,7 +150,7 @@ export function registerOpsRoutes(app, { requireAuth, wrap, express }) {
   }));
 
   // ---------- Trạng thái hệ thống ----------
-  app.get("/api/admin/status", requireAuth, requireSysadmin, wrap(async (req, res) => {
+  const buildStatus = async () => {
     const day = new Date(Date.now() - 864e5).toISOString();
     const logs = await loginCol().all();
     const backups = (await backupLog().all()).filter((b) => !String(b.kind).startsWith("Khôi phục")).sort((a, b) => b.at.localeCompare(a.at));
@@ -170,11 +170,25 @@ export function registerOpsRoutes(app, { requireAuth, wrap, express }) {
       ["Có ít nhất 2 quản trị hệ thống thật", users.filter((u) => u.status === "active" && !u.test && (u.roles || []).includes("sysadmin")).length + String(process.env.ADMIN_EMAILS || "").split(",").filter((x) => x.trim()).length >= 2],
       ["Có tài khoản Ban giám hiệu", users.some((u) => u.status === "active" && !u.test && (u.roles || []).includes("principal")) || env("PRINCIPAL_EMAILS")],
     ].map(([label, ok]) => ({ label, ok }));
-    res.json({
+    return ({
       storage: db.kind === "file" ? "Tệp JSON (chỉ để chạy thử)" : "PostgreSQL", uptimeMinutes: Math.round(process.uptime() / 60), node: process.version,
       counts, lastBackup: backups[0] || null, backupEncrypted: !!keyOf(),
       logins24h: { ok: logs.filter((x) => x.at >= day && x.result === "Thành công").length, failed: logs.filter((x) => x.at >= day && x.result !== "Thành công").length },
       checks,
+    });
+  };
+  app.get("/api/admin/status", requireAuth, requireSysadmin, wrap(async (req, res) => res.json(await buildStatus())));
+  // Trang riêng của quản trị hệ thống: việc cần làm
+  app.get("/api/admin/overview", requireAuth, requireSysadmin, wrap(async (req, res) => {
+    const st = await buildStatus();
+    const users = await db.collection("users").all();
+    res.json({
+      storage: st.storage, uptimeMinutes: st.uptimeMinutes, lastBackup: st.lastBackup, backupEncrypted: st.backupEncrypted, logins24h: st.logins24h,
+      failedChecks: st.checks.filter((c) => !c.ok), checks: st.checks,
+      pendingUsers: users.filter((u) => u.status === "pending").map(({ passwordHash, ...x }) => x),
+      dataRequests: (await db.collection("datarequests").all()).filter((x) => x.status === "Chờ xử lý"),
+      demoActive: !!(await db.collection("settings").get("demoManifest")),
+      users: { active: users.filter((u) => u.status === "active").length, locked: users.filter((u) => u.status === "locked").length, pending: users.filter((u) => u.status === "pending").length },
     });
   }));
 }
